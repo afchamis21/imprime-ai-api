@@ -1,0 +1,1 @@
+ALTER TABLE pricing_strategy RENAME COLUMN is_default TO is_active;
