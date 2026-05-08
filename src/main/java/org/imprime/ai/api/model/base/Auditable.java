@@ -6,11 +6,15 @@ import lombok.Setter;
 import org.imprime.ai.api.model.enums.StatusCd;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Getter
 @Setter
 @MappedSuperclass
 public abstract class Auditable {
+    @Column(name = "GUID", length = 20)
+    private String guid;
+
     @Column(name = "STATUS", length = 5)
     @Convert(converter = StatusCd.Converter.class)
     private StatusCd status;
@@ -50,6 +54,10 @@ public abstract class Auditable {
 
         if (status == null) {
             status = StatusCd.ACTIVE;
+        }
+
+        if (guid == null || guid.isEmpty()) {
+            guid = UUID.randomUUID().toString();
         }
     }
 

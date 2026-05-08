@@ -42,4 +42,7 @@ public class User extends Auditable {
 
     @Column(name = "PRIMARY_ADDRESS_ID")
     private Long primaryAddressId;
+
+    @Column(name = "COMPANY_ID")
+    private Long companyId;
 }

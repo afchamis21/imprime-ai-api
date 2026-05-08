@@ -106,11 +106,11 @@
 
                 <configuration>
                     <url>jdbc:oracle:thin:@localhost:1521/FREEPDB1</url>
-                    <user>${db.username}</user>
-                    <password>${db.password}</password>
+                    <user>imprime_ai_api</user>
+                    <password>passwd</password>
 
                     <schemas>
-                        <schema>APP_USER</schema>
+                        <schema>IMPRIME_AI_API</schema>
                     </schemas>
                 </configuration>
             </plugin>
