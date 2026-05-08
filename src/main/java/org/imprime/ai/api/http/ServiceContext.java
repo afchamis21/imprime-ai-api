@@ -3,11 +3,8 @@ package org.imprime.ai.api.http;
 import jakarta.annotation.Nullable;
 import lombok.Data;
 import org.imprime.ai.api.model.User;
-import org.imprime.ai.api.model.enums.MessageCd;
 import org.slf4j.MDC;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -21,8 +18,6 @@ public class ServiceContext {
 
     @Nullable
     private User user;
-
-    private final List<MessageCd> messages = new ArrayList<>();
 
     private final String transactionId = UUID.randomUUID().toString();
 

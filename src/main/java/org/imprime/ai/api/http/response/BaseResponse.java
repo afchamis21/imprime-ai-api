@@ -4,9 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.imprime.ai.api.model.MessageLkup;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.util.Collections;
 import java.util.List;
 
 @Data
@@ -14,11 +14,24 @@ import java.util.List;
 @AllArgsConstructor
 public class BaseResponse<T> {
     private T data;
-    private List<String> metadata;
+    private List<Message> metadata;
 
     public static <B> ResponseEntity<BaseResponse<B>> ok(B body) {
-        BaseResponse<B> res = new BaseResponse<>(body, List.of());
-        return ResponseEntity.ok(res); // TODO Implement the messages once we have a ServiceContext
+        return ok(body, List.of());
+    }
+
+    public static <B> ResponseEntity<BaseResponse<B>> ok(B body, List<MessageLkup> message) {
+        BaseResponse<B> res = new BaseResponse<>(body, message.stream().map(Message::of).toList());
+        return ResponseEntity.ok(res);
+    }
+
+    public static <B> ResponseEntity<BaseResponse<B>> build(B body, HttpStatus status) {
+        return build(body, status, List.of());
+    }
+
+    public static <B> ResponseEntity<BaseResponse<B>> build(B body, HttpStatus status, List<MessageLkup> message) {
+        BaseResponse<B> res = new BaseResponse<>(body, message.stream().map(Message::of).toList());
+        return new ResponseEntity<>(res, status);
     }
 
     @Data
@@ -40,6 +53,5 @@ public class BaseResponse<T> {
 
             return new Message(messageLkup.getMessageCd().getCode(), messageLkup.getText(), messageLkup.getType());
         }
-        // TODO Ideally this will be a SysMessage
     }
 }
