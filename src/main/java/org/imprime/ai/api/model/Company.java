@@ -6,10 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.imprime.ai.api.model.base.Auditable;
-
-import java.time.OffsetDateTime;
 
 @Getter
 @Setter

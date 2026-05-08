@@ -14,7 +14,7 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
 
     @Modifying
     @Query(value = """
-    UPDATE AUTH_TOKENS
+    UPDATE AUTH_TOKEN
        SET REVOKED = 1
      WHERE USER_ID = :userId
        AND REVOKED = 0
@@ -23,7 +23,7 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
 
     @Modifying
     @Query(value = """
-    UPDATE AUTH_TOKENS
+    UPDATE AUTH_TOKEN
        SET REVOKED = 1
      WHERE AUTH_TOKEN_ID=:authTokenId
     """, nativeQuery = true)

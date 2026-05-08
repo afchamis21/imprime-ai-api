@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties
 public class ImprimeAiApplication {
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SpringApplication.run(ImprimeAiApplication.class, args);
     }
 
