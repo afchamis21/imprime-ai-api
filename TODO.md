@@ -1,8 +1,8 @@
 1. [ ] Internacionalização das MessageLkup
 2. [ ] Cadastro Usuário
-2. [ ] Cadastro Vendedor
-3. [ ] Login Vendedor
-4. [ ] Criar Order
-5. [ ] Criar Chat
-6. [ ] Chat Funcional
-7. [ ] Confirmação de Pedido
+3. [ ] Cadastro Vendedor
+4. [ ] Login Vendedor
+5. [ ] Criar Order
+6. [ ] Criar Chat
+7. [ ] Chat Funcional
+8. [ ] Confirmação de Pedido
