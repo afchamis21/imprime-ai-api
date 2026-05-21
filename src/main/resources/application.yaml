@@ -15,3 +15,8 @@ auth:
     key: kZi7C6J1IrRCTSdjEj7RDuLj2PLaOnWyQa1Qq3dUp/+bv4gTQ2HQtwu4FdH07a6MZOO3258I/jHgc60R30VLFg==
     duration: 2h
     token-type: refresh
+
+imprime:
+  ai:
+    api:
+      default-language: en_us

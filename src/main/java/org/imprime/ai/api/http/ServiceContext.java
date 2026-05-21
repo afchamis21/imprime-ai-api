@@ -3,6 +3,7 @@ package org.imprime.ai.api.http;
 import jakarta.annotation.Nullable;
 import lombok.Data;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.LanguageCd;
 import org.slf4j.MDC;
 
 import java.util.ArrayList;
@@ -20,6 +21,8 @@ public class ServiceContext {
 
     @Nullable
     private User user;
+
+    private LanguageCd languageCd;
 
     private List<Exception> exceptions = new ArrayList<>();
 

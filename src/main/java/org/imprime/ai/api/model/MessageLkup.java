@@ -7,6 +7,7 @@ import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 import org.imprime.ai.api.model.converter.CodeAttributeConverter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
+import org.imprime.ai.api.model.enums.LanguageCd;
 import org.imprime.ai.api.model.enums.MessageCd;
 
 import java.time.OffsetDateTime;
@@ -20,6 +21,10 @@ public class MessageLkup {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "MESSAGE_ID", nullable = false)
     private Long id;
+
+    @Column(name = "LANGUAGE_CODE", nullable = false, length = 5)
+    @Convert(converter = LanguageCd.Converter.class)
+    private LanguageCd languageCd;
 
     @Column(name = "CODE", nullable = false, length = 30)
     @Convert(converter = MessageCd.Converter.class)
