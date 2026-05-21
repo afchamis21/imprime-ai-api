@@ -1,4 +1,4 @@
-1. [ ] Internacionalização das MessageLkup
+1. [X] Internacionalização das MessageLkup
 2. [ ] Cadastro Usuário
 3. [ ] Cadastro Vendedor
 4. [ ] Login Vendedor
