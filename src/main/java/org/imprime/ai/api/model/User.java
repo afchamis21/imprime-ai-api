@@ -24,6 +24,8 @@ public class User extends Auditable {
     @Column(name = "DOCUMENT", nullable = false, length = 20)
     private String document;
 
+    // TODO Document Type
+
     @Column(name = "EMAIL", nullable = false)
     private String email;
 

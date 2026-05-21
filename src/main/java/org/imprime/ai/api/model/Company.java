@@ -23,8 +23,20 @@ public class Company extends Auditable {
     @Column(name = "CNPJ", length = 20)
     private String cnpj;
 
+    // TODO Document Type
+
     @Column(name = "ADDRESS_ID")
     private Long addressId;
+
+    // TODO Cover Picture ID
+
+    // TODO Logo Picture ID
+
+    // TODO Description
+
+    // TODO Tags
+
+    // TODO Porfolio
 
     @Column(name = "OWNER_ID")
     private Long ownerId;

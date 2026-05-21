@@ -1,6 +1,7 @@
 package org.imprime.ai.api.model.exception;
 
 import lombok.Getter;
+import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.springframework.http.HttpStatus;
 
@@ -12,11 +13,17 @@ public class HttpException extends RuntimeException {
     public HttpException(MessageCd messageCd, HttpStatus httpStatus) {
         this.messageCd = messageCd;
         this.httpStatus = httpStatus;
+        storeInContext();
     }
 
     public HttpException(String message, MessageCd messageCd, HttpStatus httpStatus) {
         super(message);
         this.messageCd = messageCd;
         this.httpStatus = httpStatus;
+        storeInContext();
+    }
+
+    private void storeInContext() {
+        ServiceContext.addException(this);
     }
 }

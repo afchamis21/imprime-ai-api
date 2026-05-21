@@ -5,6 +5,8 @@ import lombok.Data;
 import org.imprime.ai.api.model.User;
 import org.slf4j.MDC;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -18,6 +20,8 @@ public class ServiceContext {
 
     @Nullable
     private User user;
+
+    private List<Exception> exceptions = new ArrayList<>();
 
     private final String transactionId = UUID.randomUUID().toString();
 
@@ -56,5 +60,9 @@ public class ServiceContext {
         } else {
             MDC.remove(USER_ID_MDC_KEY);
         }
+    }
+
+    public static void addException(Exception exception) {
+        getContext().exceptions.add(exception);
     }
 }

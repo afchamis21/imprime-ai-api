@@ -2,6 +2,7 @@ package org.imprime.ai.api.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.model.MessageLkup;
 import org.imprime.ai.api.model.enums.MessageCd;
@@ -22,6 +23,7 @@ public class ErrorController {
 
     @ExceptionHandler(value = { Exception.class })
     public ResponseEntity<?> handleException(Exception e) {
+        ServiceContext.addException(e);
         MessageLkup messageLkup = messageLkupService.getMessageByCode(MessageCd.INTERNAL_SERVER_ERROR);
 
         return BaseResponse.build(null, HttpStatus.INTERNAL_SERVER_ERROR, List.of(messageLkup));
