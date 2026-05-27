@@ -2,6 +2,7 @@ package org.imprime.ai.api.service;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
 import jakarta.annotation.Nullable;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.config.AuthConfig;
@@ -133,6 +134,7 @@ public class AuthService {
         return passwordEncoder.matches(password, passwordHash);
     }
 
+    @Transactional
     public AuthResponse register(RegisterUserRequest request) {
         User user = userService.registerUser(request);
         return generateTokens(user);
