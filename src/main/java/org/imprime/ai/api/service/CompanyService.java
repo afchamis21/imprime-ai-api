@@ -29,7 +29,7 @@ public class CompanyService {
 
         company.setName(request.name());
 
-        Address address = addressService.registerAddress(request.address());
+        Address address = addressService.registerAddress(request.address(), owner);
         company.setAddressId(address.getId());
 
         return companyRepository.save(company);

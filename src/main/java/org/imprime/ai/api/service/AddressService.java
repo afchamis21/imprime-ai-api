@@ -19,12 +19,12 @@ public class AddressService {
     private final AddressRepository addressRepository;
 
     @Transactional
-    public Address registerAddress(RegisterAddressRequest request) {
-        return registerAddress(request, false);
+    public Address registerAddress(RegisterAddressRequest request, User user) {
+        return registerAddress(request, user, false);
     }
 
     @Transactional
-    public Address registerAddress(RegisterAddressRequest request, boolean isDefaultAddress) {
+    public Address registerAddress(RegisterAddressRequest request, @NonNull User user, boolean isDefaultAddress) {
         Address address = new Address();
 
         address.setCity(request.city());
@@ -37,6 +37,7 @@ public class AddressService {
         address.setAddressLine2(request.addressLine2());
 
         address.setDefaultAddress(isDefaultAddress);
+        address.setUserId(user.getId());
 
         return addressRepository.save(address);
     }

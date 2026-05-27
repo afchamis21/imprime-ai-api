@@ -83,8 +83,6 @@ public class UserService {
         request.validateOrThrow();
         // TODO Is email unique?
         // TODO Is document unique?
-        Address address = addressService.registerAddress(request.address(), true);
-
         User user = new User();
 
         user.setDocumentType(request.documentType());
@@ -96,19 +94,17 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setPhoneCountry("55");
         user.setPhoneNumber(request.phoneNumber());
-        user.setPrimaryAddressId(address.getId());
 
         user = userRepository.save(user);
 
         if (request.isMaker() && request.company() != null) {
             Company company = companyService.registerCompany(request.company(), user);
             user.setCompanyId(company.getId());
-            user = userRepository.save(user);
         }
 
-        address.setUserId(user.getId());
-        addressService.persist(address);
+        Address address = addressService.registerAddress(request.address(), user, true);
+        user.setPrimaryAddressId(address.getId());
 
-        return user;
+        return userRepository.save(user);
     }
 }

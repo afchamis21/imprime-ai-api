@@ -3,6 +3,8 @@ package org.imprime.ai.api.model.base;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.imprime.ai.api.http.ServiceContext;
+import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.StatusCd;
 
 import java.time.Instant;
@@ -42,8 +44,7 @@ public abstract class Auditable {
             updateDt = now;
         }
 
-        // TODO Once I have a service context
-        String user = "SYSTEM";
+        String user = ServiceContext.getUser().map(User::getGuid).orElse("SYSTEM");
         if (createUser == null) {
             createUser = user;
         }
@@ -64,7 +65,6 @@ public abstract class Auditable {
     @PreUpdate
     protected void beforeUpdate() {
         updateDt = Instant.now();
-        updateUser = "SYSTEM";
-        // TODO Once I have a service context
+        updateUser = ServiceContext.getUser().map(User::getGuid).orElse("SYSTEM");
     }
 }

@@ -25,8 +25,6 @@ public class Company extends Auditable {
     @Convert(converter = DocumentType.Converter.class)
     private DocumentType documentType;
 
-    // TODO Document Type
-
     @Column(name = "ADDRESS_ID")
     private Long addressId;
 
