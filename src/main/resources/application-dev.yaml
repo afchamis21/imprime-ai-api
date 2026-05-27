@@ -17,3 +17,24 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+
+auth:
+  access-token:
+    key: wQk4Ttx1tdbnpMPofqAeBYsNcqq64Uk96izwnf/x4VyAjR7DPcYLc5vIzHrUrZPwUFnAeMOVlMz8IuwVuKasfA==
+    duration: 5m
+    token-type: access
+  refresh-token:
+    key: kZi7C6J1IrRCTSdjEj7RDuLj2PLaOnWyQa1Qq3dUp/+bv4gTQ2HQtwu4FdH07a6MZOO3258I/jHgc60R30VLFg==
+    duration: 2h
+    token-type: refresh
+
+cors:
+  path-pattern: /**
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+  allowed-origins:
+    - http://localhost:5173

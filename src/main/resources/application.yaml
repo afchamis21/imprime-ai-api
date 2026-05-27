@@ -6,16 +6,6 @@ logging:
   pattern:
     console: '%clr(%d{${LOG_DATEFORMAT_PATTERN:yyyy-MM-dd HH:mm:ss.SSS}}){faint} %clr(${LOG_LEVEL_PATTERN:%5p}) %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} userId[%X{user-id}] transactionId[%X{transaction-id}] %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}'
 
-auth:
-  access-token:
-    key: wQk4Ttx1tdbnpMPofqAeBYsNcqq64Uk96izwnf/x4VyAjR7DPcYLc5vIzHrUrZPwUFnAeMOVlMz8IuwVuKasfA==
-    duration: 5m
-    token-type: access
-  refresh-token:
-    key: kZi7C6J1IrRCTSdjEj7RDuLj2PLaOnWyQa1Qq3dUp/+bv4gTQ2HQtwu4FdH07a6MZOO3258I/jHgc60R30VLFg==
-    duration: 2h
-    token-type: refresh
-
 imprime:
   ai:
     api:
