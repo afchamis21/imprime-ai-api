@@ -3,12 +3,8 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.type.NumericBooleanConverter;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.enums.StatusCd;
-
-import java.time.Instant;
 
 @Getter
 @Setter
@@ -34,6 +30,10 @@ public class Address extends Auditable {
 
     @Column(name = "ZIP_CODE", length = 20)
     private String zipCode;
+
+    @Column(name = "NEIGHBORHOOD", length = 100)
+    private String neighborhood;
+
 
     @Column(name = "ADDRESS_LINE_1", nullable = false)
     private String addressLine1;

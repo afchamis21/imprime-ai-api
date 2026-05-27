@@ -7,7 +7,8 @@ public record UserDTO(
         String firstName,
         String lastName,
         String email,
-        String phoneNumber
+        String phoneNumber,
+        Boolean isMaker
 ) {
     public static UserDTO from(User user) {
         return new UserDTO(
@@ -15,7 +16,8 @@ public record UserDTO(
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
-                user.getPhoneNumber()
+                user.getPhoneNumber(),
+                user.getCompanyId() != null
         );
     }
 }

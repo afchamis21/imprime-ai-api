@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
+import org.imprime.ai.api.model.enums.DocumentType;
 
 @Getter
 @Setter
@@ -24,7 +25,9 @@ public class User extends Auditable {
     @Column(name = "DOCUMENT", nullable = false, length = 20)
     private String document;
 
-    // TODO Document Type
+    @Column(name = "DOCUMENT_TYPE", nullable = false, length = 10)
+    @Convert(converter = DocumentType.Converter.class)
+    private DocumentType documentType;
 
     @Column(name = "EMAIL", nullable = false)
     private String email;

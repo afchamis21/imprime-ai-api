@@ -1,12 +1,10 @@
 package org.imprime.ai.api.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
+import org.imprime.ai.api.model.enums.DocumentType;
 
 @Getter
 @Setter
@@ -20,8 +18,12 @@ public class Company extends Auditable {
     @Column(name = "NAME", length = 100)
     private String name;
 
-    @Column(name = "CNPJ", length = 20)
-    private String cnpj;
+    @Column(name = "DOCUMENT", length = 20)
+    private String document;
+
+    @Column(name = "DOCUMENT_TYPE", nullable = false, length = 10)
+    @Convert(converter = DocumentType.Converter.class)
+    private DocumentType documentType;
 
     // TODO Document Type
 

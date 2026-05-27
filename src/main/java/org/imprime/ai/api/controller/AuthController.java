@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.SkipAuth;
 import org.imprime.ai.api.http.request.auth.LoginRequest;
 import org.imprime.ai.api.http.request.auth.RefreshTokenRequest;
+import org.imprime.ai.api.http.request.user.RegisterUserRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.service.AuthService;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+
+    @SkipAuth
+    @PostMapping("/register")
+    public ResponseEntity<?> login(@RequestBody RegisterUserRequest request) {
+        return BaseResponse.ok(authService.register(request));
+    }
 
     @SkipAuth
     @PostMapping("/login")

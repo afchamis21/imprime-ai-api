@@ -1,0 +1,1 @@
+DELETE FROM message_lkup WHERE CODE = 'SYS_404' AND LANGUAGE_CODE IN ('en-US', 'pt-BR');

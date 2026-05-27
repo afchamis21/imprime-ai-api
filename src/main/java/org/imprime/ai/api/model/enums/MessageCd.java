@@ -8,6 +8,7 @@ import org.imprime.ai.api.model.converter.CodeAttributeConverter;
 @RequiredArgsConstructor
 public enum MessageCd implements CodeAttribute {
     INTERNAL_SERVER_ERROR("SYS_500"),
+    GENERIC_404("SYS_404"),
 
     UNAUTHORIZED("AUTH_401");
 
