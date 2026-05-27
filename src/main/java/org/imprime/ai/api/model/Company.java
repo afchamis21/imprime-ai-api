@@ -12,6 +12,7 @@ import org.imprime.ai.api.model.enums.DocumentType;
 @Table(name = "COMPANY")
 public class Company extends Auditable {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "COMPANY_ID", nullable = false)
     private Long id;
 
