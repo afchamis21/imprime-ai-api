@@ -4,10 +4,12 @@ import jakarta.annotation.Nullable;
 import lombok.Data;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.LanguageCd;
+import org.imprime.ai.api.model.exception.UnauthorizedException;
 import org.slf4j.MDC;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Data
@@ -67,5 +69,13 @@ public class ServiceContext {
 
     public static void addException(Exception exception) {
         getContext().exceptions.add(exception);
+    }
+
+    public static Optional<User> getUser() {
+        return  Optional.ofNullable(getContext().user);
+    }
+
+    public static User getUserOrThrow() {
+        return getUser().orElseThrow(UnauthorizedException::new);
     }
 }

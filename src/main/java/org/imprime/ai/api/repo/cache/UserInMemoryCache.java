@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Normally I'd have made a cache interface, an abstract class, an ICacheable, etc. etc.
  * But I'm in a hurry.
  *
- * As the app grows, this would be better stored on REDIS but it works for now!
+ * As the app grows, this would be better stored on REDIS but it works for now! Or have some invalidation strategies
  *
  * Honestly, In Memmory is probably OK, but I can make this better later for sure
  */
@@ -27,22 +27,33 @@ public class UserInMemoryCache {
     private final UserRepository userRepository;
 
     private ConcurrentHashMap<String, User> usersByGuid = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Long, User> usersById = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
         List<User> users = userRepository.findAllByStatus(StatusCd.ACTIVE);
 
         ConcurrentHashMap<String, User> usersByGuid = new ConcurrentHashMap<>();
-        users.forEach(user -> usersByGuid.put(user.getGuid(), user));
+        ConcurrentHashMap<Long, User> usersById = new ConcurrentHashMap<>();
+        users.forEach(user -> {
+            usersByGuid.put(user.getGuid(), user);
+            usersById.put(user.getId(), user);
+        });
+
         this.usersByGuid = usersByGuid;
+        this.usersById = usersById;
     }
 
     public Optional<User> findUserByGuid(String guid) {
         return Optional.ofNullable(usersByGuid.get(guid));
     }
+    public Optional<User> findUserById(Long id) {
+        return Optional.ofNullable(usersById.get(id));
+    }
 
     public void put(User user) {
         usersByGuid.put(user.getGuid(), user);
+        usersById.put(user.getId(), user);
     }
 
     public void delete(String guid) {

@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.config.AuthConfig;
 import org.imprime.ai.api.http.request.auth.LoginRequest;
 import org.imprime.ai.api.http.request.auth.RefreshTokenRequest;
+import org.imprime.ai.api.http.request.user.RegisterUserRequest;
 import org.imprime.ai.api.http.response.AuthResponse;
 import org.imprime.ai.api.model.AuthToken;
 import org.imprime.ai.api.model.User;
@@ -130,5 +131,10 @@ public class AuthService {
 
     private boolean passwordMatches(String password, String passwordHash) {
         return passwordEncoder.matches(password, passwordHash);
+    }
+
+    public AuthResponse register(RegisterUserRequest request) {
+        User user = userService.registerUser(request);
+        return generateTokens(user);
     }
 }
