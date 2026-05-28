@@ -9,7 +9,8 @@ import org.imprime.ai.api.model.converter.CodeAttributeConverter;
 @RequiredArgsConstructor
 public enum LanguageCd implements CodeAttribute {
     PT_BR("pt-BR"),
-    EN_US("en-US")
+    EN_US("en-US"),
+    ES_ES("es-ES"),
     ;
 
     private final String code;
