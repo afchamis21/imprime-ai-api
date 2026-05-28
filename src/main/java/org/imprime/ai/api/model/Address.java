@@ -34,7 +34,6 @@ public class Address extends Auditable {
     @Column(name = "NEIGHBORHOOD", length = 100)
     private String neighborhood;
 
-
     @Column(name = "ADDRESS_LINE_1", nullable = false)
     private String addressLine1;
 
