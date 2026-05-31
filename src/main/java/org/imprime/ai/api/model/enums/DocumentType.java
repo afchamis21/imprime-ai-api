@@ -24,7 +24,7 @@ public enum DocumentType implements CodeAttribute {
         }
     }
 
-    public boolean validate(String value) {
+    public MessageCd validate(String value) {
         return validator.validate(value);
     }
 }

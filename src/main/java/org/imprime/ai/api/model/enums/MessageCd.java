@@ -92,7 +92,8 @@ public enum MessageCd implements CodeAttribute {
 
     MISSING_COMPANY_DOCUMENT("COM_006"),
 
-    MISSING_COMPANY_ADDRESS("COM_007");
+    MISSING_COMPANY_ADDRESS("COM_007"),
+    INVALID_PHONE_FORMAT("PHO_001");
     //endregion
 
     private final String code;

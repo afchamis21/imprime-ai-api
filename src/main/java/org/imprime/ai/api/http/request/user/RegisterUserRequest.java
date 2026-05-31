@@ -1,151 +1,88 @@
 package org.imprime.ai.api.http.request.user;
 
-import com.google.i18n.phonenumbers.NumberParseException;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import jakarta.annotation.Nullable;
+import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.request.address.RegisterAddressRequest;
 import org.imprime.ai.api.http.request.base.ValidatedRequest;
 import org.imprime.ai.api.http.request.company.RegisterCompanyRequest;
 import org.imprime.ai.api.model.enums.DocumentType;
 import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.validator.annotations.*;
+import org.imprime.ai.api.validator.reflection.ValidatorEngine;
 
-import java.util.Set;
-import java.util.regex.Pattern;
-
+@Slf4j
 public record RegisterUserRequest(
+        @Required(message = MessageCd.MISSING_USER_FIRST_NAME)
+        @StringLength(minLength = 3, maxLength = 100, minLengthMessage = MessageCd.USER_FIRST_NAME_INVALID_LENGTH, maxLengthMessage =  MessageCd.USER_FIRST_NAME_INVALID_LENGTH)
+        @Regex(regex = "^[\\p{L}]+$", message =  MessageCd.INVALID_USER_FIRST_NAME)
         String firstName,
+
+        @Required(message = MessageCd.MISSING_USER_LAST_NAME)
+        @StringLength(minLength = 3, maxLength = 100, minLengthMessage = MessageCd.USER_LAST_NAME_INVALID_LENGTH, maxLengthMessage =  MessageCd.USER_LAST_NAME_INVALID_LENGTH)
+        @Regex(regex = "^[\\p{L}\\s]+$", message =  MessageCd.INVALID_USER_LAST_NAME)
         String lastName,
+
+        @Required(message = MessageCd.MISSING_USER_EMAIL)
+        @StringLength(maxLength = 255, minLengthMessage = MessageCd.INVALID_USER_EMAIL, maxLengthMessage =  MessageCd.INVALID_USER_EMAIL)
+        @Regex(regex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$",  message =  MessageCd.INVALID_USER_EMAIL)
         String email,
+
+        @Required(message = MessageCd.MISSING_USER_PASSWORD)
+        @StringLength(minLength = 8,maxLength = 32, minLengthMessage = MessageCd.INVALID_USER_PASSWORD, maxLengthMessage =  MessageCd.INVALID_USER_PASSWORD)
+        @Regex(regex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).+$",  message =  MessageCd.INVALID_USER_PASSWORD)
         String password,
+
+        @Required(message = MessageCd.USER_PASSWORD_MISMATCH)
         String confirmPassword,
+
+        @Required(message = MessageCd.MISSING_USER_DOCUMENT_TYPE)
+        @DocumentTypes(types = {DocumentType.CPF, DocumentType.RG}, message = MessageCd.INVALID_DOCUMENT_TYPE)
         DocumentType documentType,
+
+        @Required(message = MessageCd.MISSING_USER_DOCUMENT)
         String document,
+
+        @Required(message = MessageCd.MISSING_USER_PHONE_NUMBER)
+        @PhoneNumber(invalidPhoneNumberMessage = MessageCd.INVALID_USER_PHONE_NUMBER)
         String phoneNumber,
+
+        @Required(message = MessageCd.MISSING_USER_ADDRESS)
         RegisterAddressRequest address,
-        @Nullable RegisterCompanyRequest company,
-        Boolean isMaker
+
+        Boolean isMaker,
+        @Nullable RegisterCompanyRequest company
 ) implements ValidatedRequest {
-
-    private static final Pattern FIRST_NAME_PATTERN =
-            Pattern.compile("^[\\p{L}]+$");
-
-    private static final Pattern LAST_NAME_PATTERN =
-            Pattern.compile("^[\\p{L}\\s]+$");
-
-    private static final Pattern EMAIL_PATTERN =
-            Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
-
-    private static final Pattern PASSWORD_PATTERN =
-            Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).+$");
-
     @Nullable
     public MessageCd getInvalidReason() {
-        if (firstName == null) {
-            return MessageCd.MISSING_USER_FIRST_NAME;
-        }
-
-        if (firstName.length() < 3 || firstName.length() > 100) {
-            return MessageCd.USER_FIRST_NAME_INVALID_LENGTH;
-        }
-
-        if (!FIRST_NAME_PATTERN.matcher(firstName).matches()) {
-            return MessageCd.INVALID_USER_FIRST_NAME;
-        }
-
-        if (lastName == null) {
-            return MessageCd.MISSING_USER_LAST_NAME;
-        }
-
-        if (lastName.length() < 3 || lastName.length() > 100) {
-            return MessageCd.USER_LAST_NAME_INVALID_LENGTH;
-        }
-
-        if (!LAST_NAME_PATTERN.matcher(lastName).matches()) {
-            return MessageCd.INVALID_USER_LAST_NAME;
-        }
-
-        if (email == null) {
-            return MessageCd.MISSING_USER_EMAIL;
-        }
-
-        if (!EMAIL_PATTERN.matcher(email).matches()) {
-            return MessageCd.INVALID_USER_EMAIL;
-        }
-
-        if (password == null) {
-            return MessageCd.MISSING_USER_PASSWORD;
-        }
-
-        if (password.length() < 8 || password.length() > 32 || !PASSWORD_PATTERN.matcher(password).matches()) {
-            return MessageCd.INVALID_USER_PASSWORD;
-        }
-
-        if (confirmPassword == null) {
-            return MessageCd.MISSING_USER_CONFIRM_PASSWORD;
+        try {
+            MessageCd messageCd = ValidatorEngine.validate(this);
+            if (messageCd != null) {
+                return messageCd;
+            }
+        } catch (Exception e) {
+            log.error("Error running reflective validations for User Request!", e);
         }
 
         if (!password.equals(confirmPassword)) {
             return MessageCd.USER_PASSWORD_MISMATCH;
         }
 
-        if (documentType == null) {
-            return MessageCd.MISSING_USER_DOCUMENT_TYPE;
+        MessageCd invalidDocumentMessage = documentType.validate(document);
+        if (invalidDocumentMessage != null) {
+            return invalidDocumentMessage;
         }
-
-        if (document == null) {
-            return MessageCd.MISSING_USER_DOCUMENT;
-        }
-
-        if (!Set.of(DocumentType.CPF, DocumentType.RG).contains(documentType)) {
-            return MessageCd.INVALID_DOCUMENT_TYPE;
-        }
-
-        if (!documentType.validate(document)) {
-            MessageCd message = switch (documentType) {
-                case CPF -> MessageCd.INVALID_CPF;
-                case RG -> MessageCd.INVALID_RG;
-                case CNPJ -> null;
-            };
-
-            if (message != null) {
-                return message;
-            }
-        }
-
-        if (phoneNumber == null) {
-            return MessageCd.MISSING_USER_PHONE_NUMBER;
-        }
-
-        if (!isValidPhoneNumber(phoneNumber)) {
-            return MessageCd.INVALID_USER_PHONE_NUMBER;
-        }
-
-        if (address == null) {
-            return MessageCd.MISSING_USER_ADDRESS;
-        }
-
-        address.validateOrThrow();
 
         if (Boolean.TRUE.equals(isMaker)) {
             if (company == null) {
                 return MessageCd.MISSING_USER_COMPANY;
             }
 
-            company.validateOrThrow();
+            MessageCd messageCd = company.getInvalidReason();
+            if (messageCd != null) {
+                return messageCd;
+            }
         }
 
-        return null;
-    }
-
-    private boolean isValidPhoneNumber(String value) {
-        try {
-            PhoneNumberUtil phoneNumberUtil = PhoneNumberUtil.getInstance();
-            String clean = value.replaceAll("[^0-9]", "");
-            var parsed = phoneNumberUtil.parse("+55" + clean, "BR");
-
-            return phoneNumberUtil.isValidNumber(parsed);
-        } catch (NumberParseException ex) {
-            return false;
-        }
+        return address.getInvalidReason();
     }
 }
