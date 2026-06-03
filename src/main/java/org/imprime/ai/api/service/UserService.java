@@ -10,6 +10,8 @@ import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.dto.FullUserDTO;
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -81,8 +83,17 @@ public class UserService {
     @Transactional
     public User registerUser(RegisterUserRequest request) {
         request.validateOrThrow();
-        // TODO Is email unique?
-        // TODO Is document unique?
+
+        boolean existsByEmail = userRepository.existsUserByEmail(request.email());
+        if (existsByEmail) {
+            throw new BadRequestException(MessageCd.USER_EMAIL_ALREADY_REGISTERED);
+        }
+
+        boolean existsByDocument = userRepository.existsUserByDocumentTypeAndDocument(request.documentType(), request.document());
+        if (existsByDocument) {
+            throw new BadRequestException(MessageCd.USER_DOCUMENT_ALREADY_REGISTERED);
+        }
+
         User user = new User();
 
         user.setDocumentType(request.documentType());

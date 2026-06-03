@@ -55,6 +55,10 @@ public class AuthService {
             throw new UnauthorizedException();
         }
 
+        if (!StatusCd.ACTIVE.equals(user.getStatus())) {
+            throw new UnauthorizedException();
+        }
+
         return generateTokens(user);
     }
 

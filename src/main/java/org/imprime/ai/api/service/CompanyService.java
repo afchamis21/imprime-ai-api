@@ -7,6 +7,8 @@ import org.imprime.ai.api.http.request.company.RegisterCompanyRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.springframework.stereotype.Component;
 
@@ -19,8 +21,16 @@ public class CompanyService {
 
     @Transactional
     public Company registerCompany(RegisterCompanyRequest request, User owner) {
-        // TODO Is name unique?
-        // TODO Is document unique?
+        boolean existsByName = companyRepository.existsByName(request.name());
+        if (existsByName) {
+            throw new BadRequestException(MessageCd.COMPANY_NAME_ALREADY_REGISTERED);
+        }
+
+        boolean existsByDocument = companyRepository.existsByDocumentTypeAndDocument(request.documentType(), request.document());
+        if (existsByDocument) {
+            throw new BadRequestException(MessageCd.COMPANY_DOCUMENT_ALREADY_REGISTERED);
+        }
+
         Company company = new Company();
         company.setOwnerId(owner.getId());
 

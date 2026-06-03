@@ -47,6 +47,8 @@ public enum MessageCd implements CodeAttribute {
     MISSING_USER_COMPANY("USR_019"),
 
     MISSING_USER_IS_MAKER("USR_020"),
+    USER_EMAIL_ALREADY_REGISTERED("USR_021"),
+    USER_DOCUMENT_ALREADY_REGISTERED("USR_022"),
     //endregion
 
     //region Document
@@ -93,8 +95,15 @@ public enum MessageCd implements CodeAttribute {
     MISSING_COMPANY_DOCUMENT("COM_006"),
 
     MISSING_COMPANY_ADDRESS("COM_007"),
-    INVALID_PHONE_FORMAT("PHO_001");
+    COMPANY_NAME_ALREADY_REGISTERED("COM_008"),
+    COMPANY_DOCUMENT_ALREADY_REGISTERED("COM_009"),
+
     //endregion
+
+    //region Phone
+    INVALID_PHONE_FORMAT("PHO_001"),
+    //endregion
+    ;
 
     private final String code;
 

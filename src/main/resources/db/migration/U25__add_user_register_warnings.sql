@@ -1,0 +1,3 @@
+DELETE FROM message_lkup
+WHERE CODE IN ('COM_008', 'COM_009', 'USR_021', 'USR_022')
+  AND LANGUAGE_CODE IN ('en-US', 'pt-BR', 'es-ES');
