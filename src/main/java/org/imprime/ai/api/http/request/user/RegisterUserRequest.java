@@ -7,7 +7,10 @@ import org.imprime.ai.api.http.request.base.ValidatedRequest;
 import org.imprime.ai.api.http.request.company.RegisterCompanyRequest;
 import org.imprime.ai.api.model.enums.DocumentType;
 import org.imprime.ai.api.model.enums.MessageCd;
-import org.imprime.ai.api.validator.annotations.*;
+import org.imprime.ai.api.validator.annotations.DocumentTypes;
+import org.imprime.ai.api.validator.annotations.Regex;
+import org.imprime.ai.api.validator.annotations.Required;
+import org.imprime.ai.api.validator.annotations.StringLength;
 import org.imprime.ai.api.validator.reflection.ValidatorEngine;
 
 @Slf4j
@@ -43,7 +46,7 @@ public record RegisterUserRequest(
         String document,
 
         @Required(message = MessageCd.MISSING_USER_PHONE_NUMBER)
-        @PhoneNumber(invalidPhoneNumberMessage = MessageCd.INVALID_USER_PHONE_NUMBER)
+//        @PhoneNumber(invalidPhoneNumberMessage = MessageCd.INVALID_USER_PHONE_NUMBER)
         String phoneNumber,
 
         @Required(message = MessageCd.MISSING_USER_ADDRESS)

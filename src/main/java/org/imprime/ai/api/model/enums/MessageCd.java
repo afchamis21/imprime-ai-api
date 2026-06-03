@@ -49,6 +49,7 @@ public enum MessageCd implements CodeAttribute {
     MISSING_USER_IS_MAKER("USR_020"),
     USER_EMAIL_ALREADY_REGISTERED("USR_021"),
     USER_DOCUMENT_ALREADY_REGISTERED("USR_022"),
+    USER_PHONE_ALREADY_REGISTERED("USR_023"),
     //endregion
 
     //region Document

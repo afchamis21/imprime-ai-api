@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.type.NumericBooleanConverter;
 import org.imprime.ai.api.model.base.Auditable;
+import org.imprime.ai.api.model.enums.EntityType;
 
 @Getter
 @Setter
@@ -16,8 +17,12 @@ public class Address extends Auditable {
     @Column(name = "ADDRESS_ID", nullable = false)
     private Long id;
 
-    @Column(name = "USER_ID", nullable = false)
-    private Long userId;
+    @Column(name = "OWNER_ID", nullable = false)
+    private Long ownerId;
+
+    @Column(name = "OWNER_TYPE")
+    @Convert(converter = EntityType.Converter.class)
+    private EntityType ownerType;
 
     @Column(name = "COUNTRY", nullable = false, length = 100)
     private String country;

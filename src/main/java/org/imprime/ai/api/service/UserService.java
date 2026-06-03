@@ -10,6 +10,7 @@ import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.dto.FullUserDTO;
+import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
@@ -94,6 +95,11 @@ public class UserService {
             throw new BadRequestException(MessageCd.USER_DOCUMENT_ALREADY_REGISTERED);
         }
 
+        boolean existsByPhone = userRepository.existsUserByPhoneNumber(request.phoneNumber());
+        if (existsByPhone) {
+            throw new BadRequestException(MessageCd.USER_PHONE_ALREADY_REGISTERED);
+        }
+
         User user = new User();
 
         user.setDocumentType(request.documentType());
@@ -113,7 +119,7 @@ public class UserService {
             user.setCompanyId(company.getId());
         }
 
-        Address address = addressService.registerAddress(request.address(), user, true);
+        Address address = addressService.registerAddress(request.address(), EntityType.USER, user.getId(), true);
         user.setPrimaryAddressId(address.getId());
 
         return userRepository.save(user);

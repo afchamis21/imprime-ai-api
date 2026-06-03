@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.request.address.RegisterAddressRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.springframework.stereotype.Service;
 
@@ -19,12 +20,12 @@ public class AddressService {
     private final AddressRepository addressRepository;
 
     @Transactional
-    public Address registerAddress(RegisterAddressRequest request, User user) {
-        return registerAddress(request, user, false);
+    public Address registerAddress(RegisterAddressRequest request, EntityType ownerType, Long ownerId) {
+        return registerAddress(request, ownerType, ownerId,false);
     }
 
     @Transactional
-    public Address registerAddress(RegisterAddressRequest request, @NonNull User user, boolean isDefaultAddress) {
+    public Address registerAddress(RegisterAddressRequest request, EntityType ownerType, Long ownerId, boolean isDefaultAddress) {
         Address address = new Address();
 
         address.setCity(request.city());
@@ -37,7 +38,8 @@ public class AddressService {
         address.setAddressLine2(request.addressLine2());
 
         address.setDefaultAddress(isDefaultAddress);
-        address.setUserId(user.getId());
+        address.setOwnerId(ownerId);
+        address.setOwnerType(ownerType);
 
         return addressRepository.save(address);
     }
@@ -49,6 +51,6 @@ public class AddressService {
 
     @NonNull
     public List<Address> findAllForUser(User user) {
-        return addressRepository.findAllByUserId(user.getId());
+        return addressRepository.findAllByOwnerTypeAndOwnerId(EntityType.USER, user.getId());
     }
 }

@@ -1,8 +1,12 @@
 package org.imprime.ai.api.validator;
 
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.jspecify.annotations.Nullable;
+
 public class CpfValidator implements IValidator<String> {
     @Override
-    public boolean validate(String value) {
-        return false;
+    @Nullable
+    public MessageCd validate(String value) {
+        return null;
     }
 }

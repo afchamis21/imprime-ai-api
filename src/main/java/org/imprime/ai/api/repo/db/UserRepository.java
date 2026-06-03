@@ -21,4 +21,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsUserByDocumentTypeAndDocument(DocumentType documentType, String document);
 
+    boolean existsUserByPhoneNumber(String phoneNumber);
 }

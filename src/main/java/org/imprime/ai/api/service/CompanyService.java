@@ -7,6 +7,7 @@ import org.imprime.ai.api.http.request.company.RegisterCompanyRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -39,7 +40,9 @@ public class CompanyService {
 
         company.setName(request.name());
 
-        Address address = addressService.registerAddress(request.address(), owner);
+        company = companyRepository.save(company);
+
+        Address address = addressService.registerAddress(request.address(), EntityType.COMPANY, company.getId());
         company.setAddressId(address.getId());
 
         return companyRepository.save(company);

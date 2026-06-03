@@ -16,7 +16,7 @@ public record RegisterAddressRequest(
         @Regex(regex = "^\\d{5}-?\\d{3}$", message = MessageCd.INVALID_ADDRESS_ZIP_CODE)
         String zipCode,
 
-        @Required(message = MessageCd.MISSING_ADDRESS_NEIGHBORHOOD)
+//        @Required(message = MessageCd.MISSING_ADDRESS_NEIGHBORHOOD)
         @StringLength(minLength = 2, maxLength = 100, minLengthMessage = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD_LENGTH, maxLengthMessage = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD_LENGTH)
         @Regex(regex = "^[\\p{L}\\p{N}\\s'.,-]+$", message = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD)
         String neighborhood,
@@ -42,7 +42,7 @@ public record RegisterAddressRequest(
 
         @Nullable
         @StringLength(maxLength = 255, minLengthMessage = MessageCd.INVALID_ADDRESS_LINE_2_LENGTH, maxLengthMessage = MessageCd.INVALID_ADDRESS_LINE_2_LENGTH)
-        @Regex(regex = "^[\\p{L}\\p{N}\\s'.,-]+$", message = MessageCd.INVALID_ADDRESS_LINE_2)
+        @Regex(regex = "^[\\p{L}\\p{N}\\s'.,-]*$", message = MessageCd.INVALID_ADDRESS_LINE_2)
         String addressLine2
 ) implements ValidatedRequest {
 
