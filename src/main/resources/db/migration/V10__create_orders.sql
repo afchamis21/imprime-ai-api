@@ -22,7 +22,7 @@ CREATE TABLE orders
 
     CONSTRAINT fk_order_vendor
         FOREIGN KEY (vendor_id)
-            REFERENCES users(user_id),
+            REFERENCES company(company_id),
 
     CONSTRAINT fk_order_model
         FOREIGN KEY (file_asset_id)

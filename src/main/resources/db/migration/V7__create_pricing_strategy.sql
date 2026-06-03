@@ -14,7 +14,7 @@ CREATE TABLE pricing_strategy
 
     CONSTRAINT fk_pricing_strategy_vendor
         FOREIGN KEY (vendor_id)
-            REFERENCES users (user_id)
+            REFERENCES company (company_id)
                 ON DELETE CASCADE
 );
 

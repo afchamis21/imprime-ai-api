@@ -3,12 +3,9 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.enums.StatusCd;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 
 @Getter
 @Setter
@@ -20,8 +17,8 @@ public class Filament extends Auditable {
     @Column(name = "FILAMENT_ID", nullable = false)
     private Long id;
 
-    @Column(name = "USER_ID", nullable = false)
-    private Long userId;
+    @Column(name = "COMPANY_ID", nullable = false)
+    private Long companyId;
 
     @Column(name = "ASSET_ID")
     private Long assetId;
