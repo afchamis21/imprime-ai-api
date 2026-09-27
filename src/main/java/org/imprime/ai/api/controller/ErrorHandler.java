@@ -19,7 +19,7 @@ import java.util.List;
 @Slf4j
 @RestControllerAdvice
 @RequiredArgsConstructor
-public class ErrorController {
+public class ErrorHandler {
     private final MessageLkupService messageLkupService;
 
     @ExceptionHandler(value = { HttpException.class })

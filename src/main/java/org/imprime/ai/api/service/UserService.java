@@ -9,7 +9,9 @@ import org.imprime.ai.api.http.request.user.RegisterUserRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.dto.AddressDTO;
 import org.imprime.ai.api.model.dto.FullUserDTO;
+import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
@@ -18,6 +20,7 @@ import org.imprime.ai.api.repo.db.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -123,5 +126,18 @@ public class UserService {
         user.setPrimaryAddressId(address.getId());
 
         return userRepository.save(user);
+    }
+
+    public List<AddressDTO> listAddresses(boolean company, Integer page, Integer size) {
+        User caller = ServiceContext.getUserOrThrow();
+        List<Owner<Long>> ownerAndEntities = new ArrayList<>();
+        if (company) {
+            Optional<Company> optionalCompany = companyService.findByOwnerId(caller.getId());
+            optionalCompany.ifPresent(value -> ownerAndEntities.add(new Owner<>(value.getId(), EntityType.COMPANY)));
+        }
+
+        ownerAndEntities.add(new Owner<>(caller.getId(), EntityType.USER));
+
+        return addressService.findPageByOwner(ownerAndEntities, page, size);
     }
 }

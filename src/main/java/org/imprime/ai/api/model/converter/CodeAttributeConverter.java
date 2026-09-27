@@ -1,8 +1,10 @@
 package org.imprime.ai.api.model.converter;
 
 import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
 
+@Converter
 public abstract class CodeAttributeConverter<T extends Enum<T> & CodeAttribute > implements AttributeConverter<T,String> {
     private final Class<T> enumType;
 

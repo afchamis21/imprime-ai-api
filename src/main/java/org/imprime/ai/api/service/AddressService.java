@@ -7,7 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.request.address.RegisterAddressRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.dto.AddressDTO;
+import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
+import org.imprime.ai.api.repo.AddressDAO;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AddressService {
+    private final AddressDAO addressDAO;
     private final AddressRepository addressRepository;
 
     @Transactional
@@ -52,5 +56,20 @@ public class AddressService {
     @NonNull
     public List<Address> findAllForUser(User user) {
         return addressRepository.findAllByOwnerTypeAndOwnerId(EntityType.USER, user.getId());
+    }
+
+    public List<AddressDTO> findPageByOwner(List<Owner<Long>> owners, Integer page, Integer size) {
+        if (owners == null || owners.isEmpty()) {
+            log.info("No owners list passed to findPageByOwner!");
+            return List.of();
+        }
+
+        List<Address> addresses = addressDAO.searchAddressesByOwner(owners, page, size);
+        if (addresses == null || addresses.isEmpty()) {
+            log.info("No addresses found for owners [{}], page [{}], size [{}]", owners, page, size);
+            return List.of();
+        }
+
+        return addresses.stream().map(AddressDTO::from).toList();
     }
 }

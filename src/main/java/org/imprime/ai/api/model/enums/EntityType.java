@@ -14,7 +14,7 @@ public enum EntityType implements CodeAttribute {
     private final String code;
 
     public static class Converter extends CodeAttributeConverter<EntityType> {
-        protected Converter() {
+        public Converter() {
             super(EntityType.class);
         }
     }

@@ -13,6 +13,8 @@ import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -46,5 +48,14 @@ public class CompanyService {
         company.setAddressId(address.getId());
 
         return companyRepository.save(company);
+    }
+
+    public Optional<Company> findByOwnerId(Long ownerId) {
+        if (ownerId == null || ownerId <= 0) {
+            log.error("Invalid ownerId [{}] passed to findByOwnerId.", ownerId);
+            return Optional.empty();
+        }
+
+        return companyRepository.findByOwnerId(ownerId);
     }
 }
