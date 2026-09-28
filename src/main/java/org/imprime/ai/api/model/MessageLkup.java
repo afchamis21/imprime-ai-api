@@ -11,6 +11,7 @@ import org.imprime.ai.api.model.enums.LanguageCd;
 import org.imprime.ai.api.model.enums.MessageCd;
 
 import java.time.OffsetDateTime;
+import java.util.regex.Matcher;
 
 @Getter
 @Setter
@@ -55,6 +56,26 @@ public class MessageLkup {
 
     @Column(name = "UPDATE_USER", length = 100)
     private String updateUser;
+
+    @Transient
+    private String[] args;
+
+    public String format() {
+        if (args == null || args.length == 0) {
+            return text;
+        }
+
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+
+        String aux = text;
+        for (String arg : args) {
+            aux = aux.replaceFirst("\\{}", Matcher.quoteReplacement(arg));
+        }
+
+        return aux;
+    }
 
     @Getter
     @RequiredArgsConstructor

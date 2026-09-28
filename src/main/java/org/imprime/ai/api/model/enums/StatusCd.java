@@ -1,6 +1,5 @@
 package org.imprime.ai.api.model.enums;
 
-import jakarta.persistence.AttributeConverter;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.model.converter.CodeAttributeConverter;
@@ -10,7 +9,10 @@ import org.imprime.ai.api.model.converter.CodeAttributeConverter;
 public enum StatusCd implements CodeAttribute {
     ACTIVE("A"),
     INACTIVE("I"),
-    DELETED("D")
+    DELETED("D"),
+
+    // Order Specific
+
     ;
 
     private final String code;

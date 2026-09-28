@@ -3,10 +3,8 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.imprime.ai.api.model.base.Auditable;
-
-import java.sql.Timestamp;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
 
 @Getter
 @Setter
@@ -14,12 +12,9 @@ import java.sql.Timestamp;
 @Table(name = "ORDER_STATUS_LKUP")
 public class OrderStatusLkup extends Auditable {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "STATUS_ID", nullable = false)
-    private Long id;
-
+    @Convert(converter = OrderStatusCd.Converter.class)
     @Column(name = "CODE", nullable = false, length = 30)
-    private String code;
+    private OrderStatusCd code;
 
     @Column(name = "NAME", nullable = false, length = 30)
     private String name;

@@ -7,12 +7,17 @@ import org.imprime.ai.api.http.request.company.RegisterCompanyRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.dto.AddressDTO;
+import org.imprime.ai.api.model.dto.CompanyAndAddress;
+import org.imprime.ai.api.model.dto.CompanyChoiceDTO;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -44,7 +49,7 @@ public class CompanyService {
 
         company = companyRepository.save(company);
 
-        Address address = addressService.registerAddress(request.address(), EntityType.COMPANY, company.getId());
+        Address address = addressService.registerAddress(request.address(), EntityType.COMPANY, company.getId(), true);
         company.setAddressId(address.getId());
 
         return companyRepository.save(company);
@@ -57,5 +62,50 @@ public class CompanyService {
         }
 
         return companyRepository.findByOwnerId(ownerId);
+    }
+
+    /**
+     * This is throw away code and I absolutely hate it. We will refactor to use coordinates and calculate distances at
+     * some point
+     * */
+    public List<CompanyChoiceDTO> findCompaniesForAddress(Address address, int max) {
+        if (address == null) {
+            return List.of();
+        }
+        List<CompanyChoiceDTO> result = new ArrayList<>();
+        List<CompanyAndAddress> matchesByCity = companyRepository.findCompaniesByCity(address.getCity());
+
+        if (matchesByCity != null && !matchesByCity.isEmpty()) {
+            matchesByCity.stream().limit(max).forEach(company -> {
+                CompanyChoiceDTO dto = new CompanyChoiceDTO(company.company().getName(), AddressDTO.from(company.address()));
+                result.add(dto);
+            });
+        }
+
+        if (result.size() >= max) {
+            return result;
+        }
+
+        List<CompanyAndAddress> matchesByState = companyRepository.findCompaniesByState(address.getState());
+        if (matchesByState != null && !matchesByState.isEmpty()) {
+            matchesByState.stream().limit(result.size() - max).forEach(company -> {
+                CompanyChoiceDTO dto = new CompanyChoiceDTO(company.company().getName(), AddressDTO.from(company.address()));
+                result.add(dto);
+            });
+        }
+
+        if (result.size() >= max) {
+            return result;
+        }
+
+        List<CompanyAndAddress> matchesByCountry = companyRepository.findCompaniesByCountry(address.getCountry());
+        if (matchesByCountry != null && !matchesByCountry.isEmpty()) {
+            matchesByCountry.stream().limit(result.size() - max).forEach(company -> {
+                CompanyChoiceDTO dto = new CompanyChoiceDTO(company.company().getName(), AddressDTO.from(company.address()));
+                result.add(dto);
+            });
+        }
+
+        return result;
     }
 }

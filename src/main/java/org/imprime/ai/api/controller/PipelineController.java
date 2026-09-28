@@ -1,6 +1,19 @@
 package org.imprime.ai.api.controller;
 
+import lombok.RequiredArgsConstructor;
+import org.imprime.ai.api.http.request.order.StartOrderRequest;
+import org.imprime.ai.api.http.response.BaseResponse;
+import org.imprime.ai.api.service.OrderService;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping ("/order-pipeline")
 public class PipelineController {
+    private final OrderService orderService;
     // TODO
     //  1. - Receber modelo (metadados + arquivo)
     //     - Criar um pré-pedido e salvar o arquivo no Object Storage
@@ -27,4 +40,9 @@ public class PipelineController {
     //              Maker precisa poder ver na página dele o valor a receber (com o desconto da nossa plataforma)
     //  5. - Ideia: No front (ou no back) ao invéz do viacep, devemos usar uma integração com o google maps.
     //      Desse forma podemos facilmente calcular quais makers estão mais próximos do cliente, e até mesmo a distância
+
+    @PostMapping(value = "/start", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> start(@RequestPart("file") MultipartFile file, @RequestParam String addressGuid) {
+        return BaseResponse.ok(orderService.start(file, new StartOrderRequest(addressGuid)));
+    }
 }

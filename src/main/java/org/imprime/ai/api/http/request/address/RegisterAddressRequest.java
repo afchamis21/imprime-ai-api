@@ -16,7 +16,6 @@ public record RegisterAddressRequest(
         @Regex(regex = "^\\d{5}-?\\d{3}$", message = MessageCd.INVALID_ADDRESS_ZIP_CODE)
         String zipCode,
 
-//        @Required(message = MessageCd.MISSING_ADDRESS_NEIGHBORHOOD)
         @StringLength(minLength = 2, maxLength = 100, minLengthMessage = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD_LENGTH, maxLengthMessage = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD_LENGTH)
         @Regex(regex = "^[\\p{L}\\p{N}\\s'.,-]+$", message = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD)
         String neighborhood,

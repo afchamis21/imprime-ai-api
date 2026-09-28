@@ -45,6 +45,16 @@ public class ServiceContext {
         return ctx;
     }
 
+    public static ServiceContext copy(ServiceContext ctx) {
+        ServiceContext copy = new ServiceContext();
+        copy.setUser(ctx.user);
+        copy.setLanguageCd(ctx.languageCd);
+        copy.setExceptions(ctx.exceptions);
+
+        contextHolder.set(copy);
+        return copy;
+    }
+
     public static void clear() {
         MDC.remove(TRANSACTION_ID_MDC_KEY);
         MDC.remove(USER_ID_MDC_KEY);

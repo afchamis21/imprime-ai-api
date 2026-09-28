@@ -15,6 +15,7 @@ import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.repo.cache.Cached;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -44,9 +45,9 @@ public class UserService {
     }
 
     public Optional<User> findUserById(Long userId) {
-        Optional<User> cachedOptional = userInMemoryCache.findUserById(userId);
+        Optional<Cached<User>> cachedOptional = userInMemoryCache.findUserById(userId);
         if (cachedOptional.isPresent()) {
-            return cachedOptional;
+            return cachedOptional.map(Cached::value);
         }
 
         Optional<User> dbOptional = userRepository.findById(userId);
@@ -56,9 +57,9 @@ public class UserService {
     }
 
     public Optional<User> findUserByGuid(String userGuid) {
-        Optional<User> cachedOptional = userInMemoryCache.findUserByGuid(userGuid);
+        Optional<Cached<User>> cachedOptional = userInMemoryCache.findUserByGuid(userGuid);
         if (cachedOptional.isPresent()) {
-            return cachedOptional;
+            return cachedOptional.map(Cached::value);
         }
 
         Optional<User> dbOptional = userRepository.findUserByGuid(userGuid);
@@ -85,7 +86,7 @@ public class UserService {
     }
 
     @Transactional
-    public User registerUser(RegisterUserRequest request) {
+    public User registerUser(RegisterUserRequest request) throws Exception {
         request.validateOrThrow();
 
         boolean existsByEmail = userRepository.existsUserByEmail(request.email());

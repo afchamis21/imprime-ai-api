@@ -25,6 +25,7 @@ public class ErrorHandler {
     @ExceptionHandler(value = { HttpException.class })
     public ResponseEntity<?> handleException(HttpException e) {
         MessageLkup messageLkup = messageLkupService.getMessageByCode(e.getMessageCd());
+        messageLkup.setArgs(e.getArgs());
 
         return BaseResponse.build(null, e.getHttpStatus(), List.of(messageLkup));
     }

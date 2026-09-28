@@ -51,7 +51,7 @@ public class BaseResponse<T> {
                 return null;
             }
 
-            return new Message(messageLkup.getMessageCd().getCode(), messageLkup.getText(), messageLkup.getType());
+            return new Message(messageLkup.getMessageCd().getCode(), messageLkup.format(), messageLkup.getType());
         }
     }
 }

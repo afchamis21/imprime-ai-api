@@ -7,11 +7,11 @@ public class UnauthorizedException extends HttpException {
     private static final HttpStatus httpStatus = HttpStatus.UNAUTHORIZED;
     private static final MessageCd messageCd = MessageCd.UNAUTHORIZED;
 
-    public UnauthorizedException(String message) {
-        super(message, messageCd, httpStatus);
+    public UnauthorizedException(String message, String ...params) {
+        super(message, messageCd, httpStatus, params);
     }
 
-    public UnauthorizedException() {
-        super(messageCd, httpStatus);
+    public UnauthorizedException(String ...params) {
+        super(messageCd, httpStatus, params);
     }
 }

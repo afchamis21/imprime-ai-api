@@ -5,9 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 
 @Getter
@@ -23,10 +22,11 @@ public class OrderStatus extends Auditable {
     @Column(name = "ORDER_ID", nullable = false)
     private Long orderId;
 
-    @Column(name = "STATUS_ID", nullable = false)
-    private Long statusLkupId;
+    @Convert(converter = OrderStatusCd.Converter.class)
+    @Column(name = "STATUS_CD", nullable = false)
+    private OrderStatusCd statusCd; // TODO Flyway. Might be a full re-do
 
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "STATUS_DATE", nullable = false)
-    private Timestamp statusDate;
+    private Instant statusDate;
 }

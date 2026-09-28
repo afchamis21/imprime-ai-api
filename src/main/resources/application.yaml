@@ -10,3 +10,11 @@ imprime:
   ai:
     api:
       default-language: en_us
+
+oci:
+  object-storage:
+    namespace: ${OCI_OBJECT_STORAGE_NAMESPACE}
+    bucket-name: ${OCI_OBJECT_STORAGE_BUCKET}
+    config-file: ${OCI_CONFIG_FILE:./secret/oci.cfg}
+    profile: ${OCI_CONFIG_PROFILE:DEFAULT}
+    region-id: ${OCI_REGION_ID:sa-saopaulo-1}

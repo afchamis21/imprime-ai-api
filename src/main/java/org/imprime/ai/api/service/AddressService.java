@@ -15,6 +15,7 @@ import org.imprime.ai.api.repo.db.AddressRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -71,5 +72,9 @@ public class AddressService {
         }
 
         return addresses.stream().map(AddressDTO::from).toList();
+    }
+
+    public Optional<Address> findByGuid(String guid) {
+        return addressRepository.findByGuid(guid);
     }
 }
