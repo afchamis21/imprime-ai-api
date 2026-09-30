@@ -10,7 +10,7 @@ import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.dto.AddressDTO;
 import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
-import org.imprime.ai.api.repo.AddressDAO;
+import org.imprime.ai.api.repo.dao.AddressDAO;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.springframework.stereotype.Service;
 

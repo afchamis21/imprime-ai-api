@@ -3,6 +3,8 @@ package org.imprime.ai.api.repo.cache;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.repo.cache.base.Cached;
+import org.imprime.ai.api.repo.cache.base.DynamicInMemoryCache;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;

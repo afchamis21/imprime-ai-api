@@ -84,7 +84,7 @@ public enum MessageCd implements CodeAttribute {
 
     INVALID_ADDRESS_LINE_2("ADR_017"),
     INVALID_ADDRESS_LINE_2_LENGTH("ADR_018"),
-    ADDRESS_NOT_ACTIVE("ADR_019"), // TODO
+    ADDRESS_NOT_ACTIVE("ADR_019"),
     //endregion
 
     //region Company
@@ -115,7 +115,8 @@ public enum MessageCd implements CodeAttribute {
 
     //region Order
     MISSING_ADDRESS_GUID("ORD_001"),
-    INVALID_ADDRESS_GUID("ORD_001");
+    INVALID_ADDRESS_GUID("ORD_002"),
+    ERROR_LOADING_MAKERS("ORD_003");
     //endregion
 
     private final String code;

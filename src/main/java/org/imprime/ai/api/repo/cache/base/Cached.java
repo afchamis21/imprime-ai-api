@@ -1,4 +1,4 @@
-package org.imprime.ai.api.repo.cache;
+package org.imprime.ai.api.repo.cache.base;
 
 import java.time.Instant;
 

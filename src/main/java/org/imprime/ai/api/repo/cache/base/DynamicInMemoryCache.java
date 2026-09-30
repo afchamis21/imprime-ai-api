@@ -1,4 +1,4 @@
-package org.imprime.ai.api.repo.cache;
+package org.imprime.ai.api.repo.cache.base;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;

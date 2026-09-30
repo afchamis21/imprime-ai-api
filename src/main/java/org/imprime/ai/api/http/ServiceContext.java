@@ -2,15 +2,15 @@ package org.imprime.ai.api.http;
 
 import jakarta.annotation.Nullable;
 import lombok.Data;
+import org.imprime.ai.api.http.response.ResponseMessage;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.LanguageCd;
+import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.service.MessageLkupService;
 import org.slf4j.MDC;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Data
 public class ServiceContext {
@@ -21,12 +21,15 @@ public class ServiceContext {
     private static final ThreadLocal<ServiceContext> contextHolder =
             new ThreadLocal<>();
 
-    @Nullable
-    private User user;
+    private MessageLkupService messageLkupService;
 
-    private LanguageCd languageCd;
+    private @Nullable User user;
+
+    private @Nullable LanguageCd languageCd;
 
     private List<Exception> exceptions = new ArrayList<>();
+
+    private List<ResponseMessage> messages = new ArrayList<>();
 
     private final String transactionId = UUID.randomUUID().toString();
 
@@ -87,5 +90,15 @@ public class ServiceContext {
 
     public static User getUserOrThrow() {
         return getUser().orElseThrow(UnauthorizedException::new);
+    }
+
+    public void addMessage(MessageCd messageCd, String ...args) {
+        if (messageLkupService == null) return;
+
+        messageLkupService.getMessageByCode(messageCd, args);
+    }
+
+    public List<ResponseMessage> getMessages() {
+        return Objects.requireNonNullElse(messages, List.of());
     }
 }

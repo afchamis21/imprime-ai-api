@@ -22,14 +22,14 @@ public class FileAsset extends Auditable {
     private Long userId;
 
     @Column(name = "ASSET_URL", length = 1000)
-    private String assetUrl; // TODO Refactor this on the migrations
+    private String assetUrl;
 
     @Column(name = "NAME", nullable = false)
     private String name;
 
     @Convert(converter = CodeAttributeConverter.class)
     @Column(name = "ASSET_TYPE")
-    private AssetType assetType; // TODO Add this to the migrations
+    private AssetType assetType;
 
     @Getter
     @RequiredArgsConstructor

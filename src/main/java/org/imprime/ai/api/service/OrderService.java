@@ -91,8 +91,7 @@ public class OrderService {
             return new StartOrderResponse(order.getGuid(), AddressDTO.from(address), companyChoiceDTOS);
         } catch (Exception e) {
             log.error("Error searching companies for order. Returning Order Guid to the UI", e);
-            // TODO Add a message to the response!
-            // TODO Make a message code cache and refactor the formatting logic!
+            ServiceContext.getContext().addMessage(MessageCd.ERROR_LOADING_MAKERS);
             return new StartOrderResponse(order.getGuid(), AddressDTO.from(address), List.of());
         }
     }

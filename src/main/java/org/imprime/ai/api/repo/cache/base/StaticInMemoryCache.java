@@ -1,4 +1,4 @@
-package org.imprime.ai.api.repo.cache;
+package org.imprime.ai.api.repo.cache.base;
 
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.ServiceContext;

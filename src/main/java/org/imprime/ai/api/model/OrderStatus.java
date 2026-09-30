@@ -24,7 +24,7 @@ public class OrderStatus extends Auditable {
 
     @Convert(converter = OrderStatusCd.Converter.class)
     @Column(name = "STATUS_CD", nullable = false)
-    private OrderStatusCd statusCd; // TODO Flyway. Might be a full re-do
+    private OrderStatusCd statusCd;
 
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "STATUS_DATE", nullable = false)
