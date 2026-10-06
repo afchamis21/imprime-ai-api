@@ -7,7 +7,7 @@ CREATE TABLE orders
     from_address_id     NUMBER    NOT NULL,
     to_address_id       NUMBER    NOT NULL,
     pricing_strategy_id NUMBER,
-    status_id           NUMBER    NOT NULL,
+    status_cd           VARCHAR2(30)    NOT NULL,
     create_dt           TIMESTAMP WITH TIME ZONE
         DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
@@ -41,8 +41,8 @@ CREATE TABLE orders
             REFERENCES pricing_strategy(pricing_strategy_id),
 
     CONSTRAINT fk_order_status
-        FOREIGN KEY (status_id)
-            REFERENCES order_status_lkup(status_id)
+        FOREIGN KEY (status_cd)
+            REFERENCES order_status_lkup(code)
 );
 
 CREATE INDEX idx_orders_buyer
@@ -58,4 +58,4 @@ CREATE INDEX idx_orders_pricing_strategy
     ON orders(pricing_strategy_id);
 
 CREATE INDEX idx_orders_status_id
-    ON orders(status_id);
+    ON orders(status_cd);

@@ -1,1 +1,0 @@
-ALTER TABLE file_asset RENAME COLUMN asset_url TO image_url;

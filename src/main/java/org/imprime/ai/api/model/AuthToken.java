@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.hibernate.type.NumericBooleanConverter;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
 
 import java.time.Instant;
@@ -53,6 +53,7 @@ public class AuthToken extends Auditable {
 
         private final String code;
 
+        @jakarta.persistence.Converter
         public static class Converter extends CodeAttributeConverter<TokenType> {
             protected Converter() {
                 super(TokenType.class);

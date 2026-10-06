@@ -1,10 +1,12 @@
 package org.imprime.ai.api.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.enums.OrderStatusCd;
 
 @Getter
 @Setter
@@ -12,9 +14,8 @@ import org.imprime.ai.api.model.enums.OrderStatusCd;
 @Table(name = "ORDER_STATUS_LKUP")
 public class OrderStatusLkup extends Auditable {
     @Id
-    @Convert(converter = OrderStatusCd.Converter.class)
     @Column(name = "CODE", nullable = false, length = 30)
-    private OrderStatusCd code;
+    private String code;
 
     @Column(name = "NAME", nullable = false, length = 30)
     private String name;

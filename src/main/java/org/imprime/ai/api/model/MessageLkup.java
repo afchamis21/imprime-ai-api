@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
 import org.imprime.ai.api.model.enums.LanguageCd;
 import org.imprime.ai.api.model.enums.MessageCd;
@@ -62,6 +62,7 @@ public class MessageLkup extends Auditable {
 
         private final String code;
 
+        @jakarta.persistence.Converter
         public static class Converter extends CodeAttributeConverter<MessageType> {
             protected Converter() {
                 super(MessageType.class);

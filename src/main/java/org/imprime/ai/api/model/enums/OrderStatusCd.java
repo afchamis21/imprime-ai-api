@@ -2,7 +2,7 @@ package org.imprime.ai.api.model.enums;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 
 @Getter
 @RequiredArgsConstructor
@@ -18,6 +18,7 @@ public enum OrderStatusCd implements CodeAttribute {
 
     private final String code;
 
+    @jakarta.persistence.Converter
     public static class Converter extends CodeAttributeConverter<OrderStatusCd> {
         public Converter() {
             super(OrderStatusCd.class);

@@ -31,9 +31,9 @@ VALUES
 -- ORD_002
 ('ORD_002', 'en-US', 'The address GUID is invalid.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 ('ORD_002', 'pt-BR', 'O GUID do endereço é inválido.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('ORD_002', 'es-ES', 'El GUID de la dirección no es válido.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');
+('ORD_002', 'es-ES', 'El GUID de la dirección no es válido.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 
 -- ORD_003
 ('ORD_003', 'en-US', 'Error loading the list of Makers. Please try again.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 ('ORD_003', 'pt-BR', 'Erro ao carregar a lista de Makers. Tente novamente.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('ORD_003', 'es-ES', 'Error al cargar la lista de Makers. Inténtelo de nuevo.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('ORD_003', 'es-ES', 'Error al cargar la lista de Makers. Inténtelo de nuevo.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');

@@ -1,4 +1,4 @@
-package org.imprime.ai.api.model.converter;
+package org.imprime.ai.api.model.converter.base;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;

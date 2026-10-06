@@ -19,5 +19,5 @@ CREATE TABLE order_status
 
     CONSTRAINT fk_order_status_lkup
         FOREIGN KEY (status_cd)
-            REFERENCES order_status_lkup (status_cd)
+            REFERENCES order_status_lkup (code)
 );

@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
 
 @Getter
@@ -27,7 +27,7 @@ public class FileAsset extends Auditable {
     @Column(name = "NAME", nullable = false)
     private String name;
 
-    @Convert(converter = CodeAttributeConverter.class)
+    @Convert(converter = AssetType.Converter.class)
     @Column(name = "ASSET_TYPE")
     private AssetType assetType;
 
@@ -37,6 +37,7 @@ public class FileAsset extends Auditable {
         MODEL("MO");
         private final String code;
 
+        @jakarta.persistence.Converter
         public static class Converter extends CodeAttributeConverter<AssetType> {
             protected Converter() {
                 super(AssetType.class);

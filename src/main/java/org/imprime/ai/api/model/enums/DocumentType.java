@@ -2,7 +2,7 @@ package org.imprime.ai.api.model.enums;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 import org.imprime.ai.api.validator.CnpjValidator;
 import org.imprime.ai.api.validator.CpfValidator;
 import org.imprime.ai.api.validator.IValidator;
