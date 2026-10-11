@@ -143,6 +143,8 @@ public class AuthService {
         try {
             User user = userService.registerUser(request);
             return generateTokens(user);
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
