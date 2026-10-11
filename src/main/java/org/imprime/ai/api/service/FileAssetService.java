@@ -11,6 +11,7 @@ import org.imprime.ai.api.model.oci.ObjectStorageKey;
 import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.validator.FileValidator;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
@@ -29,9 +30,10 @@ public class FileAssetService {
             throw validationError;
         }
 
-        User caller = ServiceContext.getUserOrThrow();
-        ObjectStorageKey key = getObjectStorageKey(assetType, caller);
         String fileName = fileValidator.sanitizeFilename(file);
+        String extension = StringUtils.getFilenameExtension(fileName);
+        User caller = ServiceContext.getUserOrThrow();
+        ObjectStorageKey key = getObjectStorageKey(assetType, caller, extension);
 
         try {
             objectStorageService.upload(key, file.getInputStream(), file.getResource().contentLength(), file.getContentType());
@@ -43,7 +45,7 @@ public class FileAssetService {
         try {
             FileAsset fileAsset = new FileAsset();
             fileAsset.setAssetType(key.getAssetType());
-            fileAsset.setAssetUrl(key.getKey());
+            fileAsset.setAssetUrl(key.getFullPath());
             fileAsset.setName(fileName);
             fileAsset.setUserId(caller.getId());
             return fileAssetRepository.save(fileAsset);
@@ -54,9 +56,9 @@ public class FileAssetService {
         }
     }
 
-    private ObjectStorageKey getObjectStorageKey(FileAsset.AssetType assetType, User user) {
+    private ObjectStorageKey getObjectStorageKey(FileAsset.AssetType assetType, User user, String extension) {
         return switch (assetType) {
-            case MODEL -> ObjectStorageKey.model(user.getGuid(), UUID.randomUUID().toString());
+            case MODEL -> ObjectStorageKey.model(user.getGuid(), UUID.randomUUID().toString(), extension);
         };
     }
 

@@ -55,7 +55,7 @@ public class ObjectStorageService {
 
         PutObjectRequest request = PutObjectRequest.builder()
                 .namespaceName(properties.getObjectStorage().getNamespace())
-                .bucketName(properties.getObjectStorage().getBucketName())
+                .bucketName(objectKey.getBucket())
                 .objectName(fullPath)
                 .contentLength(contentLength)
                 .contentType(Objects.requireNonNullElse(contentType, MediaType.APPLICATION_OCTET_STREAM_VALUE))
@@ -86,10 +86,12 @@ public class ObjectStorageService {
     }
 
     public void delete(ObjectStorageKey key) {
+        final String fullPath = Path.of(appConfig.getEnvironment().name().toLowerCase(Locale.ROOT), key.getKey()).toString();
+
         DeleteObjectRequest request = DeleteObjectRequest.builder()
                 .namespaceName(properties.getObjectStorage().getNamespace())
-                .bucketName(properties.getObjectStorage().getBucketName())
-                .objectName(key.getKey()).build();
+                .bucketName(key.getBucket())
+                .objectName(fullPath).build();
 
         objectStorage.deleteObject(request);
     }

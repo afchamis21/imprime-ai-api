@@ -38,6 +38,8 @@ public class ErrorHandler {
         ServiceContext.getContext().addMessage(MessageCd.INTERNAL_SERVER_ERROR);
         ServiceContext.addException(e);
 
+        log.error("Unhandled exception: ", e);
+
         return BaseResponse.build(null, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

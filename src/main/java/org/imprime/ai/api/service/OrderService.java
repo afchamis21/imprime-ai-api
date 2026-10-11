@@ -67,7 +67,7 @@ public class OrderService {
         // 5.1 If error curl up and cry. Then delete the asset and the uploaded model and return error to the UI
         Order order = new Order();
         try {
-            order.setFromAddressId(address.getId());
+            order.setToAddressId(address.getId());
             order.setBuyerId(caller.getId());
             order.setFileAssetId(fileAsset.getId());
             order = orderRepository.save(order);
@@ -87,13 +87,27 @@ public class OrderService {
         // 7. Return DTO containing the OrderGUID + Ship To Address + Maker List to the UI
 
         try {
-            List<CompanyChoiceDTO> companyChoiceDTOS = companyService.findCompaniesForAddress(address, 10);
+            List<CompanyChoiceDTO> companyChoiceDTOS = companyService.findCompaniesForAddress(address, 100);
             return new StartOrderResponse(order.getGuid(), AddressDTO.from(address), companyChoiceDTOS);
         } catch (Exception e) {
             log.error("Error searching companies for order. Returning Order Guid to the UI", e);
             ServiceContext.getContext().addMessage(MessageCd.ERROR_LOADING_MAKERS);
             return new StartOrderResponse(order.getGuid(), AddressDTO.from(address), List.of());
         }
+    }
+
+    public List<CompanyChoiceDTO> getMakerOptions(String orderGuid, Integer max) {
+        Optional<Order> optionalOrder = orderRepository.findOrderByGuid(orderGuid);
+        if (optionalOrder.isEmpty()) {
+            throw new BadRequestException(MessageCd.INTERNAL_SERVER_ERROR); // TODO
+        }
+
+        Optional<Address> optionalAddress = addressService.findById(optionalOrder.get().getToAddressId());
+        if (optionalAddress.isEmpty()) {
+            throw new BadRequestException(MessageCd.INTERNAL_SERVER_ERROR); // TODO
+        }
+
+        return companyService.findCompaniesForAddress(optionalAddress.get(), max);
     }
 
     // Fetch Order Snapshot

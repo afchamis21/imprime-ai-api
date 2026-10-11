@@ -16,6 +16,8 @@ import org.imprime.ai.api.repo.db.CompanyDAO;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 
@@ -69,9 +71,14 @@ public class CompanyService {
             return List.of();
         }
 
-        return companyDAO.findNearestCompaniesByAddress(address.getLatitude(), address.getLongitude(), max)
-                .stream()
-                .map(match -> new CompanyChoiceDTO(match.company().getName(), AddressDTO.from(match.address())))
-                .toList();
+        return companyDAO.findNearestCompaniesByAddress(address.getLatitude(), address.getLongitude(), max).stream().map(match -> {
+            double meters = match.distanceMeters();
+
+            boolean useKilometers = meters > 1000;
+            double value = useKilometers ? meters / 1000.0 : meters;
+            String unit = useKilometers ? "km" : "m";
+
+            return new CompanyChoiceDTO(match.company().getName(), AddressDTO.from(match.address()), new CompanyChoiceDTO.Distance(BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP), unit));
+        }).toList();
     }
 }

@@ -42,6 +42,9 @@ public class AddressService {
         address.setAddressLine1(request.addressLine1());
         address.setAddressLine2(request.addressLine2());
 
+        address.setLatitude(request.latitude());
+        address.setLongitude(request.longitude());
+
         address.setDefaultAddress(isDefaultAddress);
         address.setOwnerId(ownerId);
         address.setOwnerType(ownerType);
@@ -76,5 +79,9 @@ public class AddressService {
 
     public Optional<Address> findByGuid(String guid) {
         return addressRepository.findByGuid(guid);
+    }
+
+    public Optional<Address> findById(Long id) {
+        return addressRepository.findById(id);
     }
 }

@@ -62,7 +62,11 @@ public class CompanyDAO {
                     a.create_dt AS address_create_dt,
                     a.create_user AS address_create_user,
                     a.update_dt AS address_update_dt,
-                    a.update_user AS address_update_user
+                    a.update_user AS address_update_user,
+                    ST_Distance(
+                        ST_SetSRID(ST_MakePoint(a.longitude, a.latitude), 4326)::geography,
+                        ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography
+                    ) AS distance_meters
                 FROM company c
                 JOIN address a
                   ON a.owner_id = c.company_id
@@ -130,7 +134,9 @@ public class CompanyDAO {
         address.setUpdateDt(rs.getTimestamp("address_update_dt") == null ? null : rs.getTimestamp("address_update_dt").toInstant());
         address.setUpdateUser(rs.getString("address_update_user"));
 
-        return new CompanyAndAddress(company, address);
+        double distanceMeters = rs.getDouble("distance_meters");
+
+        return new CompanyAndAddress(company, address, distanceMeters);
     }
 
     private DocumentType parseDocumentType(String code) {

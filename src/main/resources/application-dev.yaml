@@ -40,6 +40,7 @@ cors:
   allowed-origins:
     - http://localhost:5173
 
-oci:
-  object-storage:
-    bucket-name: dev-payloads
+imprime:
+  ai:
+    api:
+      environment: dev

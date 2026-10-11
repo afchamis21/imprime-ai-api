@@ -13,7 +13,6 @@ public class OciConfigProperties {
     @Data
     public static class ObjectStorageConfig {
         private String namespace;
-        private String bucketName;
         private String configFile;
         private String regionId;
         private String profile;

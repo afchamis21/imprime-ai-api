@@ -43,7 +43,7 @@ public class FileValidator {
 
         String extension = StringUtils.getFilenameExtension(filename);
         Set<String> allowedExtensions = ALLOWED_EXTENSIONS.get(type);
-        if (extension == null || allowedExtensions.contains(extension.toLowerCase(Locale.ROOT))) {
+        if (extension == null || !allowedExtensions.contains(extension.toLowerCase(Locale.ROOT))) {
             log.warn("Extension [{}] is not on the allow list {}!", extension, allowedExtensions);
             return new BadRequestException(MessageCd.FILE_UNSUPPORTED_EXTENSION, allowedExtensions.toString());
         }

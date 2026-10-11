@@ -42,7 +42,10 @@ public record RegisterAddressRequest(
         @Nullable
         @StringLength(maxLength = 255, minLengthMessage = MessageCd.INVALID_ADDRESS_LINE_2_LENGTH, maxLengthMessage = MessageCd.INVALID_ADDRESS_LINE_2_LENGTH)
         @Regex(regex = "^[\\p{L}\\p{N}\\s'.,-]*$", message = MessageCd.INVALID_ADDRESS_LINE_2)
-        String addressLine2
+        String addressLine2,
+
+        Double latitude,
+        Double longitude
 ) implements ValidatedRequest {
 
     @Nullable
