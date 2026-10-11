@@ -34,3 +34,7 @@ build/
 
 secret/*.cfg
 !secret/*.cfg.example
+
+mvnw
+rm550444.pem
+oci.cfg

@@ -1,17 +1,17 @@
 spring:
   datasource:
-    url: jdbc:oracle:thin:@localhost:1521/FREEPDB1
-    username: imprime_ai_api
-    password: passwd
-    driver-class-name: oracle.jdbc.OracleDriver
+    url: jdbc:postgresql://167.234.230.178:5432/imprime_ai_db
+    username: imprime_ai
+    password: iiYQVyHBko+p/OHlT6L1ole3nIWCgRNunoWQygULOM0=
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
 
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.OracleDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   flyway:
     enabled: true
