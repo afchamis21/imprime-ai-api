@@ -95,7 +95,10 @@ public class ServiceContext {
     public void addMessage(MessageCd messageCd, String ...args) {
         if (messageLkupService == null) return;
 
-        messageLkupService.getMessageByCode(messageCd, args);
+        ResponseMessage msg = messageLkupService.getMessageByCode(messageCd, args);
+        if (msg != null) {
+            messages.add(msg);
+        }
     }
 
     public List<ResponseMessage> getMessages() {
