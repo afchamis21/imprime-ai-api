@@ -1,1 +1,1 @@
-DROP TABLE order_status CASCADE CONSTRAINTS;
+DROP TABLE order_status;

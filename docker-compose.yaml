@@ -1,21 +1,21 @@
 services:
-  oracle:
-    image: container-registry.oracle.com/database/free:latest
-    container_name: oracle-free
+  postgres:
+    image: postgis/postgis:16-3.5-alpine
+    container_name: postgres
 
     ports:
-      - "1521:1521"
-      - "5500:5500"
+      - "5432:5432"
 
     environment:
-      ORACLE_PWD: Oracle123
-      ORACLE_CHARACTERSET: AL32UTF8
+      POSTGRES_DB: imprime_ai_api
+      POSTGRES_USER: imprime_ai_api
+      POSTGRES_PASSWORD: passwd
 
     volumes:
-      - oracle_data:/opt/oracle/oradata
-      - ./init:/opt/oracle/scripts/startup
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
 
     restart: unless-stopped
 
 volumes:
-  oracle_data:
+  postgres_data:

@@ -8,15 +8,14 @@ import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.dto.AddressDTO;
-import org.imprime.ai.api.model.dto.CompanyAndAddress;
 import org.imprime.ai.api.model.dto.CompanyChoiceDTO;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.repo.db.CompanyDAO;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +25,7 @@ import java.util.Optional;
 public class CompanyService {
     private final AddressService addressService;
     private final CompanyRepository companyRepository;
+    private final CompanyDAO companyDAO;
 
     @Transactional
     public Company registerCompany(RegisterCompanyRequest request, User owner) {
@@ -64,48 +64,14 @@ public class CompanyService {
         return companyRepository.findByOwnerId(ownerId);
     }
 
-    /**
-     * This is throw away code and I absolutely hate it. We will refactor to use coordinates and calculate distances at
-     * some point
-     * */
     public List<CompanyChoiceDTO> findCompaniesForAddress(Address address, int max) {
-        if (address == null) {
+        if (address == null || address.getLatitude() == null || address.getLongitude() == null || max <= 0) {
             return List.of();
         }
-        List<CompanyChoiceDTO> result = new ArrayList<>();
-        List<CompanyAndAddress> matchesByCity = companyRepository.findCompaniesByCity(address.getCity());
 
-        if (matchesByCity != null && !matchesByCity.isEmpty()) {
-            matchesByCity.stream().limit(max).forEach(company -> {
-                CompanyChoiceDTO dto = new CompanyChoiceDTO(company.company().getName(), AddressDTO.from(company.address()));
-                result.add(dto);
-            });
-        }
-
-        if (result.size() >= max) {
-            return result;
-        }
-
-        List<CompanyAndAddress> matchesByState = companyRepository.findCompaniesByState(address.getState());
-        if (matchesByState != null && !matchesByState.isEmpty()) {
-            matchesByState.stream().limit(result.size() - max).forEach(company -> {
-                CompanyChoiceDTO dto = new CompanyChoiceDTO(company.company().getName(), AddressDTO.from(company.address()));
-                result.add(dto);
-            });
-        }
-
-        if (result.size() >= max) {
-            return result;
-        }
-
-        List<CompanyAndAddress> matchesByCountry = companyRepository.findCompaniesByCountry(address.getCountry());
-        if (matchesByCountry != null && !matchesByCountry.isEmpty()) {
-            matchesByCountry.stream().limit(result.size() - max).forEach(company -> {
-                CompanyChoiceDTO dto = new CompanyChoiceDTO(company.company().getName(), AddressDTO.from(company.address()));
-                result.add(dto);
-            });
-        }
-
-        return result;
+        return companyDAO.findNearestCompaniesByAddress(address.getLatitude(), address.getLongitude(), max)
+                .stream()
+                .map(match -> new CompanyChoiceDTO(match.company().getName(), AddressDTO.from(match.address())))
+                .toList();
     }
 }

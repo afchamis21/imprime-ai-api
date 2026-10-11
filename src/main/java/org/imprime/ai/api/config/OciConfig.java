@@ -3,10 +3,12 @@ package org.imprime.ai.api.config;
 import com.oracle.bmc.Region;
 import com.oracle.bmc.auth.AuthenticationDetailsProvider;
 import com.oracle.bmc.auth.ConfigFileAuthenticationDetailsProvider;
+import com.oracle.bmc.http.client.jersey3.Jersey3HttpProvider;
 import com.oracle.bmc.objectstorage.ObjectStorage;
 import com.oracle.bmc.objectstorage.ObjectStorageClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 
 import java.io.IOException;
 
@@ -28,6 +30,7 @@ public class OciConfig {
             OciConfigProperties properties) {
         return ObjectStorageClient.builder()
                 .region(Region.fromRegionId(properties.getObjectStorage().getRegionId()))
+                .httpProvider(new Jersey3HttpProvider())
                 .build(authenticationDetailsProvider);
     }
 }

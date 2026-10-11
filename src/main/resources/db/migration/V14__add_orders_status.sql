@@ -1,1 +1,1 @@
-ALTER TABLE orders ADD status VARCHAR2(5);
+ALTER TABLE orders ADD status VARCHAR(5);

@@ -1,1 +1,1 @@
-ALTER TABLE address ADD neighborhood VARCHAR2(100);
+ALTER TABLE address ADD neighborhood VARCHAR(100);

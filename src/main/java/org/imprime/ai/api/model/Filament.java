@@ -29,7 +29,6 @@ public class Filament extends Auditable {
     @Column(name = "FILAMENT_TYPE", nullable = false, length = 100)
     private String filamentType;
 
-    @Lob
     @Column(name = "DESCRIPTION")
     private String description;
 }

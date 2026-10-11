@@ -4,26 +4,26 @@ INSERT INTO message_lkup (
 )
 VALUES
 -- COM_008
-('COM_008', 'en-US', 'A company with this name already exists.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('COM_008', 'pt-BR', 'Já existe uma empresa com este nome.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('COM_008', 'es-ES', 'Ya existe una empresa con este nombre.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('COM_008', 'en-US', 'A company with this name already exists.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('COM_008', 'pt-BR', 'Já existe uma empresa com este nome.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('COM_008', 'es-ES', 'Ya existe una empresa con este nombre.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 
 -- COM_009
-('COM_009', 'en-US', 'A company with this document already exists.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('COM_009', 'pt-BR', 'Já existe uma empresa com este documento.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('COM_009', 'es-ES', 'Ya existe una empresa con este documento.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('COM_009', 'en-US', 'A company with this document already exists.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('COM_009', 'pt-BR', 'Já existe uma empresa com este documento.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('COM_009', 'es-ES', 'Ya existe una empresa con este documento.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 
 -- USR_021
-('USR_021', 'en-US', 'A user with this email already exists.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('USR_021', 'pt-BR', 'Já existe um usuário com este e-mail.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('USR_021', 'es-ES', 'Ya existe un usuario con este correo electrónico.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_021', 'en-US', 'A user with this email already exists.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_021', 'pt-BR', 'Já existe um usuário com este e-mail.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_021', 'es-ES', 'Ya existe un usuario con este correo electrónico.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 
 -- USR_022
-('USR_022', 'en-US', 'A user with this document already exists.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('USR_022', 'pt-BR', 'Já existe um usuário com este documento.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('USR_022', 'es-ES', 'Ya existe un usuario con este documento.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_022', 'en-US', 'A user with this document already exists.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_022', 'pt-BR', 'Já existe um usuário com este documento.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_022', 'es-ES', 'Ya existe un usuario con este documento.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
 
 -- USR_023
-('USR_023', 'en-US', 'A user with this phone number already exists.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('USR_023', 'pt-BR', 'Já existe um usuário com este telefone.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
-('USR_023', 'es-ES', 'Ya existe un usuario con este número de teléfono.', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');
+('USR_023', 'en-US', 'A user with this phone number already exists.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_023', 'pt-BR', 'Já existe um usuário com este telefone.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre'),
+('USR_023', 'es-ES', 'Ya existe un usuario con este número de teléfono.', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');

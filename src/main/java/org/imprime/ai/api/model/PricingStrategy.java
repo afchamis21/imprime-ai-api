@@ -3,11 +3,7 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.type.NumericBooleanConverter;
 import org.imprime.ai.api.model.base.Auditable;
-
-import java.time.Instant;
 
 @Getter
 @Setter
@@ -25,7 +21,6 @@ public class PricingStrategy extends Auditable {
     @Column(name = "NAME", nullable = false)
     private String name;
 
-    @Convert(converter = NumericBooleanConverter.class)
     @Column(name = "IS_DEFAULT", nullable = false)
     private Boolean isDefault;
 }
