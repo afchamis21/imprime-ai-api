@@ -3,10 +3,9 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
-
-import java.time.Instant;
 
 @Getter
 @Setter
@@ -24,8 +23,8 @@ public class PricingRule extends Auditable {
     @Column(name = "IMPLEMENTATION_CLASS", nullable = false)
     private String implementationClass;
 
-    @Lob
-    @Column(name = "CONFIGS")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "CONFIGS", columnDefinition = "jsonb")
     private String configs;
 
     @Column(name = "EXECUTION_ORDER", nullable = false)

@@ -6,4 +6,4 @@ DROP INDEX idx_user_company_id;
 ALTER TABLE users
     DROP COLUMN company_id;
 
-DROP TABLE company CASCADE CONSTRAINTS;
+DROP TABLE company;

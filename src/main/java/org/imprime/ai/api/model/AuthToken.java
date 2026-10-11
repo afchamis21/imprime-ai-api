@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
-import org.hibernate.type.NumericBooleanConverter;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
@@ -31,7 +30,6 @@ public class AuthToken extends Auditable {
     @Convert(converter = TokenType.Converter.class)
     private TokenType type;
 
-    @Convert(converter = NumericBooleanConverter.class)
     @Column(name = "REVOKED", nullable = false)
     private Boolean revoked;
 

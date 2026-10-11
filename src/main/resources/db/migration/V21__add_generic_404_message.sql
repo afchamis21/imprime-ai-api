@@ -1,5 +1,5 @@
 INSERT INTO message_lkup (CODE, LANGUAGE_CODE, TEXT, TYPE, GUID, STATUS, CREATE_DT, CREATE_USER, UPDATE_DT, UPDATE_USER)
-VALUES ('SYS_404', 'en-US', 'Page not found', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');
+VALUES ('SYS_404', 'en-US', 'Page not found', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');
 
 INSERT INTO message_lkup (CODE, LANGUAGE_CODE, TEXT, TYPE, GUID, STATUS, CREATE_DT, CREATE_USER, UPDATE_DT, UPDATE_USER)
-VALUES ('SYS_404', 'pt-BR', 'Página não encontrada', 'E', uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');
+VALUES ('SYS_404', 'pt-BR', 'Página não encontrada', 'E', gen_random_uuid(), 'A', CURRENT_TIMESTAMP, 'Andre', CURRENT_TIMESTAMP, 'Andre');

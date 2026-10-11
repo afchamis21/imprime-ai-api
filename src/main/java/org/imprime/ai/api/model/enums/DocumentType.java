@@ -19,7 +19,7 @@ public enum DocumentType implements CodeAttribute {
     private final IValidator<String> validator;
 
     public static class Converter extends CodeAttributeConverter<DocumentType> {
-        protected Converter() {
+        public Converter() {
             super(DocumentType.class);
         }
     }

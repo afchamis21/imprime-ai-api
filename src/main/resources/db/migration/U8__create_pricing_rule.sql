@@ -1,1 +1,1 @@
-DROP TABLE pricing_rule CASCADE CONSTRAINTS;
+DROP TABLE pricing_rule;

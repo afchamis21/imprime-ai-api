@@ -32,9 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 
-secret/*.cfg
+secret/**
+!secret/**/*.cfg.example
 !secret/*.cfg.example
-
-mvnw
-rm550444.pem
-oci.cfg

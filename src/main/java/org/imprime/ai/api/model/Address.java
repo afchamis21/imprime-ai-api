@@ -3,7 +3,6 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.type.NumericBooleanConverter;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.EntityType;
 
@@ -36,6 +35,12 @@ public class Address extends Auditable {
     @Column(name = "ZIP_CODE", length = 20)
     private String zipCode;
 
+    @Column(name = "LATITUDE")
+    private Double latitude;
+
+    @Column(name = "LONGITUDE")
+    private Double longitude;
+
     @Column(name = "NEIGHBORHOOD", length = 100)
     private String neighborhood;
 
@@ -45,7 +50,6 @@ public class Address extends Auditable {
     @Column(name = "ADDRESS_LINE_2")
     private String addressLine2;
 
-    @Convert(converter = NumericBooleanConverter.class)
     @Column(name = "DEFAULT_ADDRESS", nullable = false)
     private Boolean defaultAddress;
 }
