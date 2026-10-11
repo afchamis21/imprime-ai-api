@@ -39,7 +39,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
-
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc11</artifactId>
@@ -110,8 +109,12 @@
             <artifactId>oci-java-sdk-objectstorage</artifactId>
             <version>${oci.sdk.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.oracle.oci.sdk</groupId>
+            <artifactId>oci-java-sdk-common-httpclient-jersey3</artifactId>
+            <version>${oci.sdk.version}</version>
+        </dependency>
     </dependencies>
-
     <build>
         <plugins>
             <plugin>
