@@ -35,3 +35,5 @@ build/
 secret/**
 !secret/**/*.cfg.example
 !secret/*.cfg.example
+application-local.yaml
+application.dev.yaml
