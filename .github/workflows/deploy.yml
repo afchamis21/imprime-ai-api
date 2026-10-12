@@ -30,7 +30,7 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "target/*.jar"
-          target: "/home/opc/app/"
+          target: "/opt/app/"
           strip_components: 1
 
       - name: Reiniciar a aplicação na VM (SSH)
@@ -40,16 +40,14 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. Apaga lixos (.original) que o Maven possa ter mandado
-            rm -f /home/opc/app/*.original
+            # Remove arquivos velhos e renomeia o novo
+            rm -f /opt/app/*.original
+            mv /opt/app/imprime-ai-api-*.jar /opt/app/backend.jar
             
-            # 2. Renomeia o executável real para backend.jar
-            mv /home/opc/app/imprime-ai-api-*.jar /home/opc/app/backend.jar
+            # Ajusta permissões
+            sudo chown opc:opc /opt/app/backend.jar
+            sudo chmod 755 /opt/app/backend.jar
             
-            # 3. Garante que o usuário opc é dono do arquivo e pode executá-lo
-            sudo chown opc:opc /home/opc/app/backend.jar
-            sudo chmod 755 /home/opc/app/backend.jar
-            
-            # 4. Reinicia o serviço
+            # Reinicia o serviço
             sudo systemctl restart backend.service
             sudo systemctl status backend.service --no-pager
