@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    clean-disabled: false
+
+auth:
+  access-token:
+    key: ${JWT_ACCESS_KEY}
+    duration: 5m
+    token-type: access
+  refresh-token:
+    key: ${JWT_REFRESH_KEY}
+    duration: 2h
+    token-type: refresh
+
+cors:
+  path-pattern: /**
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+  allowed-origins:
+    - ${CORS_ORIGINS:http://localhost:5173} # Se a variável não existir, usa o localhost por padrão
+
+imprime:
+  ai:
+    api:
+      environment: dev
