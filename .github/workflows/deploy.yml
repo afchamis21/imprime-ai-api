@@ -1,0 +1,48 @@
+name: Deploy to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'oracle'
+          cache: maven
+
+      - name: Compilar o projeto (Maven)
+        run: mvn clean package -DskipTests
+
+      - name: Transferir arquivo .jar para a VM (SCP)
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "target/*.jar"
+          target: "/home/opc/app/"
+          strip_components: 1
+
+      - name: Reiniciar a aplicação na VM (SSH)
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Organiza os arquivos no diretório do usuário opc
+            mv /home/opc/app/*.jar /home/opc/app/backend.jar
+            
+            # Reinicia o serviço
+            sudo systemctl restart backend.service
+            sudo systemctl status backend.service --no-pager
