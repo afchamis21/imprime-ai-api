@@ -40,9 +40,16 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # Pega especificamente o arquivo original recém-chegado e sobrescreve o backend.jar
+            # 1. Apaga lixos (.original) que o Maven possa ter mandado
+            rm -f /home/opc/app/*.original
+            
+            # 2. Renomeia o executável real para backend.jar
             mv /home/opc/app/imprime-ai-api-*.jar /home/opc/app/backend.jar
             
-            # Reinicia o serviço
+            # 3. Garante que o usuário opc é dono do arquivo e pode executá-lo
+            sudo chown opc:opc /home/opc/app/backend.jar
+            sudo chmod 755 /home/opc/app/backend.jar
+            
+            # 4. Reinicia o serviço
             sudo systemctl restart backend.service
             sudo systemctl status backend.service --no-pager
