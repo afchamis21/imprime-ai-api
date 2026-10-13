@@ -1,1 +1,1 @@
-DROP TABLE filament CASCADE CONSTRAINTS;
+DROP TABLE filament;

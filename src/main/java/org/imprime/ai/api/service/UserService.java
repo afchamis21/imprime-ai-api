@@ -9,15 +9,19 @@ import org.imprime.ai.api.http.request.user.RegisterUserRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.dto.AddressDTO;
 import org.imprime.ai.api.model.dto.FullUserDTO;
+import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
+import org.imprime.ai.api.repo.cache.base.Cached;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,9 +45,9 @@ public class UserService {
     }
 
     public Optional<User> findUserById(Long userId) {
-        Optional<User> cachedOptional = userInMemoryCache.findUserById(userId);
+        Optional<Cached<User>> cachedOptional = userInMemoryCache.findUserById(userId);
         if (cachedOptional.isPresent()) {
-            return cachedOptional;
+            return cachedOptional.map(Cached::value);
         }
 
         Optional<User> dbOptional = userRepository.findById(userId);
@@ -53,9 +57,9 @@ public class UserService {
     }
 
     public Optional<User> findUserByGuid(String userGuid) {
-        Optional<User> cachedOptional = userInMemoryCache.findUserByGuid(userGuid);
+        Optional<Cached<User>> cachedOptional = userInMemoryCache.findUserByGuid(userGuid);
         if (cachedOptional.isPresent()) {
-            return cachedOptional;
+            return cachedOptional.map(Cached::value);
         }
 
         Optional<User> dbOptional = userRepository.findUserByGuid(userGuid);
@@ -82,7 +86,7 @@ public class UserService {
     }
 
     @Transactional
-    public User registerUser(RegisterUserRequest request) {
+    public User registerUser(RegisterUserRequest request) throws Exception {
         request.validateOrThrow();
 
         boolean existsByEmail = userRepository.existsUserByEmail(request.email());
@@ -123,5 +127,18 @@ public class UserService {
         user.setPrimaryAddressId(address.getId());
 
         return userRepository.save(user);
+    }
+
+    public List<AddressDTO> listAddresses(boolean company, Integer page, Integer size) {
+        User caller = ServiceContext.getUserOrThrow();
+        List<Owner<Long>> ownerAndEntities = new ArrayList<>();
+        if (company) {
+            Optional<Company> optionalCompany = companyService.findByOwnerId(caller.getId());
+            optionalCompany.ifPresent(value -> ownerAndEntities.add(new Owner<>(value.getId(), EntityType.COMPANY)));
+        }
+
+        ownerAndEntities.add(new Owner<>(caller.getId(), EntityType.USER));
+
+        return addressService.findPageByOwner(ownerAndEntities, page, size);
     }
 }

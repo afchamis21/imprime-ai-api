@@ -4,19 +4,17 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.base.Auditable;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 import org.imprime.ai.api.model.enums.CodeAttribute;
 import org.imprime.ai.api.model.enums.LanguageCd;
 import org.imprime.ai.api.model.enums.MessageCd;
-
-import java.time.OffsetDateTime;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "MESSAGE_LKUP")
-public class MessageLkup {
+public class MessageLkup extends Auditable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "MESSAGE_ID", nullable = false)
@@ -37,24 +35,25 @@ public class MessageLkup {
     @Convert(converter = MessageType.Converter.class)
     private MessageType type;
 
-    @Column(name = "GUID", length = 36)
-    private String guid;
-
-    @Column(name = "STATUS", length = 5)
-    private String status;
-
-    @ColumnDefault("CURRENT_TIMESTAMP")
-    @Column(name = "CREATE_DT", nullable = false)
-    private OffsetDateTime createDt;
-
-    @Column(name = "CREATE_USER", length = 100)
-    private String createUser;
-
-    @Column(name = "UPDATE_DT")
-    private OffsetDateTime updateDt;
-
-    @Column(name = "UPDATE_USER", length = 100)
-    private String updateUser;
+//    @Transient
+//    private String[] args;
+//
+//    public String format() {
+//        if (args == null || args.length == 0) {
+//            return text;
+//        }
+//
+//        if (text == null || text.isBlank()) {
+//            return text;
+//        }
+//
+//        String aux = text;
+//        for (String arg : args) {
+//            aux = aux.replaceFirst("\\{}", Matcher.quoteReplacement(arg));
+//        }
+//
+//        return aux;
+//    }
 
     @Getter
     @RequiredArgsConstructor
@@ -63,6 +62,7 @@ public class MessageLkup {
 
         private final String code;
 
+        @jakarta.persistence.Converter
         public static class Converter extends CodeAttributeConverter<MessageType> {
             protected Converter() {
                 super(MessageType.class);

@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.config.AppConfig;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.model.enums.LanguageCd;
+import org.imprime.ai.api.service.MessageLkupService;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -21,11 +22,13 @@ public class ServiceContextInterceptor implements HandlerInterceptor {
     private static final String TRANSACTION_ID_HEADER = "X-Transaction-Id";
     private static final String LANGUAGE_CD_HEADER = "X-Language-Code";
 
+    private final MessageLkupService messageLkupService;
     private final AppConfig appConfig;
 
     @Override
     public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) throws Exception {
         ServiceContext ctx = ServiceContext.getContext();
+        ctx.setMessageLkupService(messageLkupService);
         response.setHeader(TRANSACTION_ID_HEADER, ctx.getTransactionId());
 
         String languageCode = request.getHeader(LANGUAGE_CD_HEADER);

@@ -6,11 +6,11 @@ import org.springframework.http.HttpStatus;
 public class BadRequestException extends HttpException {
     private static final HttpStatus httpStatus = HttpStatus.BAD_REQUEST;
 
-    public BadRequestException(String message, MessageCd messageCd) {
-        super(message, messageCd, httpStatus);
+    public BadRequestException(String message, MessageCd messageCd, String ...params) {
+        super(message, messageCd, httpStatus, params);
     }
 
-    public BadRequestException(MessageCd messageCd) {
-        super(messageCd, httpStatus);
+    public BadRequestException(MessageCd messageCd, String ...params) {
+        super(messageCd, httpStatus, params);
     }
 }

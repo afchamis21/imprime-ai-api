@@ -1,1 +1,1 @@
-DROP TABLE file_asset CASCADE CONSTRAINTS;
+DROP TABLE file_asset;

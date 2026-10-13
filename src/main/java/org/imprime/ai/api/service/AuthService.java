@@ -140,7 +140,13 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterUserRequest request) {
-        User user = userService.registerUser(request);
-        return generateTokens(user);
+        try {
+            User user = userService.registerUser(request);
+            return generateTokens(user);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

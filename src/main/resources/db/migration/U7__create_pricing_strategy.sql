@@ -1,1 +1,1 @@
-DROP TABLE pricing_strategy CASCADE CONSTRAINTS;
+DROP TABLE pricing_strategy;

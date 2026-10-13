@@ -34,7 +34,7 @@ Após o banco de dados estar rodando e pronto para receber conexões, inicie a a
 
 **No Linux / WSL / macOS:**
 ```bash
-./mvnw spring-boot:run
+./mvnw clean spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 **No Windows (PowerShell / CMD):**
@@ -53,4 +53,10 @@ Para parar a execução da API, basta pressionar `Ctrl + C` no terminal onde o S
 Para desligar e remover o contêiner do banco de dados Oracle, execute o seguinte comando na mesma pasta:
 ```bash
 docker compose down
+```
+
+### 🐧 Rodando novamente as migrations pelo Flyway
+
+```bash
+./mvnw flyway:clean flyway:migrate -Dflyway.cleanDisabled=false
 ```

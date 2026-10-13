@@ -28,6 +28,7 @@
     </scm>
     <properties>
         <java.version>25</java.version>
+        <oci.sdk.version>3.97.0</oci.sdk.version>
     </properties>
     <dependencies>
         <dependency>
@@ -38,10 +39,9 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
-
         <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
         <dependency>
@@ -68,7 +68,7 @@
 
         <dependency>
             <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-oracle</artifactId>
+            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
         <!-- JWT -->
@@ -96,8 +96,26 @@
             <artifactId>libphonenumber</artifactId>
             <version>9.0.30</version>
         </dependency>
-    </dependencies>
 
+        <!-- Caching -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- Oracle -->
+        <dependency>
+            <groupId>com.oracle.oci.sdk</groupId>
+            <artifactId>oci-java-sdk-objectstorage</artifactId>
+            <version>${oci.sdk.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.oracle.oci.sdk</groupId>
+            <artifactId>oci-java-sdk-common-httpclient-jersey3</artifactId>
+            <version>${oci.sdk.version}</version>
+        </dependency>
+    </dependencies>
     <build>
         <plugins>
             <plugin>
@@ -118,12 +136,12 @@
                 <version>11.14.1</version>
 
                 <configuration>
-                    <url>jdbc:oracle:thin:@localhost:1521/FREEPDB1</url>
+                    <url>jdbc:postgresql://localhost:5432/imprime_ai_api</url>
                     <user>imprime_ai_api</user>
                     <password>passwd</password>
 
                     <schemas>
-                        <schema>IMPRIME_AI_API</schema>
+                        <schema>public</schema>
                     </schemas>
                 </configuration>
             </plugin>

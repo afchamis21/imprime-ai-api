@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+secret/**
+!secret/**/*.cfg.example
+!secret/*.cfg.example
+
+application-local.yaml
+application-prod.yaml

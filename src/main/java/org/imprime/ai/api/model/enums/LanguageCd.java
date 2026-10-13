@@ -3,7 +3,7 @@ package org.imprime.ai.api.model.enums;
 import jakarta.annotation.Nullable;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.imprime.ai.api.model.converter.CodeAttributeConverter;
+import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 
 @Getter
 @RequiredArgsConstructor
@@ -26,6 +26,7 @@ public enum LanguageCd implements CodeAttribute {
         return null;
     }
 
+    @jakarta.persistence.Converter
     public static class Converter extends CodeAttributeConverter<LanguageCd> {
         protected Converter() {
             super(LanguageCd.class);

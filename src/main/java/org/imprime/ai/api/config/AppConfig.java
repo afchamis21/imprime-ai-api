@@ -10,4 +10,9 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "imprime.ai.api")
 public class AppConfig {
     private LanguageCd defaultLanguage;
+    private Environment environment;
+
+    public enum Environment {
+        DEV
+    }
 }

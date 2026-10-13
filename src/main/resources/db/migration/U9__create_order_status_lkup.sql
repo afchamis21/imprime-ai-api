@@ -1,1 +1,1 @@
-DROP TABLE order_status_lkup CASCADE CONSTRAINTS;
+DROP TABLE order_status_lkup;
