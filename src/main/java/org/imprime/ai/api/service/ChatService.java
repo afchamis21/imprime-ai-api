@@ -82,7 +82,7 @@ public class ChatService {
         chatMessage = chatMessageRepository.save(chatMessage);
 
         MessageDTO messageDTO = MessageDTO.from(chatMessage);
-        deliverMessage(chatId, messageDTO, users.stream().filter(u -> !u.getId().equals(caller.getId())).map(User::getGuid).toList());
+        deliverMessage(chatId, messageDTO, users.stream().map(User::getGuid).toList());
 
         return new ChatDTO(chat.getGuid(), users.stream().map(UserDTO::from).toList(), List.of(messageDTO));
     }
@@ -111,7 +111,7 @@ public class ChatService {
                 .findUserIdsByChatId(chat.getChatId())
                 .stream().filter(userId -> !userId.equals(caller.getGuid()))
                 .toList();
-        
+
         deliverMessage(chat.getChatId(), MessageDTO.from(message), recipients);
     }
 

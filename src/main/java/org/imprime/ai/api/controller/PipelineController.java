@@ -1,7 +1,6 @@
 package org.imprime.ai.api.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.imprime.ai.api.http.request.chat.StartChatRequest;
 import org.imprime.ai.api.http.request.order.StartOrderRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.service.ChatService;
@@ -28,15 +27,6 @@ public class PipelineController {
     @PostMapping(value = "/start", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> start(@RequestPart("file") MultipartFile file, @RequestParam String addressGuid) {
         return BaseResponse.ok(orderService.start(file, new StartOrderRequest(addressGuid)));
-    }
-
-    // TODO
-    //  2. - Com o pré-pedido, podemos escolher X vendedores para abrir Chat
-    //     - Precisamos fazer algo com WebSocket para termos live chats (linkados ao pedido).
-    //       - Quando fizermos o fetch do chat, podemos ter linkado chats antigos com o mesmo vendedor/cliente que já foram fechados/estão abertos
-    @PostMapping(value = "/chat")
-    public ResponseEntity<?> chat(@RequestBody StartChatRequest request) {
-        return BaseResponse.ok(chatService.start(request));
     }
 
     // TODO
