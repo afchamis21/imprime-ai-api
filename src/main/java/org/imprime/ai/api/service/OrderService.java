@@ -52,7 +52,7 @@ public class OrderService {
         }
 
         if (!StatusCd.ACTIVE.equals(address.getStatus())) {
-            log.warn("Address [{}] is not Active [{}]",  address.getId(), address.getStatus());
+            log.warn("Address [{}] is not Active [{}]", address.getId(), address.getStatus());
             throw new BadRequestException(MessageCd.ADDRESS_NOT_ACTIVE);
         }
 
@@ -108,6 +108,10 @@ public class OrderService {
         }
 
         return companyService.findCompaniesForAddress(optionalAddress.get(), max);
+    }
+
+    public Optional<Order> findByGuid(String guid) {
+        return orderRepository.findOrderByGuid(guid);
     }
 
     // Fetch Order Snapshot

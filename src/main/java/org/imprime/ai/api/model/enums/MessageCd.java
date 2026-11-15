@@ -100,6 +100,7 @@ public enum MessageCd implements CodeAttribute {
     MISSING_COMPANY_ADDRESS("COM_007"),
     COMPANY_NAME_ALREADY_REGISTERED("COM_008"),
     COMPANY_DOCUMENT_ALREADY_REGISTERED("COM_009"),
+    COMPANY_NOT_FOUND("COM_010"),
 
     //endregion
 
@@ -116,9 +117,13 @@ public enum MessageCd implements CodeAttribute {
     //region Order
     MISSING_ADDRESS_GUID("ORD_001"),
     INVALID_ADDRESS_GUID("ORD_002"),
-    ERROR_LOADING_MAKERS("ORD_003");
+    ERROR_LOADING_MAKERS("ORD_003"),
+    ORDER_NOT_FOUND("ORD_004"),
     //endregion
 
+    //region Chat
+    CHAT_NOT_FOUND("CHAT_001");
+    //endregion
     private final String code;
 
     @jakarta.persistence.Converter

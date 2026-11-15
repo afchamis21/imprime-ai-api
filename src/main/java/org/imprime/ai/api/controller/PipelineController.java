@@ -1,8 +1,10 @@
 package org.imprime.ai.api.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.imprime.ai.api.http.request.chat.StartChatRequest;
 import org.imprime.ai.api.http.request.order.StartOrderRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
+import org.imprime.ai.api.service.ChatService;
 import org.imprime.ai.api.service.OrderService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,9 +13,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping ("/order-pipeline")
+@RequestMapping("/order-pipeline")
 public class PipelineController {
     private final OrderService orderService;
+    private final ChatService chatService;
 
     //  1. - Receber modelo (metadados + arquivo)
     //     - Criar um pré-pedido e salvar o arquivo no Object Storage
@@ -31,6 +34,12 @@ public class PipelineController {
     //  2. - Com o pré-pedido, podemos escolher X vendedores para abrir Chat
     //     - Precisamos fazer algo com WebSocket para termos live chats (linkados ao pedido).
     //       - Quando fizermos o fetch do chat, podemos ter linkado chats antigos com o mesmo vendedor/cliente que já foram fechados/estão abertos
+    @PostMapping(value = "/chat")
+    public ResponseEntity<?> chat(@RequestBody StartChatRequest request) {
+        return BaseResponse.ok(chatService.start(request));
+    }
+
+    // TODO
     //  3. - Preço aceito/negado
     //       - Aceito -> Fechar todos os outros chats do pedido em aberto, movemos o status do pedido de pré para aprovado. Pedidos em aprovado não devem poder abrir novos chats.
     //          Mantemos o chat com o vendedor em aberto para quaisquer comunicações

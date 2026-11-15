@@ -14,7 +14,7 @@ import java.util.UUID;
 @Setter
 @MappedSuperclass
 public abstract class Auditable {
-    @Column(name = "GUID", length = 20)
+    @Column(name = "GUID", length = 36)
     private String guid;
 
     @Column(name = "STATUS", length = 5)

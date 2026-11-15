@@ -115,6 +115,11 @@
             <artifactId>oci-java-sdk-common-httpclient-jersey3</artifactId>
             <version>${oci.sdk.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

@@ -6,7 +6,6 @@ import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.OrderStatus;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.exception.InternalErrorException;
-import org.imprime.ai.api.repo.db.OrderStatusLkupRepository;
 import org.imprime.ai.api.repo.db.OrderStatusRepository;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,6 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class OrderStatusService {
-    private final OrderStatusLkupRepository orderStatusLkupRepository;
     private final OrderStatusRepository orderStatusRepository;
 
     private Set<OrderStatusCd> possibleStatusesToMove(OrderStatusCd from) {
@@ -39,7 +37,7 @@ public class OrderStatusService {
     }
 
     private boolean canMoveTo(OrderStatusCd from, OrderStatusCd to) {
-        return  possibleStatusesToMove(from).contains(to);
+        return possibleStatusesToMove(from).contains(to);
     }
 
     public OrderStatus move(@NonNull Order order, @NonNull OrderStatusCd to) {
@@ -47,7 +45,7 @@ public class OrderStatusService {
         OrderStatusCd from = latest.map(OrderStatus::getStatusCd).orElse(null);
 
         if (!canMoveTo(from, to)) {
-            log.error("Can't move order [{}] status from {} to {}", order.getId(),from, to);
+            log.error("Can't move order [{}] status from {} to {}", order.getId(), from, to);
             throw new InternalErrorException();
         }
 
@@ -57,5 +55,15 @@ public class OrderStatusService {
         orderStatus.setStatusCd(to);
 
         return orderStatusRepository.save(orderStatus);
+    }
+
+    public @NonNull OrderStatus findLatest(@NonNull Order order) {
+        Optional<OrderStatus> latest = orderStatusRepository.findLatestStatusByOrderId(order.getId());
+        if (latest.isEmpty()) {
+            log.error("Can't find latest order status for order {}", order.getId());
+            throw new InternalErrorException();
+        }
+
+        return latest.get();
     }
 }

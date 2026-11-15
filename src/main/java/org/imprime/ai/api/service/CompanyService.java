@@ -78,7 +78,16 @@ public class CompanyService {
             double value = useKilometers ? meters / 1000.0 : meters;
             String unit = useKilometers ? "km" : "m";
 
-            return new CompanyChoiceDTO(match.company().getName(), AddressDTO.from(match.address()), new CompanyChoiceDTO.Distance(BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP), unit));
+            return new CompanyChoiceDTO(match.company().getName(), match.company().getGuid(), AddressDTO.from(match.address()), new CompanyChoiceDTO.Distance(BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP), unit));
         }).toList();
+    }
+
+    public Optional<Company> findByCompanyGuid(String guid) {
+        return companyRepository.findByGuid(guid);
+    }
+
+    public List<User> findAllMembers(Company company) {
+        User owner = companyRepository.findOwnerByCompanyId(company.getId()).orElseThrow();
+        return List.of(owner);
     }
 }
