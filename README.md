@@ -43,8 +43,18 @@ Após o banco de dados estar rodando e pronto para receber conexões, inicie a a
 ```
 
 ### O que acontece em seguida?
-1. O **Flyway** será acionado e criará ou atualizará todas as tabelas e esquemas necessários no banco de dados Oracle automaticamente de acordo com as *migrations* do projeto.
-2. O servidor web vai iniciar e a API estará pronta para receber requisições (normalmente na porta `8081`).
+1. O **Flyway** será acionado e criará ou atualizará todas as tabelas e esquemas necessários no banco de dados automaticamente de acordo com as *migrations* do projeto.
+2. O servidor web vai iniciar e a API estará pronta para receber requisições.
+
+## 📖 Documentação da API (Swagger / OpenAPI)
+
+Com a aplicação em execução, a documentação interativa da API pode ser acessada através do **Swagger UI**:
+
+- **Swagger UI:** `http://localhost:8080/swagger-ui/index.html` (ou `http://localhost:8080/swagger-ui.html`)
+- **Especificação OpenAPI (JSON):** `http://localhost:8080/v3/api-docs`
+- **Especificação OpenAPI (YAML):** `http://localhost:8080/v3/api-docs.yaml`
+
+> **Dica:** Para testar endpoints protegidos no Swagger UI, execute primeiro `/auth/login` ou `/auth/register`, copie o valor de `data.accessToken.token` e clique no botão **Authorize** no topo da página.
 
 ## 🛑 Parando os Serviços
 

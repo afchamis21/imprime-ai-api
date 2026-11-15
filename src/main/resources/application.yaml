@@ -17,3 +17,11 @@ oci:
     config-file: ${OCI_CONFIG_FILE:./secret/oci.cfg}
     profile: ${OCI_CONFIG_PROFILE:DEFAULT}
     region-id: ${OCI_REGION_ID:sa-saopaulo-1}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha

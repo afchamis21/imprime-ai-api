@@ -1,8 +1,17 @@
 package org.imprime.ai.api.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.request.order.StartOrderRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
+import org.imprime.ai.api.http.response.StartOrderResponse;
+import org.imprime.ai.api.model.dto.ChatDTO;
 import org.imprime.ai.api.service.ChatService;
 import org.imprime.ai.api.service.OrderService;
 import org.springframework.http.MediaType;
@@ -13,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/order-pipeline")
+@Tag(name = "Esteira de Pedidos (Order Pipeline)", description = "Endpoints do fluxo de criação de pedidos (upload de modelo 3D) e abertura de chats de cotação com Makers")
 public class PipelineController {
     private final OrderService orderService;
     private final ChatService chatService;
@@ -24,9 +34,42 @@ public class PipelineController {
     //     - Calcular a estimativa com base nas configurações de cada vendedor
     //       - Depois
     //     - Retornar lista à UI
+    @Operation(
+            summary = "Iniciar pedido com upload de modelo 3D",
+            description = "Recebe o arquivo do modelo 3D (`.stl` ou `.3mf`) e o `addressGuid` de entrega do cliente, armazena o modelo no Object Storage, cria o pedido com status inicial `QUOTING` e retorna os Makers próximos."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Pedido iniciado com sucesso e lista de Makers retornada"),
+            @ApiResponse(responseCode = "400", description = "Arquivo inválido/vazio, extensão não suportada (`.stl`, `.3mf`) ou endereço inválido/inativo", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "O endereço informado não pertence ao usuário autenticado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
     @PostMapping(value = "/start", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> start(@RequestPart("file") MultipartFile file, @RequestParam String addressGuid) {
+    public ResponseEntity<BaseResponse<StartOrderResponse>> start(
+            @Parameter(description = "Arquivo do modelo 3D nos formatos `.stl` ou `.3mf`", required = true)
+            @RequestPart("file") MultipartFile file,
+            @Parameter(description = "GUID do endereço de entrega pertencente ao cliente", required = true)
+            @RequestParam String addressGuid) {
         return BaseResponse.ok(orderService.start(file, new StartOrderRequest(addressGuid)));
+    }
+
+    // TODO
+    //  2. - Com o pré-pedido, podemos escolher X vendedores para abrir Chat
+    //     - Precisamos fazer algo com WebSocket para termos live chats (linkados ao pedido).
+    //       - Quando fizermos o fetch do chat, podemos ter linkado chats antigos com o mesmo vendedor/cliente que já foram fechados/estão abertos
+    @Operation(
+            summary = "Iniciar chat de cotação com um Maker",
+            description = "Abre uma sala de chat vinculada a um pedido em status `QUOTING` entre o comprador e os membros da empresa (Maker) selecionada, enviando a primeira mensagem e notificando os destinatários via WebSocket."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Chat criado e mensagem inicial enviada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Pedido ou empresa (Maker) não encontrados", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "O pedido não pertence ao usuário ou não está no status `QUOTING`", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PostMapping(value = "/chat")
+    public ResponseEntity<BaseResponse<ChatDTO>> chat(@RequestBody StartChatRequest request) {
+        return BaseResponse.ok(chatService.start(request));
     }
 
     // TODO

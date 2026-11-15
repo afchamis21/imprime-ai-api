@@ -39,3 +39,5 @@ secret/**
 application-local.yaml
 application-dev.yaml
 application-prod.yaml
+.devenv
+.env

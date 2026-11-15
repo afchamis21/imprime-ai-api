@@ -18,7 +18,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class ErrorHandler {
 
     @ExceptionHandler(value = { HttpException.class })
-    public ResponseEntity<?> handleException(HttpException e) {
+    public ResponseEntity<BaseResponse<Void>> handleException(HttpException e) {
         ServiceContext.getContext().addMessage(e.getMessageCd(), e.getArgs());
         ServiceContext.addException(e);
 
@@ -26,7 +26,7 @@ public class ErrorHandler {
     }
 
     @ExceptionHandler(value = { NoResourceFoundException.class })
-    public ResponseEntity<?> handleException(NoResourceFoundException e) {
+    public ResponseEntity<BaseResponse<Void>> handleException(NoResourceFoundException e) {
         ServiceContext.getContext().addMessage(MessageCd.GENERIC_404);
         ServiceContext.addException(e);
 
@@ -34,7 +34,7 @@ public class ErrorHandler {
     }
 
     @ExceptionHandler(value = { Exception.class })
-    public ResponseEntity<?> handleException(Exception e) {
+    public ResponseEntity<BaseResponse<Void>> handleException(Exception e) {
         ServiceContext.getContext().addMessage(MessageCd.INTERNAL_SERVER_ERROR);
         ServiceContext.addException(e);
 

@@ -16,6 +16,13 @@ public class HttpConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(serviceContextInterceptor).order(1);
-        registry.addInterceptor(authInterceptor).order(2);
+        registry.addInterceptor(authInterceptor)
+                .order(2)
+                .excludePathPatterns(
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html"
+                );
     }
 }
