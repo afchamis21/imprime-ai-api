@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.request.order.StartOrderRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.StartOrderResponse;
-import org.imprime.ai.api.model.dto.ChatDTO;
 import org.imprime.ai.api.service.ChatService;
 import org.imprime.ai.api.service.OrderService;
 import org.springframework.http.MediaType;
@@ -51,25 +50,6 @@ public class PipelineController {
             @Parameter(description = "GUID do endereço de entrega pertencente ao cliente", required = true)
             @RequestParam String addressGuid) {
         return BaseResponse.ok(orderService.start(file, new StartOrderRequest(addressGuid)));
-    }
-
-    // TODO
-    //  2. - Com o pré-pedido, podemos escolher X vendedores para abrir Chat
-    //     - Precisamos fazer algo com WebSocket para termos live chats (linkados ao pedido).
-    //       - Quando fizermos o fetch do chat, podemos ter linkado chats antigos com o mesmo vendedor/cliente que já foram fechados/estão abertos
-    @Operation(
-            summary = "Iniciar chat de cotação com um Maker",
-            description = "Abre uma sala de chat vinculada a um pedido em status `QUOTING` entre o comprador e os membros da empresa (Maker) selecionada, enviando a primeira mensagem e notificando os destinatários via WebSocket."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Chat criado e mensagem inicial enviada com sucesso"),
-            @ApiResponse(responseCode = "400", description = "Pedido ou empresa (Maker) não encontrados", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
-            @ApiResponse(responseCode = "403", description = "O pedido não pertence ao usuário ou não está no status `QUOTING`", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
-    })
-    @PostMapping(value = "/chat")
-    public ResponseEntity<BaseResponse<ChatDTO>> chat(@RequestBody StartChatRequest request) {
-        return BaseResponse.ok(chatService.start(request));
     }
 
     // TODO
