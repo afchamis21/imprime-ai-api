@@ -1,14 +1,12 @@
 package org.imprime.ai.api.service;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.order.StartOrderRequest;
 import org.imprime.ai.api.http.response.StartOrderResponse;
-import org.imprime.ai.api.model.Address;
-import org.imprime.ai.api.model.FileAsset;
-import org.imprime.ai.api.model.Order;
-import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.*;
 import org.imprime.ai.api.model.dto.AddressDTO;
 import org.imprime.ai.api.model.dto.CompanyChoiceDTO;
 import org.imprime.ai.api.model.enums.EntityType;
@@ -22,6 +20,7 @@ import org.imprime.ai.api.repo.db.OrderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -112,6 +111,17 @@ public class OrderService {
 
     public Optional<Order> findByGuid(String guid) {
         return orderRepository.findOrderByGuid(guid);
+    }
+
+    @Transactional
+    public OrderStatus acceptOffer(String orderGuid, BigDecimal offer, Company company) {
+        Order order = findByGuid(orderGuid).orElseThrow();
+        order.setOrderTotal(offer);
+        order.setVendorId(company.getId());
+
+        orderRepository.save(order);
+
+        return orderStatusService.move(order, OrderStatusCd.CONFIRMED);
     }
 
     // Fetch Order Snapshot

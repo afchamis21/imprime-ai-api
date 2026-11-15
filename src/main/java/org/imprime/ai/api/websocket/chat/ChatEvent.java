@@ -32,4 +32,8 @@ public final class ChatEvent<T> implements Serializable {
                 Instant.now()
         );
     }
+
+    public static ChatEvent<Void> chatDisabled(UUID chatId) {
+        return new ChatEvent<>("chat.disabled", chatId.toString(), null, Instant.now());
+    }
 }

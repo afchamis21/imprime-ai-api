@@ -8,7 +8,8 @@ import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 @RequiredArgsConstructor
 public enum MessageType implements CodeAttribute {
     MESSAGE("M"),
-    OFFER("O");
+    OFFER("O"),
+    SYSTEM("SYS");
 
     private final String code;
 

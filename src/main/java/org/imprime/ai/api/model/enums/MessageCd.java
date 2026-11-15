@@ -122,7 +122,7 @@ public enum MessageCd implements CodeAttribute {
     //endregion
 
     //region Chat
-    CHAT_NOT_FOUND("CHAT_001");
+    CHAT_NOT_FOUND("CHAT_001"), OFFER_NOT_NUMERIC("CHAT_002"), MESSAGE_NOT_OFFER("CHAT_003");
     //endregion
     private final String code;
 

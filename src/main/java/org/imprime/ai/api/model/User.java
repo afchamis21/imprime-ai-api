@@ -46,4 +46,9 @@ public class User extends Auditable {
 
     @Column(name = "COMPANY_ID")
     private Long companyId;
+
+    @Transient
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
 }

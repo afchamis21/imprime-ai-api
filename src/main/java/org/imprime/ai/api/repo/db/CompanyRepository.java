@@ -19,6 +19,9 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
 
     Optional<Company> findByGuid(String guid);
 
-    @Query(value = "SELECT u FROM User u JOIN Company c ON u.id = c.ownerId WHERE c.id = :companyId")
-    Optional<User> findOwnerByCompanyId(Long companyId);
+    @Query(value = "SELECT u FROM User u JOIN Company c ON u.id = c.ownerId WHERE c.guid = :companyId")
+    Optional<User> findOwnerByCompanyGuid(String companyId);
+
+    @Query(value = "SELECT c FROM User u JOIN Company c ON u.id = c.ownerId WHERE u.guid = :guid")
+    Optional<Company> findByOwnerGuid(String guid);
 }

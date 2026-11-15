@@ -3,11 +3,9 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.imprime.ai.api.model.base.Auditable;
-import org.imprime.ai.api.model.enums.StatusCd;
 
-import java.time.Instant;
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -36,4 +34,7 @@ public class Order extends Auditable {
 
     @Column(name = "PRICING_STRATEGY_ID")
     private Long pricingStrategyId;
+
+    @Column(name = "ORDER_TOTAL")
+    private BigDecimal orderTotal;
 }

@@ -20,8 +20,14 @@ public class Chat extends Auditable {
     @Column(name = "chat_id")
     private UUID chatId;
 
-    @Column(name = "order_id")
-    private Long orderId;
+    @Column(name = "order_guid")
+    private String orderGuid;
+
+    @Column(name = "user_guid")
+    private String clientGuid;
+
+    @Column(name = "company_guid")
+    private String companyGuid;
 
     @Column(name = "last_message_at")
     private Instant lastMessageAt;

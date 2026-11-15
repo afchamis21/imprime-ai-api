@@ -87,7 +87,11 @@ public class CompanyService {
     }
 
     public List<User> findAllMembers(Company company) {
-        User owner = companyRepository.findOwnerByCompanyId(company.getId()).orElseThrow();
+        return findAllMembers(company.getGuid());
+    }
+
+    public List<User> findAllMembers(String companyId) {
+        User owner = companyRepository.findOwnerByCompanyGuid(companyId).orElseThrow();
         return List.of(owner);
     }
 }

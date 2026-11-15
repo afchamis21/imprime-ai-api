@@ -2,6 +2,7 @@ package org.imprime.ai.api.websocket.chat;
 
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.ServiceContext;
+import org.imprime.ai.api.http.request.chat.QuoteDecisionRequest;
 import org.imprime.ai.api.http.request.chat.SendMessageRequest;
 import org.imprime.ai.api.http.request.chat.StartChatRequest;
 import org.imprime.ai.api.model.User;
@@ -54,6 +55,26 @@ public class ChatController {
             ctx.setUser(user);
 
             chatService.sendMessage(chatId, request);
+        } finally {
+            ServiceContext.clear();
+        }
+    }
+
+    @MessageMapping("chats/{chatId}/quote-decision")
+    public void sendMessage(
+            @DestinationVariable UUID chatId,
+            QuoteDecisionRequest request,
+            Principal principal
+    ) {
+        try {
+            var ctx = ServiceContext.getContext();
+            if (!(principal instanceof AuthenticatedUserPrincipal(User user)) || user == null) {
+                throw new UnauthorizedException();
+            }
+
+            ctx.setUser(user);
+
+            chatService.handleQuoteDecision(chatId, request);
         } finally {
             ServiceContext.clear();
         }
