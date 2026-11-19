@@ -8,8 +8,8 @@ import java.util.List;
 public record ChatDTO(
         @Schema(description = "GUID único do chat", example = "f47ac10b-58cc-4372-a567-0e02b2c3d479")
         String chatGuid,
-        @Schema(description = "Lista de participantes do chat (comprador e membros da empresa Maker)")
-        List<UserDTO> members,
+        UserDTO client,
+        CompanyDTO maker,
         @Schema(description = "Histórico de mensagens do chat")
         List<MessageDTO> messages
 ) {

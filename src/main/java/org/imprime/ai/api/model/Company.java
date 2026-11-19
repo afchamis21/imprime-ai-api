@@ -39,6 +39,8 @@ public class Company extends Auditable {
 
     // TODO Porfolio
 
+    // TODO Contact Info
+
     @Column(name = "OWNER_ID")
     private Long ownerId;
 }
