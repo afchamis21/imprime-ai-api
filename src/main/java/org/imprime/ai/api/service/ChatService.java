@@ -71,7 +71,7 @@ public class ChatService {
         chat.setCompanyGuid(company.getGuid());
         chat.setLastMessageAt(Instant.now());
 
-        chat = chatRepository.save(chat);
+        chat = chatRepository.saveAndFlush(chat);
 
         sendMessage(chat, request.message());
     }
