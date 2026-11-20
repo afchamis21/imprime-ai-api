@@ -57,8 +57,12 @@ public class FileAssetService {
     }
 
     private ObjectStorageKey getObjectStorageKey(FileAsset.AssetType assetType, User user, String extension) {
+        String identifier = UUID.randomUUID().toString();
         return switch (assetType) {
-            case MODEL -> ObjectStorageKey.model(user.getGuid(), UUID.randomUUID().toString(), extension);
+            case MODEL -> ObjectStorageKey.model(user.getGuid(), identifier, extension);
+            case IMAGE -> ObjectStorageKey.image(user.getGuid(), identifier, extension);
+            case ARCHIVE_3D -> ObjectStorageKey.archive3d(user.getGuid(), identifier, extension);
+            case SCAD_SCRIPT -> ObjectStorageKey.scadScript(user.getGuid(), identifier, extension);
         };
     }
 

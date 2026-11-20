@@ -38,6 +38,7 @@ public class AddressService {
         address.setCountry(request.country());
 
         address.setZipCode(request.zipCode());
+        address.setNeighborhood(request.neighborhood());
 
         address.setAddressLine1(request.addressLine1());
         address.setAddressLine2(request.addressLine2());

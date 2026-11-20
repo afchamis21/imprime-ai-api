@@ -11,6 +11,11 @@ public enum MessageCd implements CodeAttribute {
     //region System
     INTERNAL_SERVER_ERROR("SYS_500"),
     GENERIC_404("SYS_404"),
+    VALIDATION_ERROR("SYS_400"),
+    INVALID_REQUEST_BODY("SYS_400_BODY"),
+    CONFLICT("SYS_409"),
+    NOT_IMPLEMENTED("SYS_501"),
+    BAD_GATEWAY("SYS_502"),
     //endregion
 
     //region Auth
@@ -85,6 +90,7 @@ public enum MessageCd implements CodeAttribute {
     INVALID_ADDRESS_LINE_2("ADR_017"),
     INVALID_ADDRESS_LINE_2_LENGTH("ADR_018"),
     ADDRESS_NOT_ACTIVE("ADR_019"),
+    ADDRESS_NOT_FOUND("ADR_020"),
     //endregion
 
     //region Company
@@ -119,10 +125,49 @@ public enum MessageCd implements CodeAttribute {
     INVALID_ADDRESS_GUID("ORD_002"),
     ERROR_LOADING_MAKERS("ORD_003"),
     ORDER_NOT_FOUND("ORD_004"),
+    INVALID_ORDER_STATUS_TRANSITION("ORD_005"),
     //endregion
 
     //region Chat
-    CHAT_NOT_FOUND("CHAT_001"), OFFER_NOT_NUMERIC("CHAT_002"), MESSAGE_NOT_OFFER("CHAT_003");
+    CHAT_NOT_FOUND("CHAT_001"),
+    OFFER_NOT_NUMERIC("CHAT_002"),
+    MESSAGE_NOT_OFFER("CHAT_003"),
+    //endregion
+
+    //region Maker & Storefront
+    MAKER_NOT_FOUND("MKR_001"),
+    PORTFOLIO_ITEM_NOT_FOUND("MKR_002"),
+    //endregion
+
+    //region Product & Model
+    PRODUCT_NOT_FOUND("PRD_001"),
+    MODEL_NOT_FOUND("MDL_001"),
+    MODEL_NOT_CUSTOMIZABLE("MDL_002"),
+    PURCHASED_MODEL_NOT_FOUND("MDL_003"),
+    //endregion
+
+    //region Review & Favorite
+    REVIEW_NOT_FOUND("REV_001"),
+    REVIEW_ALREADY_EXISTS("REV_002"),
+    FAVORITE_NOT_FOUND("FAV_001"),
+    //endregion
+
+    //region Support
+    SUPPORT_TICKET_NOT_FOUND("SUP_001"),
+    //endregion
+
+    //region Maker Panel
+    PRINTER_NOT_FOUND("PRT_001"),
+    PRINTER_BUSY("PRT_002"),
+    FILAMENT_NOT_FOUND("FIL_001"),
+    ARCHIVE_FILE_NOT_FOUND("ARC_001"),
+    QUEUE_ITEM_NOT_FOUND("QUE_001"),
+    PROJECT_NOT_FOUND("PRJ_001"),
+    BOM_ITEM_NOT_FOUND("PRJ_002"),
+    PROJECT_ALREADY_COMPLETED("PRJ_003"),
+    MODEL_SOURCE_NOT_FOUND("SRC_001"),
+    MODEL_SOURCE_SYNC_FAILED("SRC_002"),
+    INSUFFICIENT_BALANCE("FIN_001");
     //endregion
     private final String code;
 

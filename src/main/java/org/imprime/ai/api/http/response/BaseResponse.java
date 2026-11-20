@@ -26,6 +26,10 @@ public class BaseResponse<T> {
         return ResponseEntity.ok(res);
     }
 
+    public static <B> ResponseEntity<BaseResponse<B>> created(B body) {
+        return build(body, HttpStatus.CREATED);
+    }
+
     public static <B> ResponseEntity<BaseResponse<B>> build(B body, HttpStatus status) {
         List<ResponseMessage> messages = ServiceContext.getContext().getMessages();
         BaseResponse<B> res = new BaseResponse<>(body, messages);

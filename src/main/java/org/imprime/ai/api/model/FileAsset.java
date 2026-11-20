@@ -34,7 +34,10 @@ public class FileAsset extends Auditable {
     @Getter
     @RequiredArgsConstructor
     public enum AssetType implements CodeAttribute {
-        MODEL("MO");
+        MODEL("MO"),
+        IMAGE("IM"),
+        ARCHIVE_3D("AR"),
+        SCAD_SCRIPT("SC");
         private final String code;
 
         @jakarta.persistence.Converter

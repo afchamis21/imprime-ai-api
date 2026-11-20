@@ -101,6 +101,14 @@ public class ServiceContext {
         }
     }
 
+    public void addResponseMessage(ResponseMessage responseMessage) {
+        if (responseMessage == null) return;
+        if (messages == null) {
+            messages = new ArrayList<>();
+        }
+        messages.add(responseMessage);
+    }
+
     public List<ResponseMessage> getMessages() {
         return Objects.requireNonNullElse(messages, List.of());
     }

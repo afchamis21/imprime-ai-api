@@ -7,10 +7,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
+import org.imprime.ai.api.http.auth.OptionalAuth;
+import org.imprime.ai.api.http.auth.RequireMaker;
 import org.imprime.ai.api.http.auth.SkipAuth;
 import org.imprime.ai.api.model.AuthToken;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
 import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
@@ -20,6 +23,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.util.Optional;
 
 @Slf4j
@@ -32,19 +37,40 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final UserService userService;
 
     private AuthType getAuthType(@NonNull HandlerMethod handlerMethod) {
-        if (handlerMethod.getMethod().isAnnotationPresent(JwtAuthenticated.class)) {
+        Method method = handlerMethod.getMethod();
+        Class<?> beanType = handlerMethod.getBeanType();
+
+        AuthType methodAuth = resolveFromAnnotatedElement(method);
+        if (methodAuth != null) {
+            return methodAuth;
+        }
+
+        AuthType classAuth = resolveFromAnnotatedElement(beanType);
+        return classAuth != null ? classAuth : AuthType.JWT;
+    }
+
+    private AuthType resolveFromAnnotatedElement(java.lang.reflect.AnnotatedElement element) {
+        if (hasAnnotation(element, RequireMaker.class)) {
+            return AuthType.REQUIRE_MAKER;
+        }
+        if (hasAnnotation(element, JwtAuthenticated.class)) {
             return AuthType.JWT;
         }
-
-        if (handlerMethod.getMethod().isAnnotationPresent(SkipAuth.class)) {
+        if (hasAnnotation(element, OptionalAuth.class)) {
+            return AuthType.OPTIONAL;
+        }
+        if (hasAnnotation(element, SkipAuth.class)) {
             return AuthType.NO_AUTH;
         }
+        return null;
+    }
 
-        return AuthType.JWT;
+    private boolean hasAnnotation(java.lang.reflect.AnnotatedElement element, Class<? extends Annotation> annotationType) {
+        return element.isAnnotationPresent(annotationType);
     }
 
     private enum AuthType {
-        JWT, NO_AUTH
+        REQUIRE_MAKER, JWT, OPTIONAL, NO_AUTH
     }
 
     @Override
@@ -52,16 +78,36 @@ public class AuthInterceptor implements HandlerInterceptor {
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
-        
+
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
         }
 
         AuthType authType = getAuthType(handlerMethod);
         return switch (authType) {
-            case JWT ->  handleJwtAuthentication(request);
+            case REQUIRE_MAKER -> handleMakerAuthentication(request);
+            case JWT -> handleJwtAuthentication(request);
+            case OPTIONAL -> handleOptionalAuthentication(request);
             case NO_AUTH -> true;
         };
+    }
+
+    private boolean handleMakerAuthentication(@NonNull HttpServletRequest request) {
+        handleJwtAuthentication(request);
+        User user = ServiceContext.getUserOrThrow();
+        if (user.getCompanyId() == null) {
+            log.warn("User [{}] attempted to access Maker-only endpoint without associated company", user.getGuid());
+            throw new ForbiddenException();
+        }
+        return true;
+    }
+
+    private boolean handleOptionalAuthentication(@NonNull HttpServletRequest request) {
+        Optional<String> headerOpt = getHeaderToken(request);
+        if (headerOpt.isEmpty() || headerOpt.get().isBlank()) {
+            return true;
+        }
+        return handleJwtAuthentication(request);
     }
 
     private boolean handleJwtAuthentication(@NonNull HttpServletRequest request) {

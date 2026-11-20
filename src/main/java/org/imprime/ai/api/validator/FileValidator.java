@@ -21,11 +21,14 @@ public class FileValidator {
 
     public FileValidator() {
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.MODEL, Set.of("stl", "3mf")); // TODO Conferir com o Amorim
+        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.IMAGE, Set.of("png", "jpg", "jpeg", "webp"));
+        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.ARCHIVE_3D, Set.of("stl", "3mf", "gcode", "obj"));
+        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.SCAD_SCRIPT, Set.of("scad"));
     }
 
     public @Nullable BadRequestException validateFile(MultipartFile file, FileAsset.AssetType type) {
         return switch (type) {
-            case MODEL -> defaultValidation(file, type);
+            case MODEL, IMAGE, ARCHIVE_3D, SCAD_SCRIPT -> defaultValidation(file, type);
         };
     }
 

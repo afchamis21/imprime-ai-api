@@ -14,7 +14,8 @@ public enum OrderStatusCd implements CodeAttribute {
     IN_TRANSIT("2.02"),
     COMPLETED("3.00"),
     CANCELLED("9.00"),
-    ERROR("9.01");
+    ERROR("9.01"),
+    REFUNDED("9.02");
 
     private final String code;
 

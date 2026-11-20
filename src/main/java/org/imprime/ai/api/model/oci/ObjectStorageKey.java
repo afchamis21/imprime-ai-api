@@ -32,6 +32,42 @@ public final class ObjectStorageKey {
         );
     }
 
+    public static ObjectStorageKey image(
+            String userGuid,
+            String fileIdentifier,
+            String extension) {
+
+        return new ObjectStorageKey(
+                Path.of(userGuid, fileIdentifier + "." + extension).toString(),
+                "media",
+                FileAsset.AssetType.IMAGE
+        );
+    }
+
+    public static ObjectStorageKey archive3d(
+            String userGuid,
+            String fileIdentifier,
+            String extension) {
+
+        return new ObjectStorageKey(
+                Path.of(userGuid, fileIdentifier + "." + extension).toString(),
+                "archives",
+                FileAsset.AssetType.ARCHIVE_3D
+        );
+    }
+
+    public static ObjectStorageKey scadScript(
+            String userGuid,
+            String fileIdentifier,
+            String extension) {
+
+        return new ObjectStorageKey(
+                Path.of(userGuid, fileIdentifier + "." + extension).toString(),
+                "scad",
+                FileAsset.AssetType.SCAD_SCRIPT
+        );
+    }
+
     public static ObjectStorageKey of(FileAsset fileAsset) {
         String assetUrl = fileAsset.getAssetUrl();
 
