@@ -13,6 +13,6 @@ public class AppConfig {
     private Environment environment;
 
     public enum Environment {
-        DEV
+        DEV, PROD
     }
 }

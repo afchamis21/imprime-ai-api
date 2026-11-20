@@ -37,19 +37,24 @@ auth:
     token-type: refresh
 
 cors:
-  path-pattern: /**
-  allowed-methods:
-    - GET
-    - POST
-    - PUT
-    - PATCH
-    - DELETE
   allowed-origins:
-    - ${CORS_ORIGINS:http://localhost:5173} # Se a variável não existir, usa o localhost por padrão
+    - https://imprimeai.shop
+    - https://www.imprimeai.shop
+    - https://api.imprimeai.shop
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+    - http://localhost:4173
+    - ${CORS_ORIGINS:}
 
 websocket:
   allowed-origins:
-    - ${CORS_ORIGINS:http://localhost:5173}
+    - https://imprimeai.shop
+    - https://www.imprimeai.shop
+    - https://api.imprimeai.shop
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+    - http://localhost:4173
+    - ${WS_ALLOWED_ORIGINS:${CORS_ORIGINS:}}
 
 imprime:
   ai:

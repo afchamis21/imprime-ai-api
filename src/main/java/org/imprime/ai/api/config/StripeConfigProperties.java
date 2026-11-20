@@ -12,6 +12,6 @@ public class StripeConfigProperties {
     private String secretKey;
     private String webhookSecret;
     private String currency = "brl";
-    private String successUrl = "http://localhost:5173/cart?payment=success&session_id={CHECKOUT_SESSION_ID}";
-    private String cancelUrl = "http://localhost:5173/cart?payment=cancel";
+    private String successUrl = "https://imprimeai.shop/cart?payment=success&session_id={CHECKOUT_SESSION_ID}";
+    private String cancelUrl = "https://imprimeai.shop/cart?payment=cancel";
 }

@@ -1,6 +1,40 @@
 spring:
   application:
     name: Imprime Ai
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:60MB}
+
+server:
+  forward-headers-strategy: framework
+
+cors:
+  path-pattern: /**
+  max-age: 3600
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+    - OPTIONS
+    - HEAD
+  exposed-headers:
+    - X-Transaction-Id
+    - Content-Disposition
+  allowed-origins:
+    - https://imprimeai.shop
+    - https://www.imprimeai.shop
+    - https://api.imprimeai.shop
+    - ${CORS_ORIGINS:}
+
+websocket:
+  allowed-origins:
+    - https://imprimeai.shop
+    - https://www.imprimeai.shop
+    - https://api.imprimeai.shop
+    - ${WS_ALLOWED_ORIGINS:${CORS_ORIGINS:}}
 
 logging:
   pattern:
@@ -33,5 +67,5 @@ stripe:
   secret-key: ${STRIPE_SECRET_KEY:}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
   currency: ${STRIPE_CURRENCY:brl}
-  success-url: ${STRIPE_SUCCESS_URL:http://localhost:5173/cart?payment=success&session_id={CHECKOUT_SESSION_ID}}
-  cancel-url: ${STRIPE_CANCEL_URL:http://localhost:5173/cart?payment=cancel}
+  success-url: ${STRIPE_SUCCESS_URL:https://imprimeai.shop/cart?payment=success&session_id={CHECKOUT_SESSION_ID}}
+  cancel-url: ${STRIPE_CANCEL_URL:https://imprimeai.shop/cart?payment=cancel}
