@@ -63,6 +63,7 @@ public class FileAssetService {
             case IMAGE -> ObjectStorageKey.image(user.getGuid(), identifier, extension);
             case ARCHIVE_3D -> ObjectStorageKey.archive3d(user.getGuid(), identifier, extension);
             case SCAD_SCRIPT -> ObjectStorageKey.scadScript(user.getGuid(), identifier, extension);
+            case ATTACHMENT -> ObjectStorageKey.attachment(user.getGuid(), identifier, extension);
         };
     }
 

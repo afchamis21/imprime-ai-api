@@ -10,6 +10,8 @@ imprime:
   ai:
     api:
       default-language: en_us
+      crypto:
+        secret: ${CRYPTO_SECRET:imprime-ai-dev-crypto-key}
 
 oci:
   object-storage:
@@ -27,6 +29,7 @@ springdoc:
     tags-sorter: alpha
 
 stripe:
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
   secret-key: ${STRIPE_SECRET_KEY:}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
   currency: ${STRIPE_CURRENCY:brl}

@@ -1,5 +1,6 @@
 package org.imprime.ai.api.service;
 
+import org.imprime.ai.api.http.request.common.CreateReviewRequest;
 import org.imprime.ai.api.http.request.user.UpdateUserProfileRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.OrderSummaryResponse;
@@ -22,4 +23,8 @@ public interface UserHubService {
     ModelDownloadResponse generatePurchasedModelDownloadUrl(String purchaseGuid);
 
     PageResponse<UserReviewResponse> listUserReviews(ReviewTargetType targetType, Pageable pageable);
+
+    UserReviewResponse updateUserReview(String reviewGuid, CreateReviewRequest request);
+
+    void deleteUserReview(String reviewGuid);
 }

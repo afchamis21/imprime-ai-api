@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConfigurationProperties(prefix = "stripe")
 public class StripeConfigProperties {
+    private String publishableKey;
     private String secretKey;
     private String webhookSecret;
     private String currency = "brl";

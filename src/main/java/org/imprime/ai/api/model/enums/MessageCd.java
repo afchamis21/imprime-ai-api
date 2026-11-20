@@ -154,6 +154,7 @@ public enum MessageCd implements CodeAttribute {
 
     //region Support
     SUPPORT_TICKET_NOT_FOUND("SUP_001"),
+    SUPPORT_TICKET_CLOSED("SUP_002"),
     //endregion
 
     //region Maker Panel

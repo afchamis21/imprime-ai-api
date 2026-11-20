@@ -4,13 +4,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.OrderStatus;
+import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
+import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.InternalErrorException;
 import org.imprime.ai.api.repo.db.OrderStatusRepository;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -37,7 +40,7 @@ public class OrderStatusService {
         };
     }
 
-    private boolean canMoveTo(OrderStatusCd from, OrderStatusCd to) {
+    public boolean canMoveTo(OrderStatusCd from, OrderStatusCd to) {
         return possibleStatusesToMove(from).contains(to);
     }
 
@@ -47,7 +50,7 @@ public class OrderStatusService {
 
         if (!canMoveTo(from, to)) {
             log.error("Can't move order [{}] status from {} to {}", order.getId(), from, to);
-            throw new InternalErrorException();
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
         }
 
         OrderStatus orderStatus = new OrderStatus();
@@ -56,6 +59,10 @@ public class OrderStatusService {
         orderStatus.setStatusCd(to);
 
         return orderStatusRepository.save(orderStatus);
+    }
+
+    public List<OrderStatus> findHistory(@NonNull Order order) {
+        return orderStatusRepository.findAllByOrderIdOrderByStatusDateAsc(order.getId());
     }
 
     public @NonNull OrderStatus findLatest(@NonNull Order order) {

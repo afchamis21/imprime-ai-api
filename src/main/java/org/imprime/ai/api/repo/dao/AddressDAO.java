@@ -24,6 +24,7 @@ public class AddressDAO {
         Address address = new Address();
 
         address.setId(rs.getLong("ADDRESS_ID"));
+        address.setGuid(rs.getString("GUID"));
         address.setOwnerId(rs.getLong("OWNER_ID"));
 
         address.setOwnerType(entityTypeConverter.convertToEntityAttribute(rs.getString("OWNER_TYPE")));
@@ -35,6 +36,8 @@ public class AddressDAO {
         address.setNeighborhood(rs.getString("NEIGHBORHOOD"));
         address.setAddressLine1(rs.getString("ADDRESS_LINE_1"));
         address.setAddressLine2(rs.getString("ADDRESS_LINE_2"));
+        address.setLatitude(rs.getObject("LATITUDE", Double.class));
+        address.setLongitude(rs.getObject("LONGITUDE", Double.class));
 
         address.setDefaultAddress(rs.getBoolean("DEFAULT_ADDRESS"));
 

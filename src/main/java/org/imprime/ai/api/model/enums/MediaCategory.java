@@ -6,5 +6,6 @@ public enum MediaCategory {
     PORTFOLIO,
     PRODUCT,
     MODEL_PREVIEW,
-    QUALITY_PROOF
+    QUALITY_PROOF,
+    CHAT_ATTACHMENT
 }

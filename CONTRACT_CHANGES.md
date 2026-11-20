@@ -2,7 +2,22 @@
 
 Este documento registra todas as melhorias arquiteturais, correções de segurança, ajustes de rotas, padronizações de payloads e evoluções de domínio aplicadas no backend Java/Spring Boot em relação aos contratos mockados listados em `/mnt/projects/imprime-ai-ui/BACKEND_TODO.md`.
 
-> **Estado atual dos novos endpoints:** Os novos controllers e DTOs estão compiláveis e totalmente documentados no **Swagger UI** (`/swagger-ui.html`) e **OpenAPI JSON** (`/v3/api-docs`). Todos os novos serviços retornam **`501 Not Implemented`** via `NotImplementedException` no envelope padrão `BaseResponse<Void>` até que suas implementações de persistência e regras de negócio sejam conectadas.
+> **Estado atual dos endpoints:** Todos os controllers e DTOs estão compiláveis e documentados no **Swagger UI** (`/swagger-ui.html`) e **OpenAPI JSON** (`/v3/api-docs`).
+>
+> **✅ Ativos (100% dos 17 domínios — Fases 1 a 4 — Schema evoluído até `V38`):**
+> - **Mídia:** `POST /media/upload` (`MediaController`)
+> - **Precificação 3D:** `GET /print/pricing`, `POST /print/estimate` (`PrintPricingController`)
+> - **Endereços do Usuário:** `GET/POST/PUT/PATCH/DELETE /users/me/addresses` e `PATCH /users/me/addresses/{addressGuid}/default` (`UserAddressController`)
+> - **Central do Usuário:** `PATCH /users/me/profile`, `GET /users/me/orders`, `GET /users/me/purchased-models`, `POST /users/me/purchased-models/{purchaseGuid}/download-url`, `GET/DELETE /users/me/favorites`, `GET /users/me/reviews` (`UserHubController`)
+> - **Pedidos (REST):** `GET /orders/{orderGuid}`, `PATCH /orders/{orderGuid}/status`, `GET /orders/{orderGuid}/makers` (`OrderRestController`)
+> - **Chats e Negociações:** `GET /chats`, `GET /chats/{chatId}`, `GET /chats/{chatId}/messages`, `POST /chats/{chatId}/read`, `POST /chats/{chatId}/offers/{messageGuid}/decision` (`ChatRestController`)
+> - **Marketplace & Catálogos Públicos:** `GET /marketplace/stats` (`MarketplaceController`), `GET /makers/**` & `PUT/DELETE /makers/{makerGuid}/favorite` (`MakerCatalogController`), `GET /products/**`, favoritos e `/products/{productGuid}/reviews` (`ProductController`), `GET /models/**`, favoritos, `/models/{modelGuid}/reviews` e `/models/{slugOrGuid}/customization` (`Model3DController`)
+> - **Suporte:** `GET/POST /support-tickets`, `GET /support-tickets/{ticketGuid}`, `POST /support-tickets/{ticketGuid}/messages` (`SupportTicketController`)
+> - **Maker Studio & Vitrine:** `GET /maker/dashboard`, `GET /maker/orders`, `GET/PUT/PATCH /maker/profile` (`MakerStudioController`), `GET/POST/PATCH/DELETE /maker/portfolio/**` e `/maker/products/**` (`MakerStorefrontController`)
+> - **Operação do Painel do Maker:** Impressoras e comandos (`/maker/printers/**`, `MakerPrinterController`), Filamentos e estoque auditável (`/maker/filaments/**`, `MakerFilamentController`), Print Archive e reimpressão (`/maker/files/**`, `MakerArchiveController`), Fila de impressão e reordenação atômica (`/maker/queue/**`, `MakerPrintQueueController`), Projetos multi-peça e BOM (`/maker/projects/**`, `MakerProjectController`) e Fontes externas de modelos (`/maker/model-sources/**`, `MakerModelSourceController`)
+> - **Analytics & Finanças do Maker:** Estatísticas de produção (`GET /maker/stats`, `MakerAnalyticsController`) e Resumo financeiro, extrato paginado, saques PIX idempotentes, despesas operacionais e tarifas (`/maker/finances/**`, `MakerFinanceController`)
+>
+> **⏳ Pendentes (`501 Not Implemented`):** Nenhum — todos os endpoints mapeados estão implementados e ativos.
 
 ---
 
@@ -113,7 +128,7 @@ Listagens de catálogos, pedidos, favoritos, avaliações, mensagens e recursos 
 | `BACKEND_TODO.md` | Novo Contrato Backend | Motivo & Nota para o Frontend |
 |---|---|---|
 | `GET /user/negotiations`<br>`POST /user/negotiations/{id}/accept`<br>(Domínio 9) | **Unificados no domínio `/chats` (`ChatRestController`):**<br>`GET /chats?role=BUYER\|MAKER&orderGuid=...&status=...`<br>`POST /chats/{chatId}/offers/{messageGuid}/decision` (`OfferDecisionRequest`) | Elimina duplicação entre "Negociações" e "Chats"; a decisão de oferta consulta a mensagem no banco via `messageGuid` para impedir adulteração de preço pelo client. |
-| `GET /chats/{id}` embutindo `messages[]` inteira, `dateLabel` e `sellerName` | `GET /chats/{chatId}` retorna `ChatDetailResponse` com `recentMessages` e metadados tipados;<br>`GET /chats/{chatId}/messages` retorna `PageResponse<MessageDTO>`;<br>`POST /chats/{chatId}/read` (`204`) zera `unreadCount` | Escalabilidade para conversas longas e controle explícito de leitura. |
+| `GET /chats/{id}` embutindo `messages[]` inteira, `dateLabel` e `sellerName` | `GET /chats/{chatId}` retorna `ChatDetailResponse` com `recentMessages` e metadados tipados;<br>`GET /chats/{chatId}/messages` retorna `PageResponse<MessageDTO>` (agora com `messageGuid` em `MessageDTO`);<br>`POST /chats/{chatId}/read` (`204`) zera `unreadCount` | Escalabilidade para conversas longas, controle explícito de leitura e envio de `messageGuid` no payload WebSocket/REST para decisão segura de ofertas. |
 
 ### Domínio 7 — Impressão Sob Demanda (Precificação)
 | `BACKEND_TODO.md` | Novo Contrato Backend | Motivo & Nota para o Frontend |
@@ -185,41 +200,28 @@ Listagens de catálogos, pedidos, favoritos, avaliações, mensagens e recursos 
 
 Como `application-dev.yaml` define `spring.jpa.hibernate.ddl-auto: validate`, novas tabelas e colunas **não** devem ser ativadas no Hibernate antes de suas respectivas migrations Flyway (`V35+`).
 
-### 3.1 Ajustes já aplicados com segurança sobre o schema atual
-- `OrderStatusCd`: adicionado `REFUNDED("9.02")` (e atualizado `OrderStatusService`). *Obs.:* criar migration Flyway para inserir `('9.02', 'Refunded', ...)` em `ORDER_STATUS_LKUP`.
-- `FileAsset.AssetType`: expandido com `IMAGE("IM")`, `ARCHIVE_3D("AR")`, `SCAD_SCRIPT("SC")` (e suportado em `ObjectStorageKey`, `FileValidator` e `FileAssetService`).
-- `AddressService.registerAddress(...)`: corrigido para persistir `request.neighborhood()`.
+### 3.1 Ajustes e Migrations Aplicadas (Fases 1 a 4 — até `V38`)
+- **`V35__seed_phase1_lookup_data.sql`:**
+  - `OrderStatusCd.REFUNDED("9.02")` inserido em `ORDER_STATUS_LKUP`.
+  - Seed multilíngue (`en-US`, `pt-BR`, `es-ES`) em `MESSAGE_LKUP` para `AUTH_403` e novos códigos de `MessageCd`.
+  - `FileAsset.AssetType` expandido com `IMAGE("IM")`, `ARCHIVE_3D("AR")`, `SCAD_SCRIPT("SC")`.
+  - `AddressService.registerAddress(...)` corrigido para persistir `neighborhood`.
+- **`V36__phase2_catalog_storefront_user_hub.sql`:**
+  - Seed `SUP_002` (`SUPPORT_TICKET_CLOSED`) em `MESSAGE_LKUP`.
+  - Evolução de **`COMPANY`** (`slug` único, `handle`, `tagline`, `bio`, `specialty`, `specialty_category`, `primary_printer`, `base_price`, `min_lead_time_days`, `max_lead_time_days`, `response_time_hours`, `min_order_value`, `avatar_url`, `cover_url`, JSONBs `capabilities`/`materials`/`tags`/`shipping_options`/`social_links`, `badge`, `online`, `verified`, `vacation_mode`, `vacation_message`, `accepting_custom_quotes`, `public_portfolio_enabled`, `pix_key_type`, `pix_key`, `kwh_rate`, `hourly_depreciation_rate`, `rating_avg`, `reviews_count`, `prints_done`).
+  - Evolução de **`ORDERS`** (`order_code`, `shipping_cost`, `tracking_code`, `notes`, `cancellation_reason`, e `file_asset_id` nullable).
+  - Ativadas como `@Entity` em `src/main/java/org/imprime/ai/api/model/` (com `JpaRepository` em `repo/db/`): `MakerPortfolioItem`, `Product`, `Model3D`, `ModelCustomization`, `OrderItem`, `Review`, `UserFavorite`, `PurchasedModel`, `SupportTicket`, `SupportTicketMessage`.
+- **`V37__phase3_maker_operations.sql`:**
+  - Evolução de **`ASSET`** (`company_id` mapeado como `companyId`, `name`, `tray_height`, `nozzle_diameter_mm`, `power_watts`, `ip_address`, `serial_number`, `printer_status`, `api_key_hash`, `api_key_prefix`, JSONBs `config` e `telemetry`).
+  - Evolução de **`FILAMENT`** (`name`, `brand`, `material`, `color_name`, `color_hex`, `initial_weight_grams`, `cost_per_kg`, `diameter_mm`, `low_stock_threshold_grams`, `humidity_percent`, `spool_location`, `notes` e `@Version` optimistic locking).
+  - Ativadas como `@Entity` em `src/main/java/org/imprime/ai/api/model/` (com `JpaRepository` em `repo/db/`): `PrinterAmsSlot`, `FilamentStockMovement`, `MakerArchiveFile`, `PrintQueueItem`, `MakerProject`, `MakerProjectBomItem`, `ModelSourceIntegration`.
+- **`V38__phase4_maker_finance.sql`:**
+  - Criação de `maker_finance_transaction` com `idempotency_key` único (`UNIQUE`), suporte a reversão em `U38__phase4_maker_finance.sql`.
+  - Ativada como `@Entity` em `src/main/java/org/imprime/ai/api/model/`: `MakerFinanceTransaction` (com `MakerFinanceTransactionRepository`).
+  - Implementação completa de `MakerFinanceServiceImpl`, `MakerAnalyticsServiceImpl` e `MakerStudioServiceImpl.getDashboard()`.
 
-### 3.2 Evoluções planejadas para Entidades JPA existentes (após migrations `V35+`)
-1. **`Company` (`COMPANY`):** Adicionar colunas para `slug` (único), `handle`, `tagline`, `description` (`bio`), `cover_picture_id`, `logo_picture_id`, `capabilities` (`jsonb`), `response_time_hours`, `min_lead_time_days`, `max_lead_time_days`, `min_order_value`, `shipping_options` (`jsonb`), `vacation_mode`, `vacation_message`, `accepting_custom_quotes`, `public_portfolio_enabled`, `pix_key_type`, `pix_key`, `kwh_rate`, `hourly_depreciation_rate`, `social_links` (`jsonb`), `verified` e `online`.
-2. **`Asset` (`ASSET`):** Corrigir nome do atributo `company_id` para `companyId`, adicionar `name`, `tray_height`, `nozzle_diameter_mm`, `power_watts`, `ip_address`, `serial_number`, `printer_status`, `api_key_hash`, `api_key_prefix`, `config` (`jsonb`) e `telemetry` (`jsonb`).
-3. **`Filament` (`FILAMENT`):** Adicionar `name`, `brand`, `color_name`, `color_hex`, `initial_weight_grams`, `cost_per_kg`, `diameter_mm`, `low_stock_threshold_grams`, `humidity_percent`, `spool_location`, `notes` e `@Version` (optimistic locking).
-4. **`Order` (`ORDERS`):** Adicionar `order_code`, `shipping_cost`, `tracking_code`, `notes`, `cancellation_reason`, e tornar `file_asset_id` nullable para suportar pedidos de produtos prontos multi-item (`ORDER_ITEM`).
-5. **`Chat` (`CHAT`):** Avaliar suporte a `unread_count` por participante (`CHAT_PARTICIPANT_STATE`) e status de negociação (`NEGOTIATION_STATUS`). Além disso, em `ChatService.handleQuoteDecision`, buscar a `ChatMessage` no banco por `messageGuid` em vez de confiar no valor enviado pelo cliente.
-6. **`MESSAGE_LKUP`:** Inserir mensagens traduzidas (`pt-BR`, `en-US`, `es-ES`) para todos os novos códigos adicionados em `MessageCd`.
+### 3.2 Melhorias Adicionais Planejadas (Opcional / Futuro)
+- **`Chat` (`CHAT`):** Avaliar suporte a `unread_count` por participante (`CHAT_PARTICIPANT_STATE`) e status de negociação (`NEGOTIATION_STATUS`). *(Obs.: `ChatService.handleQuoteDecision` já foi corrigido na Fase 1 para validar `messageGuid` no banco.)*
 
-### 3.3 Entidades Rascunho (`src/main/java/org/imprime/ai/api/model/draft/`)
-Foram criados 18 rascunhos completos de entidades JPA estendendo `Auditable`, com `// @Entity` comentado até a criação das migrations Flyway:
-- `MakerPortfolioItem` (`MAKER_PORTFOLIO_ITEM`)
-- `Product` (`PRODUCT`)
-- `Model3D` (`MODEL_3D`)
-- `ModelCustomization` (`MODEL_CUSTOMIZATION`)
-- `OrderItem` (`ORDER_ITEM`)
-- `Review` (`REVIEW`)
-- `UserFavorite` (`USER_FAVORITE`)
-- `PurchasedModel` (`PURCHASED_MODEL`)
-- `SupportTicket` (`SUPPORT_TICKET`)
-- `SupportTicketMessage` (`SUPPORT_TICKET_MESSAGE`)
-- `PrinterAmsSlot` (`PRINTER_AMS_SLOT`)
-- `FilamentStockMovement` (`FILAMENT_STOCK_MOVEMENT`)
-- `MakerArchiveFile` (`MAKER_ARCHIVE_FILE`)
-- `PrintQueueItem` (`PRINT_QUEUE_ITEM`)
-- `MakerProject` (`MAKER_PROJECT`)
-- `MakerProjectBomItem` (`MAKER_PROJECT_BOM_ITEM`)
-- `ModelSourceIntegration` (`MODEL_SOURCE_INTEGRATION`)
-- `MakerFinanceTransaction` (`MAKER_FINANCE_TRANSACTION`)
-
-**Checklist para ativar cada domínio:**
-1. Criar a migration SQL Flyway (`V35__...`) correspondente às tabelas do domínio.
-2. Mover a(s) entidade(s) de `model/draft/` para `model/` (ou descomentar `@Entity`) e criar os `JpaRepository` em `repo/db/`.
-3. Substituir o `throw new NotImplementedException(...)` no `*ServiceImpl` correspondente pela lógica de negócio real.
+### 3.3 Entidades Rascunho Pendentes (`src/main/java/org/imprime/ai/api/model/draft/`)
+- **Nenhuma** — todos os rascunhos de entidades JPA das Fases 1 a 4 foram promovidos para `src/main/java/org/imprime/ai/api/model/` com suas respectivas migrations Flyway (`V35`–`V38`).

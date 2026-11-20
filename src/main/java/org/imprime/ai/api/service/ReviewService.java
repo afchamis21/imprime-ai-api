@@ -11,5 +11,9 @@ public interface ReviewService {
 
     ReviewResponse createReview(ReviewTargetType targetType, String targetGuid, CreateReviewRequest request);
 
+    ReviewResponse updateReview(ReviewTargetType targetType, String targetGuid, String reviewGuid, CreateReviewRequest request);
+
     void deleteReview(ReviewTargetType targetType, String targetGuid, String reviewGuid);
+
+    void recalculateTargetRating(ReviewTargetType targetType, Long targetId);
 }

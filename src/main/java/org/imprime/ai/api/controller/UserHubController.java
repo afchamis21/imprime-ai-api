@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
+import org.imprime.ai.api.http.request.common.CreateReviewRequest;
 import org.imprime.ai.api.http.request.user.UpdateUserProfileRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
@@ -158,5 +159,42 @@ public class UserHubController {
             @RequestParam(required = false) ReviewTargetType targetType,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return BaseResponse.ok(userHubService.listUserReviews(targetType, pageable));
+    }
+
+    @Operation(
+            summary = "Editar avaliação enviada pelo usuário",
+            description = "Atualiza a nota e o comentário de uma avaliação publicada pelo usuário autenticado e recalcula a média do alvo."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avaliação atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PutMapping("/reviews/{reviewGuid}")
+    public ResponseEntity<BaseResponse<UserReviewResponse>> updateUserReview(
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid,
+            @Valid @RequestBody CreateReviewRequest request) {
+        return BaseResponse.ok(userHubService.updateUserReview(reviewGuid, request));
+    }
+
+    @Operation(
+            summary = "Excluir avaliação enviada pelo usuário",
+            description = "Remove uma avaliação publicada pelo usuário autenticado e recalcula a média do alvo."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Avaliação excluída com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @DeleteMapping("/reviews/{reviewGuid}")
+    public ResponseEntity<Void> deleteUserReview(
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid) {
+        userHubService.deleteUserReview(reviewGuid);
+        return ResponseEntity.noContent().build();
     }
 }

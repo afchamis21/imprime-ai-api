@@ -14,6 +14,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.db.CompanyDAO;
 import org.imprime.ai.api.repo.db.CompanyRepository;
+import org.imprime.ai.api.util.SlugUtil;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -48,6 +49,7 @@ public class CompanyService {
         company.setDocumentType(request.documentType());
 
         company.setName(request.name());
+        company.setSlug(SlugUtil.ensureUniqueSlug(request.name(), companyRepository::existsBySlug));
 
         company = companyRepository.save(company);
 

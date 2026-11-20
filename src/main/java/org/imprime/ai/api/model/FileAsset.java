@@ -37,7 +37,8 @@ public class FileAsset extends Auditable {
         MODEL("MO"),
         IMAGE("IM"),
         ARCHIVE_3D("AR"),
-        SCAD_SCRIPT("SC");
+        SCAD_SCRIPT("SC"),
+        ATTACHMENT("AT");
         private final String code;
 
         @jakarta.persistence.Converter

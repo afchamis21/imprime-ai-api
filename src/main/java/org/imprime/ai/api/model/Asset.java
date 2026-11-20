@@ -3,7 +3,10 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
+import org.imprime.ai.api.model.enums.PrinterStatus;
 
 import java.math.BigDecimal;
 
@@ -18,7 +21,10 @@ public class Asset extends Auditable {
     private Long id;
 
     @Column(name = "COMPANY_ID", nullable = false)
-    private Long company_id;
+    private Long companyId;
+
+    @Column(name = "NAME", nullable = false, length = 100)
+    private String name;
 
     @Column(name = "MODEL", nullable = false)
     private String model;
@@ -34,4 +40,37 @@ public class Asset extends Auditable {
 
     @Column(name = "TRAY_DEPTH", precision = 10, scale = 2)
     private BigDecimal trayDepth;
+
+    @Column(name = "TRAY_HEIGHT", precision = 10, scale = 2)
+    private BigDecimal trayHeight;
+
+    @Column(name = "NOZZLE_DIAMETER_MM", nullable = false, precision = 5, scale = 3)
+    private BigDecimal nozzleDiameterMm = new BigDecimal("0.400");
+
+    @Column(name = "POWER_WATTS", nullable = false)
+    private Integer powerWatts = 300;
+
+    @Column(name = "IP_ADDRESS", length = 60)
+    private String ipAddress;
+
+    @Column(name = "SERIAL_NUMBER", length = 100)
+    private String serialNumber;
+
+    @Convert(converter = PrinterStatus.Converter.class)
+    @Column(name = "PRINTER_STATUS", nullable = false, length = 20)
+    private PrinterStatus printerStatus = PrinterStatus.ONLINE;
+
+    @Column(name = "API_KEY_HASH", length = 64)
+    private String apiKeyHash;
+
+    @Column(name = "API_KEY_PREFIX", length = 40)
+    private String apiKeyPrefix;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "CONFIG", columnDefinition = "jsonb")
+    private String configJson = "{}";
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "TELEMETRY", columnDefinition = "jsonb")
+    private String telemetryJson = "{}";
 }

@@ -10,6 +10,7 @@ import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.dto.AddressDTO;
 import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
+import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.repo.dao.AddressDAO;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.springframework.stereotype.Service;
@@ -60,7 +61,7 @@ public class AddressService {
 
     @NonNull
     public List<Address> findAllForUser(User user) {
-        return addressRepository.findAllByOwnerTypeAndOwnerId(EntityType.USER, user.getId());
+        return addressRepository.findAllByOwnerTypeAndOwnerIdAndStatus(EntityType.USER, user.getId(), StatusCd.ACTIVE);
     }
 
     public List<AddressDTO> findPageByOwner(List<Owner<Long>> owners, Integer page, Integer size) {

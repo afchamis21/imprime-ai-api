@@ -117,7 +117,7 @@ public class PaymentService {
                     .putMetadata("addressGuid", request.addressGuid() != null ? request.addressGuid() : "")
                     .putMetadata("shippingAddress", resolvedAddressSummary)
                     .putMetadata("customerName", request.customerName() != null ? request.customerName() : (caller.getFirstName() + " " + caller.getLastName()).trim())
-                    .putMetadata("customerPhone", request.customerPhone() != null ? request.customerPhone() : caller.getPhoneNumber())
+                    .putMetadata("customerPhone", request.customerPhone() != null ? request.customerPhone() : (caller.getPhoneNumber() != null ? caller.getPhoneNumber() : ""))
                     .putMetadata("notes", request.notes() != null ? request.notes() : "")
                     .putMetadata("totalAmount", totalAmount.toPlainString());
 

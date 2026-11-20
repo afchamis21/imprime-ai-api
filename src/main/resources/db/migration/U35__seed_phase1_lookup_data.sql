@@ -1,0 +1,40 @@
+DELETE FROM order_status_lkup
+WHERE code = '9.02';
+
+DELETE FROM message_lkup
+WHERE code IN (
+    'AUTH_403',
+    'SYS_400',
+    'SYS_400_BODY',
+    'SYS_409',
+    'SYS_501',
+    'SYS_502',
+    'ADR_020',
+    'COM_010',
+    'ORD_004',
+    'ORD_005',
+    'CHAT_001',
+    'CHAT_002',
+    'CHAT_003',
+    'MKR_001',
+    'MKR_002',
+    'PRD_001',
+    'MDL_001',
+    'MDL_002',
+    'MDL_003',
+    'REV_001',
+    'REV_002',
+    'FAV_001',
+    'SUP_001',
+    'PRT_001',
+    'PRT_002',
+    'FIL_001',
+    'ARC_001',
+    'QUE_001',
+    'PRJ_001',
+    'PRJ_002',
+    'PRJ_003',
+    'SRC_001',
+    'SRC_002',
+    'FIN_001'
+);

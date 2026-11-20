@@ -159,6 +159,49 @@ public class Model3DController {
         return BaseResponse.created(reviewService.createReview(ReviewTargetType.MODEL_3D, modelGuid, request));
     }
 
+    @JwtAuthenticated
+    @Operation(
+            summary = "Editar avaliação de modelo 3D",
+            description = "Atualiza uma avaliação publicada pelo próprio usuário autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avaliação atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados de avaliação inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Modelo 3D ou avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PutMapping("/{modelGuid}/reviews/{reviewGuid}")
+    public ResponseEntity<BaseResponse<ReviewResponse>> updateModelReview(
+            @Parameter(description = "GUID do modelo 3D", required = true)
+            @PathVariable String modelGuid,
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid,
+            @Valid @RequestBody CreateReviewRequest request) {
+        return BaseResponse.ok(reviewService.updateReview(ReviewTargetType.MODEL_3D, modelGuid, reviewGuid, request));
+    }
+
+    @JwtAuthenticated
+    @Operation(
+            summary = "Excluir avaliação de modelo 3D",
+            description = "Remove uma avaliação publicada pelo próprio usuário autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Avaliação excluída com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Modelo 3D ou avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @DeleteMapping("/{modelGuid}/reviews/{reviewGuid}")
+    public ResponseEntity<Void> deleteModelReview(
+            @Parameter(description = "GUID do modelo 3D", required = true)
+            @PathVariable String modelGuid,
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid) {
+        reviewService.deleteReview(ReviewTargetType.MODEL_3D, modelGuid, reviewGuid);
+        return ResponseEntity.noContent().build();
+    }
+
     @SkipAuth
     @SecurityRequirements
     @Operation(

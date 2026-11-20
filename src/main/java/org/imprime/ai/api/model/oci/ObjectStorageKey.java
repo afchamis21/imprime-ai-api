@@ -1,11 +1,13 @@
 package org.imprime.ai.api.model.oci;
 
 import lombok.Getter;
+import lombok.ToString;
 import org.imprime.ai.api.model.FileAsset;
 
 import java.nio.file.Path;
 
 @Getter
+@ToString
 public final class ObjectStorageKey {
     private final String key;
     private final String bucket;
@@ -65,6 +67,18 @@ public final class ObjectStorageKey {
                 Path.of(userGuid, fileIdentifier + "." + extension).toString(),
                 "scad",
                 FileAsset.AssetType.SCAD_SCRIPT
+        );
+    }
+
+    public static ObjectStorageKey attachment(
+            String userGuid,
+            String fileIdentifier,
+            String extension) {
+
+        return new ObjectStorageKey(
+                Path.of(userGuid, fileIdentifier + "." + extension).toString(),
+                "media",
+                FileAsset.AssetType.ATTACHMENT
         );
     }
 

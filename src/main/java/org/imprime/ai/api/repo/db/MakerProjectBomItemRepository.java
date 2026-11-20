@@ -1,0 +1,19 @@
+package org.imprime.ai.api.repo.db;
+
+import org.imprime.ai.api.model.MakerProjectBomItem;
+import org.imprime.ai.api.model.enums.StatusCd;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface MakerProjectBomItemRepository extends JpaRepository<MakerProjectBomItem, Long> {
+    List<MakerProjectBomItem> findAllByMakerProjectIdAndStatusOrderByIdAsc(Long makerProjectId, StatusCd status);
+
+    List<MakerProjectBomItem> findAllByMakerProjectIdInAndStatusOrderByIdAsc(Collection<Long> makerProjectIds, StatusCd status);
+
+    Optional<MakerProjectBomItem> findByGuidAndStatus(String guid, StatusCd status);
+}

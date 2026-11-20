@@ -1,8 +1,11 @@
 package org.imprime.ai.api.service;
 
 import com.oracle.bmc.objectstorage.ObjectStorage;
+import com.oracle.bmc.objectstorage.model.CreatePreauthenticatedRequestDetails;
+import com.oracle.bmc.objectstorage.requests.CreatePreauthenticatedRequestRequest;
 import com.oracle.bmc.objectstorage.requests.DeleteObjectRequest;
 import com.oracle.bmc.objectstorage.requests.PutObjectRequest;
+import com.oracle.bmc.objectstorage.responses.CreatePreauthenticatedRequestResponse;
 import com.oracle.bmc.objectstorage.transfer.UploadConfiguration;
 import com.oracle.bmc.objectstorage.transfer.UploadManager;
 import lombok.RequiredArgsConstructor;
@@ -10,14 +13,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.config.AppConfig;
 import org.imprime.ai.api.config.OciConfigProperties;
 import org.imprime.ai.api.http.ServiceContext;
+import org.imprime.ai.api.model.FileAsset;
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.exception.BadGatewayException;
 import org.imprime.ai.api.model.oci.ObjectStorageKey;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -46,7 +56,7 @@ public class ObjectStorageService {
             return;
         }
 
-        final String fullPath = Path.of(appConfig.getEnvironment().name().toLowerCase(Locale.ROOT), path).toString();
+        final String fullPath = buildFullObjectName(path);
 
         UploadManager uploadManager = new UploadManager(
                 objectStorage,
@@ -86,7 +96,7 @@ public class ObjectStorageService {
     }
 
     public void delete(ObjectStorageKey key) {
-        final String fullPath = Path.of(appConfig.getEnvironment().name().toLowerCase(Locale.ROOT), key.getKey()).toString();
+        final String fullPath = buildFullObjectName(key.getKey());
 
         DeleteObjectRequest request = DeleteObjectRequest.builder()
                 .namespaceName(properties.getObjectStorage().getNamespace())
@@ -94,5 +104,99 @@ public class ObjectStorageService {
                 .objectName(fullPath).build();
 
         objectStorage.deleteObject(request);
+    }
+
+    public String buildPublicObjectUrl(FileAsset asset) {
+        if (asset == null || asset.getAssetUrl() == null || asset.getAssetUrl().isBlank()) {
+            return null;
+        }
+        String assetUrl = asset.getAssetUrl().trim();
+        if (isHttpUrl(assetUrl)) {
+            return assetUrl;
+        }
+        OciConfigProperties.ObjectStorageConfig storageConfig = properties.getObjectStorage();
+        if (storageConfig == null
+                || isBlank(storageConfig.getRegionId())
+                || isBlank(storageConfig.getNamespace())) {
+            return assetUrl;
+        }
+        ObjectStorageKey storageKey = ObjectStorageKey.of(asset);
+        String fullObjectName = buildFullObjectName(storageKey.getKey());
+        return String.format(
+                "https://objectstorage.%s.oraclecloud.com/n/%s/b/%s/o/%s",
+                storageConfig.getRegionId(),
+                storageConfig.getNamespace(),
+                storageKey.getBucket(),
+                fullObjectName
+        );
+    }
+
+    public PresignedDownloadUrl createPresignedDownloadUrl(FileAsset asset, Duration ttl) {
+        if (asset == null || isBlank(asset.getAssetUrl())) {
+            throw new IllegalArgumentException("FileAsset must have a valid assetUrl");
+        }
+        Duration effectiveTtl = ttl != null && !ttl.isNegative() && !ttl.isZero()
+                ? ttl
+                : Duration.ofMinutes(15);
+        Instant expiresAt = Instant.now().plus(effectiveTtl);
+
+        String rawUrl = asset.getAssetUrl().trim();
+        OciConfigProperties.ObjectStorageConfig storageConfig = properties.getObjectStorage();
+        if (isHttpUrl(rawUrl)
+                || objectStorage == null
+                || storageConfig == null
+                || isBlank(storageConfig.getRegionId())
+                || isBlank(storageConfig.getNamespace())) {
+            return new PresignedDownloadUrl(buildPublicObjectUrl(asset), expiresAt);
+        }
+
+        ObjectStorageKey storageKey = ObjectStorageKey.of(asset);
+        String fullObjectName = buildFullObjectName(storageKey.getKey());
+
+        try {
+            CreatePreauthenticatedRequestDetails details = CreatePreauthenticatedRequestDetails.builder()
+                    .name("dl-" + UUID.randomUUID())
+                    .accessType(CreatePreauthenticatedRequestDetails.AccessType.ObjectRead)
+                    .objectName(fullObjectName)
+                    .timeExpires(Date.from(expiresAt))
+                    .build();
+
+            CreatePreauthenticatedRequestRequest request = CreatePreauthenticatedRequestRequest.builder()
+                    .namespaceName(storageConfig.getNamespace())
+                    .bucketName(storageKey.getBucket())
+                    .createPreauthenticatedRequestDetails(details)
+                    .build();
+
+            CreatePreauthenticatedRequestResponse response = objectStorage.createPreauthenticatedRequest(request);
+            String accessUri = response.getPreauthenticatedRequest().getAccessUri();
+            String normalizedUri = accessUri != null && accessUri.startsWith("/") ? accessUri : "/" + Objects.toString(accessUri, "");
+            String url = "https://objectstorage." + storageConfig.getRegionId() + ".oraclecloud.com" + normalizedUri;
+            Instant parExpiresAt = response.getPreauthenticatedRequest().getTimeExpires() != null
+                    ? response.getPreauthenticatedRequest().getTimeExpires().toInstant()
+                    : expiresAt;
+            return new PresignedDownloadUrl(url, parExpiresAt);
+        } catch (Exception e) {
+            log.error("Failed to create OCI preauthenticated download URL for asset [{}]", asset.getGuid(), e);
+            throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        }
+    }
+
+    private String buildFullObjectName(String key) {
+        String envPrefix = appConfig != null && appConfig.getEnvironment() != null
+                ? appConfig.getEnvironment().name().toLowerCase(Locale.ROOT)
+                : "dev";
+        return Path.of(envPrefix, key).toString().replace('\\', '/');
+    }
+
+    private boolean isHttpUrl(String value) {
+        String lower = value.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://");
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    public record PresignedDownloadUrl(String url, Instant expiresAt) {
     }
 }

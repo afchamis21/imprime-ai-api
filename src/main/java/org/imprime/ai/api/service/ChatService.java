@@ -16,7 +16,9 @@ import org.imprime.ai.api.model.enums.MessageType;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
+import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.websocket.chat.ChatEvent;
@@ -58,22 +60,28 @@ public class ChatService {
 
         OrderStatus latest = orderStatusService.findLatest(order);
         if (!OrderStatusCd.QUOTING.equals(latest.getStatusCd())) {
-            log.warn("User trying to create chat for Order not in Quoting. Order [{}]. Current Status [{}]", order.getId(), latest.getStatusCd());
-            throw new ForbiddenException();
+            log.info("Order [{}] is already in status [{}]; cloning a new QUOTING order for buyer [{}]",
+                    order.getGuid(), latest.getStatusCd(), caller.getGuid());
+            order = orderService.cloneOrderForNewQuote(order, caller);
         }
 
         Optional<Company> optionalCompany = companyService.findByCompanyGuid(request.makerGuid());
         Company company = optionalCompany.orElseThrow(() -> new BadRequestException(MessageCd.COMPANY_NOT_FOUND));
 
-        Chat chat = new Chat();
-        chat.setOrderGuid(order.getGuid());
-        chat.setClientGuid(caller.getGuid());
-        chat.setCompanyGuid(company.getGuid());
-        chat.setLastMessageAt(Instant.now());
+        Chat chat = chatRepository
+                .findFirstByOrderGuidAndCompanyGuidAndStatusOrderByCreateDtDesc(
+                        order.getGuid(), company.getGuid(), StatusCd.ACTIVE
+                )
+                .orElseGet(() -> {
+                    Chat created = new Chat();
+                    created.setOrderGuid(order.getGuid());
+                    created.setClientGuid(caller.getGuid());
+                    created.setCompanyGuid(company.getGuid());
+                    created.setLastMessageAt(Instant.now());
+                    return chatRepository.saveAndFlush(created);
+                });
 
-        chat = chatRepository.saveAndFlush(chat);
-
-        sendMessage(chat, request.message());
+        sendMessage(chat, request.message(), getChatMembers(chat));
     }
 
     @Transactional
@@ -107,12 +115,33 @@ public class ChatService {
         message.setContent(request.content());
         message.setType(request.type());
 
-        message = chatMessageRepository.save(message);
+        ChatMessage saved = chatMessageRepository.save(message);
+        if (saved != null) {
+            message = saved;
+        }
         chatRepository.updateLastMessageSentAt(chat.getChatId());
 
+        if (MessageType.SYSTEM.equals(request.type())
+                && request.content() != null
+                && request.content().toLowerCase().contains("pagamento")
+                && request.content().toLowerCase().contains("produ")
+                && chat.getOrderGuid() != null) {
+            try {
+                orderService.findByGuid(chat.getOrderGuid()).ifPresent(order -> {
+                    OrderStatus latest = orderStatusService.findLatest(order);
+                    if (latest != null && OrderStatusCd.CONFIRMED.equals(latest.getStatusCd())) {
+                        orderStatusService.move(order, OrderStatusCd.IN_PRODUCTION);
+                        log.info("Order [{}] moved to IN_PRODUCTION after payment confirmation in Chat [{}]",
+                                order.getGuid(), chat.getChatId());
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("Could not transition order [{}] to IN_PRODUCTION from chat payment event", chat.getOrderGuid(), e);
+            }
+        }
+
         if (recipients == null) {
-            List<String> members = getChatMembers(chat);
-            recipients = members.stream().filter(guid -> !guid.equals(caller.getGuid())).toList();
+            recipients = getChatMembers(chat);
         }
 
         deliverMessage(chat.getChatId(), MessageDTO.from(message, caller), recipients);
@@ -121,16 +150,33 @@ public class ChatService {
     @Transactional
     public void handleQuoteDecision(UUID chatId, QuoteDecisionRequest request) {
         log.info("Incoming Quote Decision for Chat [{}]", chatId);
+        if (request == null) {
+            throw new BadRequestException(MessageCd.INVALID_REQUEST_BODY);
+        }
+
+        if (request.message() != null
+                && request.message().messageGuid() != null
+                && !request.message().messageGuid().isBlank()) {
+            decideOfferByMessageGuid(chatId, request.message().messageGuid(), Boolean.TRUE.equals(request.accept()), null);
+            return;
+        }
+
         User caller = ServiceContext.getUserOrThrow();
         Chat chat = findChat(chatId);
 
         MessageDTO quoteMessage = request.message();
-        if (!MessageType.OFFER.equals(quoteMessage.type())) {
-            log.warn("Quote Decision request received without Quote Message! [{}]", quoteMessage.type());
+        if (quoteMessage == null || !MessageType.OFFER.equals(quoteMessage.type())) {
+            log.warn("Quote Decision request received without Quote Message! [{}]", quoteMessage != null ? quoteMessage.type() : null);
             throw new BadRequestException(MessageCd.MESSAGE_NOT_OFFER);
         }
 
-        if (request.accept()) {
+        if (quoteMessage.sender() != null
+                && quoteMessage.sender().userGuid() != null
+                && caller.getGuid().equals(quoteMessage.sender().userGuid())) {
+            throw new ForbiddenException();
+        }
+
+        if (Boolean.TRUE.equals(request.accept())) {
             acceptOffer(caller, chat, quoteMessage);
         } else {
             declineOffer(caller, chat, quoteMessage);
@@ -138,14 +184,76 @@ public class ChatService {
     }
 
     @Transactional
+    public Chat decideOfferByMessageGuid(UUID chatId, String messageGuid, boolean accept, @Nullable String reason) {
+        User caller = ServiceContext.getUserOrThrow();
+        Chat chat = findChat(chatId);
+
+        Optional<ChatMessage> dbMsgOpt = chatMessageRepository.findByGuidAndChatId(messageGuid, chatId);
+        if (dbMsgOpt.isPresent()) {
+            ChatMessage msg = dbMsgOpt.get();
+            if (msg.getSenderId() != null && caller.getGuid().equals(msg.getSenderId())) {
+                log.warn("User [{}] attempted to decide their own offer [{}] in Chat [{}]",
+                        caller.getGuid(), messageGuid, chatId);
+                throw new ForbiddenException();
+            }
+        } else if (!caller.getGuid().equals(chat.getClientGuid())) {
+            log.warn("User [{}] attempted to decide offer in Chat [{}] where client is [{}]",
+                    caller.getGuid(), chatId, chat.getClientGuid());
+            throw new ForbiddenException();
+        }
+
+        if (!StatusCd.ACTIVE.equals(chat.getStatus())) {
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+        }
+
+        Order order = orderService.findByGuid(chat.getOrderGuid())
+                .orElseThrow(() -> new NotFoundException(MessageCd.ORDER_NOT_FOUND));
+        OrderStatus latestOrderStatus = orderStatusService.findLatest(order);
+        if (!OrderStatusCd.QUOTING.equals(latestOrderStatus.getStatusCd())) {
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+        }
+
+        ChatMessage dbMsg = dbMsgOpt
+                .orElseThrow(() -> new NotFoundException(MessageCd.CHAT_NOT_FOUND));
+
+        if (!MessageType.OFFER.equals(dbMsg.getType())) {
+            log.warn("Message [{}] in Chat [{}] is type [{}], expected OFFER", messageGuid, chatId, dbMsg.getType());
+            throw new BadRequestException(MessageCd.MESSAGE_NOT_OFFER);
+        }
+
+        try {
+            new BigDecimal(dbMsg.getContent().trim());
+        } catch (Exception e) {
+            throw new BadRequestException(MessageCd.OFFER_NOT_NUMERIC);
+        }
+
+        User sender = userService.findUserByGuid(dbMsg.getSenderId()).orElse(caller);
+        MessageDTO authoritativeQuote = MessageDTO.from(dbMsg, sender);
+
+        if (accept) {
+            acceptOffer(caller, chat, authoritativeQuote);
+        } else {
+            declineOffer(caller, chat, authoritativeQuote, reason);
+        }
+
+        return chat;
+    }
+
+    @Transactional
     public void acceptOffer(User caller, Chat chat, MessageDTO quoteMessage) {
         log.info("Accepting offer for Chat [{}]", chat.getChatId());
-        BigDecimal offer = new BigDecimal(quoteMessage.content());
+        BigDecimal offer = new BigDecimal(quoteMessage.content().trim());
 
         Company company = companyService.findByCompanyGuid(chat.getCompanyGuid()).orElseThrow();
 
         OrderStatus orderStatus = orderService.acceptOffer(chat.getOrderGuid(), offer, company);
         log.info("Order [{}] Confirmed! New Status [{}]", orderStatus.getOrderId(), orderStatus.getStatusCd());
+
+        String text = "Proposta de R$ %.2f aprovada por %s! Pedido confirmado.".formatted(
+                offer,
+                caller.getFullName()
+        );
+        sendMessage(chat, new SendMessageRequest(text, MessageType.SYSTEM), getChatMembers(chat));
 
         disableChatsForOrder(chat.getOrderGuid(), chat);
     }
@@ -169,23 +277,32 @@ public class ChatService {
 
     @Transactional
     public void declineOffer(User caller, Chat chat, MessageDTO quoteMessage) {
+        declineOffer(caller, chat, quoteMessage, null);
+    }
+
+    @Transactional
+    public void declineOffer(User caller, Chat chat, MessageDTO quoteMessage, @Nullable String reason) {
         log.info("Rejecting offer for Chat [{}]", chat.getChatId());
 
-        SendMessageRequest messageRequest = new SendMessageRequest(
-                "Oferta de R$ %.2f recusada por %s".formatted(
-                        new BigDecimal(quoteMessage.content()),
-                        caller.getFullName()
-                ),
-                MessageType.SYSTEM
+        String baseText = "Oferta de R$ %.2f recusada por %s".formatted(
+                new BigDecimal(quoteMessage.content().trim()),
+                caller.getFullName()
         );
+        String text = (reason != null && !reason.isBlank()) ? baseText + " (" + reason.trim() + ")" : baseText;
 
-        sendMessage(chat, messageRequest);
+        SendMessageRequest messageRequest = new SendMessageRequest(text, MessageType.SYSTEM);
+
+        sendMessage(chat, messageRequest, getChatMembers(chat));
+    }
+
+    public @NonNull Chat findAuthorizedChat(UUID chatId) {
+        return findChat(chatId);
     }
 
     private @NonNull Chat findChat(UUID chatId) {
         User caller = ServiceContext.getUserOrThrow();
 
-        Chat chat = chatRepository.findById(chatId).orElseThrow(() -> new BadRequestException(MessageCd.CHAT_NOT_FOUND));
+        Chat chat = chatRepository.findById(chatId).orElseThrow(() -> new NotFoundException(MessageCd.CHAT_NOT_FOUND));
 
         List<String> members = getChatMembers(chat);
         boolean isMember = members.stream().anyMatch(guid -> guid.equals(caller.getGuid()));

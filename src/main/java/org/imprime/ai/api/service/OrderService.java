@@ -124,6 +124,19 @@ public class OrderService {
         return orderStatusService.move(order, OrderStatusCd.CONFIRMED);
     }
 
+    @Transactional
+    public Order cloneOrderForNewQuote(Order templateOrder, User buyer) {
+        Order cloned = new Order();
+        cloned.setBuyerId(buyer.getId());
+        cloned.setToAddressId(templateOrder.getToAddressId());
+        cloned.setFileAssetId(templateOrder.getFileAssetId());
+        cloned = orderRepository.save(cloned);
+
+        orderStatusService.move(cloned, OrderStatusCd.CREATED);
+        orderStatusService.move(cloned, OrderStatusCd.QUOTING);
+        return cloned;
+    }
+
     // Fetch Order Snapshot
 
     // Fetch Order Chats -> might exist on chat service

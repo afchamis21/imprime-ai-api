@@ -172,6 +172,28 @@ public class ProductController {
 
     @JwtAuthenticated
     @Operation(
+            summary = "Editar avaliação de produto",
+            description = "Atualiza uma avaliação publicada pelo próprio usuário autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avaliação atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados de avaliação inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Produto ou avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PutMapping("/{productGuid}/reviews/{reviewGuid}")
+    public ResponseEntity<BaseResponse<ReviewResponse>> updateProductReview(
+            @Parameter(description = "GUID do produto", required = true)
+            @PathVariable String productGuid,
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid,
+            @Valid @RequestBody CreateReviewRequest request) {
+        return BaseResponse.ok(reviewService.updateReview(ReviewTargetType.PRODUCT, productGuid, reviewGuid, request));
+    }
+
+    @JwtAuthenticated
+    @Operation(
             summary = "Excluir avaliação de produto",
             description = "Remove uma avaliação publicada pelo próprio usuário autenticado."
     )
