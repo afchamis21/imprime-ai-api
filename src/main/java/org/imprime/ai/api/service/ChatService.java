@@ -68,13 +68,14 @@ public class ChatService {
         Optional<Company> optionalCompany = companyService.findByCompanyGuid(request.makerGuid());
         Company company = optionalCompany.orElseThrow(() -> new BadRequestException(MessageCd.COMPANY_NOT_FOUND));
 
+        final String targetOrderGuid = order.getGuid();
         Chat chat = chatRepository
                 .findFirstByOrderGuidAndCompanyGuidAndStatusOrderByCreateDtDesc(
-                        order.getGuid(), company.getGuid(), StatusCd.ACTIVE
+                        targetOrderGuid, company.getGuid(), StatusCd.ACTIVE
                 )
                 .orElseGet(() -> {
                     Chat created = new Chat();
-                    created.setOrderGuid(order.getGuid());
+                    created.setOrderGuid(targetOrderGuid);
                     created.setClientGuid(caller.getGuid());
                     created.setCompanyGuid(company.getGuid());
                     created.setLastMessageAt(Instant.now());
