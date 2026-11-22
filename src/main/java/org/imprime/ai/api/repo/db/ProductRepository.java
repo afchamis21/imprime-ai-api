@@ -15,11 +15,15 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Long> {
     boolean existsBySlug(String slug);
 
+    Optional<Product> findByGuid(String guid);
+
     Optional<Product> findByGuidAndStatus(String guid, StatusCd status);
 
     Optional<Product> findBySlugAndStatus(String slug, StatusCd status);
 
     List<Product> findAllByStatus(StatusCd status);
+
+    List<Product> findAllByOrderByCreateDtDesc();
 
     Page<Product> findAllByCompanyIdAndStatus(Long companyId, StatusCd status, Pageable pageable);
 

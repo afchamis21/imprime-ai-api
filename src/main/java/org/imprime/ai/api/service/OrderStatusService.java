@@ -29,10 +29,11 @@ public class OrderStatusService {
         }
 
         return switch (from) {
-            case CREATED -> Set.of(OrderStatusCd.QUOTING, OrderStatusCd.CANCELLED);
+            case CREATED -> Set.of(OrderStatusCd.QUOTING, OrderStatusCd.CONFIRMED, OrderStatusCd.CANCELLED);
             case QUOTING -> Set.of(OrderStatusCd.CONFIRMED, OrderStatusCd.CANCELLED);
-            case CONFIRMED -> Set.of(OrderStatusCd.IN_PRODUCTION, OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
-            case IN_PRODUCTION -> Set.of(OrderStatusCd.IN_TRANSIT, OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
+            case CONFIRMED -> Set.of(OrderStatusCd.IN_PRODUCTION, OrderStatusCd.COMPLETED, OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
+            case IN_PRODUCTION -> Set.of(OrderStatusCd.READY_TO_SHIP, OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
+            case READY_TO_SHIP -> Set.of(OrderStatusCd.IN_PRODUCTION, OrderStatusCd.IN_TRANSIT, OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
             case IN_TRANSIT -> Set.of(OrderStatusCd.COMPLETED, OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
             case COMPLETED -> Set.of(OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED);
             case CANCELLED -> Set.of(OrderStatusCd.REFUNDED);

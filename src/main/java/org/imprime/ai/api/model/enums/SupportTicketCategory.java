@@ -8,6 +8,7 @@ import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 @RequiredArgsConstructor
 public enum SupportTicketCategory implements CodeAttribute {
     ORDER("ORDER"),
+    DISPUTE("DISPUTE"),
     TECHNICAL("TECHNICAL"),
     PAYMENT("PAYMENT"),
     ACCOUNT("ACCOUNT"),

@@ -21,4 +21,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findAllByBuyerIdAndStatusOrderByCreateDtDesc(Long buyerId, StatusCd status);
 
     List<Order> findAllByVendorIdAndStatusOrderByCreateDtDesc(Long vendorId, StatusCd status);
+
+    List<Order> findAllByStatusOrderByCreateDtDesc(StatusCd status);
+
+    List<Order> findAllByCheckoutSessionIdAndBuyerIdAndStatusOrderByIdAsc(
+            String checkoutSessionId,
+            Long buyerId,
+            StatusCd status
+    );
 }

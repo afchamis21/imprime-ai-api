@@ -10,10 +10,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.SkipAuth;
+import org.imprime.ai.api.http.request.payment.CompleteCheckoutRequest;
 import org.imprime.ai.api.http.request.payment.CreateCheckoutSessionRequest;
+import org.imprime.ai.api.http.request.payment.CalculateShippingQuotesRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.CheckoutSessionResponse;
+import org.imprime.ai.api.http.response.CompleteCheckoutResponse;
+import org.imprime.ai.api.http.response.payment.ShippingQuotesResponse;
 import org.imprime.ai.api.service.PaymentService;
+import org.imprime.ai.api.service.ShippingQuoteService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +29,15 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Pagamentos (Stripe)", description = "Endpoints para criação de sessão de checkout na Stripe e recebimento de webhooks")
 public class PaymentController {
     private final PaymentService paymentService;
+    private final ShippingQuoteService shippingQuoteService;
+
+    @JwtAuthenticated
+    @PostMapping("/shipping/quotes")
+    @Operation(summary = "Calcular opções de frete por Maker", description = "Consulta o Melhor Envio no backend e retorna serviços disponíveis para cada Maker físico do carrinho.")
+    public ResponseEntity<BaseResponse<ShippingQuotesResponse>> calculateShippingQuotes(
+            @RequestBody CalculateShippingQuotesRequest request) {
+        return BaseResponse.ok(shippingQuoteService.calculate(request));
+    }
 
     @Operation(
             summary = "Criar sessão de pagamento no Stripe Checkout",
@@ -40,6 +54,24 @@ public class PaymentController {
             @RequestBody CreateCheckoutSessionRequest request
     ) {
         return BaseResponse.ok(paymentService.createCheckoutSession(request));
+    }
+
+    @Operation(
+            summary = "Concluir checkout do carrinho e gerar pedidos",
+            description = "Confirma o pagamento do carrinho e persiste pedidos, itens, modelos adquiridos e transições iniciais de status."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Checkout finalizado e pedidos criados/recuperados com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos, endereço ausente ou sessão não paga", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Endereço não pertence ao usuário autenticado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @JwtAuthenticated
+    @PostMapping("/checkout/complete")
+    public ResponseEntity<BaseResponse<CompleteCheckoutResponse>> completeCheckout(
+            @RequestBody CompleteCheckoutRequest request
+    ) {
+        return BaseResponse.ok(paymentService.completeCartCheckout(request));
     }
 
     @Operation(

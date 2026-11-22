@@ -9,6 +9,7 @@ import org.imprime.ai.api.model.converter.base.CodeAttributeConverter;
 public enum StatusCd implements CodeAttribute {
     ACTIVE("A"),
     INACTIVE("I"),
+    SUSPENDED("S"),
     DELETED("D"),
 
     // Order Specific

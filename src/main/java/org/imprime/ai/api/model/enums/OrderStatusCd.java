@@ -11,6 +11,7 @@ public enum OrderStatusCd implements CodeAttribute {
     QUOTING("1.01"),
     CONFIRMED("2.00"),
     IN_PRODUCTION("2.01"),
+    READY_TO_SHIP("2.015"),
     IN_TRANSIT("2.02"),
     COMPLETED("3.00"),
     CANCELLED("9.00"),

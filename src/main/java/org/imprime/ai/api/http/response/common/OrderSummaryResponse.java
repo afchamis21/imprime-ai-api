@@ -24,6 +24,12 @@ public record OrderSummaryResponse(
         BigDecimal totalAmount,
         @Schema(description = "Código de rastreio da transportadora/Correios")
         String trackingCode,
+        @Schema(description = "Nome da transportadora do envio")
+        String carrierName,
+        @Schema(description = "Status atual do envio")
+        String trackingStatus,
+        @Schema(description = "URL segura de acompanhamento do envio")
+        String trackingUrl,
         @Schema(description = "Observações do pedido")
         String notes,
         @Schema(description = "Resumo do Maker responsável pelo pedido")
@@ -37,4 +43,21 @@ public record OrderSummaryResponse(
         @Schema(description = "Data da última atualização em UTC (ISO-8601)", example = "2026-11-19T16:00:00Z")
         Instant updatedAt
 ) {
+    public OrderSummaryResponse(
+            String orderGuid,
+            String orderCode,
+            OrderStatusCd status,
+            BigDecimal subtotal,
+            BigDecimal shippingCost,
+            BigDecimal totalAmount,
+            String trackingCode,
+            String notes,
+            MakerBriefResponse maker,
+            UserDTO buyer,
+            List<OrderItemResponse> items,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(orderGuid, orderCode, status, subtotal, shippingCost, totalAmount,
+                trackingCode, null, null, null, notes, maker, buyer, items, createdAt, updatedAt);
+    }
 }

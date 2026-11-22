@@ -110,7 +110,7 @@ public final class CatalogDtoMapper {
                     author != null ? author.getGuid() : authorCompany.getGuid(),
                     authorCompany.getSlug(),
                     firstNonBlank(authorCompany.getName(), author != null ? author.getFullName() : "Autor"),
-                    authorCompany.getAvatarUrl(),
+                    firstNonBlank(authorCompany.getAvatarUrl(), author != null ? author.getAvatarUrl() : null),
                     Boolean.TRUE.equals(authorCompany.getVerified())
             );
         }
@@ -121,7 +121,7 @@ public final class CatalogDtoMapper {
                 author.getGuid(),
                 SlugUtil.slugify(author.getFullName()),
                 author.getFullName(),
-                null,
+                author.getAvatarUrl(),
                 false
         );
     }

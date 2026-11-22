@@ -33,6 +33,15 @@ public record CreateCheckoutSessionRequest(
         @Schema(description = "URL de redirecionamento em caso de pagamento aprovado")
         String successUrl,
         @Schema(description = "URL de redirecionamento caso o usuário cancele o checkout")
-        String cancelUrl
+        String cancelUrl,
+        @Schema(description = "GUIDs das cotações Melhor Envio selecionadas no checkout")
+        List<String> shippingQuoteGuids
 ) {
+    public CreateCheckoutSessionRequest(List<CheckoutItemRequest> items, String addressGuid, AddressDTO shippingAddress,
+                                       String customerName, String customerEmail, String customerPhone, String notes,
+                                       String currency, BigDecimal subtotal, BigDecimal shippingCost, BigDecimal totalAmount,
+                                       String successUrl, String cancelUrl) {
+        this(items, addressGuid, shippingAddress, customerName, customerEmail, customerPhone, notes, currency,
+                subtotal, shippingCost, totalAmount, successUrl, cancelUrl, List.of());
+    }
 }

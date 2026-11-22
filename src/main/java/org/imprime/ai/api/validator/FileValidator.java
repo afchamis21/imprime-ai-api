@@ -20,7 +20,7 @@ public class FileValidator {
     private static final Map<FileAsset.AssetType, Set<String>> ALLOWED_EXTENSIONS = new EnumMap<>(FileAsset.AssetType.class);
 
     public FileValidator() {
-        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.MODEL, Set.of("stl", "3mf")); // TODO Conferir com o Amorim
+        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.MODEL, Set.of("stl", "3mf", "obj", "glb", "scad"));
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.IMAGE, Set.of("png", "jpg", "jpeg", "webp", "gif", "svg", "avif"));
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.ARCHIVE_3D, Set.of("stl", "3mf", "gcode", "obj"));
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.SCAD_SCRIPT, Set.of("scad"));

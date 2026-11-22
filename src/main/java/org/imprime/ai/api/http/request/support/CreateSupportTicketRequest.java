@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.imprime.ai.api.model.enums.SupportTicketCategory;
 
+import java.util.List;
+
 @Schema(description = "Dados para abertura de um novo chamado de suporte")
 public record CreateSupportTicketRequest(
         @Schema(description = "Assunto do chamado", example = "Problema com arquivo STL do pedido PED-1029", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -23,6 +25,20 @@ public record CreateSupportTicketRequest(
         @Schema(description = "Mensagem inicial descrevendo a dúvida ou ocorrência", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "A mensagem inicial é obrigatória")
         @Size(max = 4000, message = "A mensagem deve ter no máximo 4000 caracteres")
-        String message
+        String message,
+
+        @Schema(description = "Indica se o chamado é uma disputa de pedido ou impressão 3D")
+        Boolean isDispute,
+
+        @Schema(description = "URLs de evidências/anexos enviadas via /media/upload")
+        List<String> attachments
 ) {
+    public CreateSupportTicketRequest(
+            String subject,
+            SupportTicketCategory category,
+            String orderGuid,
+            String message
+    ) {
+        this(subject, category, orderGuid, message, null, List.of());
+    }
 }

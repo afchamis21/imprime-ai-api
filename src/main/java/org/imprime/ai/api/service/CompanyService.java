@@ -50,6 +50,9 @@ public class CompanyService {
 
         company.setName(request.name());
         company.setSlug(SlugUtil.ensureUniqueSlug(request.name(), companyRepository::existsBySlug));
+        if (owner.getAvatarUrl() != null && !owner.getAvatarUrl().isBlank()) {
+            company.setAvatarUrl(owner.getAvatarUrl());
+        }
 
         company = companyRepository.save(company);
 

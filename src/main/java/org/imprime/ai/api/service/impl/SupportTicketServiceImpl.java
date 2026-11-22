@@ -15,7 +15,9 @@ import org.imprime.ai.api.model.SupportTicketMessage;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.enums.SupportTicketCategory;
 import org.imprime.ai.api.model.enums.SupportTicketStatus;
+import org.imprime.ai.api.model.enums.TicketPriority;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
@@ -24,6 +26,7 @@ import org.imprime.ai.api.repo.db.SupportTicketMessageRepository;
 import org.imprime.ai.api.repo.db.SupportTicketRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.SupportTicketService;
+import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageableSortMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,6 +57,7 @@ public class SupportTicketServiceImpl implements SupportTicketService {
     private final SupportTicketMessageRepository messageRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
+    private final JsonCodec jsonCodec = new JsonCodec();
 
     @Override
     public PageResponse<SupportTicketSummaryResponse> listTickets(SupportTicketStatus status, Pageable pageable) {
@@ -115,6 +119,10 @@ public class SupportTicketServiceImpl implements SupportTicketService {
             resolvedOrderGuid = order.getGuid();
         }
 
+        boolean dispute = Boolean.TRUE.equals(request.isDispute())
+                || SupportTicketCategory.DISPUTE.equals(request.category());
+        List<String> attachments = sanitizeAttachments(request.attachments());
+
         SupportTicket ticket = new SupportTicket();
         ticket.setUserId(caller.getId());
         ticket.setOrderId(orderId);
@@ -122,6 +130,8 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         ticket.setSubject(request.subject().trim());
         ticket.setCategory(request.category());
         ticket.setTicketStatus(SupportTicketStatus.OPEN);
+        ticket.setIsDispute(dispute);
+        ticket.setPriority(dispute ? TicketPriority.HIGH : TicketPriority.MEDIUM);
 
         SupportTicket savedTicket = supportTicketRepository.save(ticket);
 
@@ -130,6 +140,7 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         initialMessage.setSenderUserId(caller.getId());
         initialMessage.setFromSupport(Boolean.FALSE);
         initialMessage.setMessage(request.message().trim());
+        initialMessage.setAttachmentsJson(jsonCodec.toJsonArray(attachments));
 
         SupportTicketMessage savedMessage = messageRepository.save(initialMessage);
         SupportTicketMessageResponse messageDto = new SupportTicketMessageResponse(
@@ -138,7 +149,8 @@ public class SupportTicketServiceImpl implements SupportTicketService {
                 caller.getFullName(),
                 false,
                 savedMessage.getMessage(),
-                savedMessage.getCreateDt()
+                savedMessage.getCreateDt(),
+                attachments
         );
 
         Instant lastUpdatedAt = savedTicket.getUpdateDt() != null ? savedTicket.getUpdateDt() : savedTicket.getCreateDt();
@@ -212,11 +224,14 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         ticket.setUpdateDt(Instant.now());
         supportTicketRepository.save(ticket);
 
+        List<String> attachments = sanitizeAttachments(request.attachments());
+
         SupportTicketMessage message = new SupportTicketMessage();
         message.setSupportTicketId(ticket.getId());
         message.setSenderUserId(caller.getId());
         message.setFromSupport(Boolean.FALSE);
         message.setMessage(request.message().trim());
+        message.setAttachmentsJson(jsonCodec.toJsonArray(attachments));
 
         SupportTicketMessage saved = messageRepository.save(message);
         return toMessageResponse(saved, caller);
@@ -236,14 +251,29 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         String senderName = fromSupport
                 ? "Equipe Imprime AÍ"
                 : (sender != null ? sender.getFullName() : "Usuário");
+        List<String> attachments = jsonCodec.readStringList(message.getAttachmentsJson());
         return new SupportTicketMessageResponse(
                 message.getGuid(),
                 sender != null ? sender.getGuid() : null,
                 senderName,
                 fromSupport,
                 message.getMessage(),
-                message.getCreateDt()
+                message.getCreateDt(),
+                attachments
         );
+    }
+
+    private List<String> sanitizeAttachments(List<String> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return List.of();
+        }
+        return attachments.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(url -> !url.isBlank())
+                .distinct()
+                .limit(10)
+                .toList();
     }
 
     private String generateUniqueProtocolCode() {

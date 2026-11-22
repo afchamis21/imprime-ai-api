@@ -9,8 +9,10 @@ import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.FileFormat3D;
 import org.imprime.ai.api.model.enums.LicenseType;
 import org.imprime.ai.api.model.enums.MaterialType;
+import org.imprime.ai.api.model.enums.ModelModerationStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -95,4 +97,23 @@ public class Model3D extends Auditable {
 
     @Column(name = "VIEWS_COUNT", nullable = false)
     private Long viewsCount = 0L;
+
+    @Convert(converter = ModelModerationStatus.Converter.class)
+    @Column(name = "MODERATION_STATUS", nullable = false, length = 30)
+    private ModelModerationStatus moderationStatus = ModelModerationStatus.APPROVED;
+
+    @Column(name = "MODERATION_REASON", columnDefinition = "text")
+    private String moderationReason;
+
+    @Column(name = "DMCA_CLAIMANT", length = 200)
+    private String dmcaClaimant;
+
+    @Column(name = "DMCA_REFERENCE", length = 120)
+    private String dmcaReference;
+
+    @Column(name = "MODERATED_BY_USER_ID")
+    private Long moderatedByUserId;
+
+    @Column(name = "MODERATED_AT")
+    private Instant moderatedAt;
 }

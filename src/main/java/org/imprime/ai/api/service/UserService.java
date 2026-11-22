@@ -14,6 +14,7 @@ import org.imprime.ai.api.model.dto.FullUserDTO;
 import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
 import org.imprime.ai.api.repo.cache.base.Cached;
@@ -116,17 +117,32 @@ public class UserService {
         user.setPhoneCountry("55");
         user.setPhoneNumber(request.phoneNumber());
 
+        if (request.avatarUrl() != null && !request.avatarUrl().isBlank()) {
+            String trimmedAvatarUrl = request.avatarUrl().trim();
+            if (trimmedAvatarUrl.length() > 1000) {
+                throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+            }
+            user.setAvatarUrl(trimmedAvatarUrl);
+        }
+
         user = userRepository.save(user);
 
         if (request.isMaker() && request.company() != null) {
             Company company = companyService.registerCompany(request.company(), user);
             user.setCompanyId(company.getId());
+            user.setRole(UserRole.MAKER);
+        } else {
+            user.setRole(UserRole.BUYER);
         }
 
         Address address = addressService.registerAddress(request.address(), EntityType.USER, user.getId(), true);
         user.setPrimaryAddressId(address.getId());
 
         return userRepository.save(user);
+    }
+
+    public void invalidateCache(User user) {
+        userInMemoryCache.evict(user);
     }
 
     public List<AddressDTO> listAddresses(boolean company, Integer page, Integer size) {

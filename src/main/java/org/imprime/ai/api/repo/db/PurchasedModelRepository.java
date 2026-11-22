@@ -13,4 +13,6 @@ public interface PurchasedModelRepository extends JpaRepository<PurchasedModel, 
     List<PurchasedModel> findAllByBuyerUserIdAndStatusOrderByPurchasedAtDesc(Long buyerUserId, StatusCd status);
 
     Optional<PurchasedModel> findByGuidAndStatus(String guid, StatusCd status);
+
+    boolean existsByBuyerUserIdAndModel3dIdAndStatus(Long buyerUserId, Long model3dId, StatusCd status);
 }

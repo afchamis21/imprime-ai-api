@@ -7,4 +7,8 @@ public class ForbiddenException extends HttpException {
     public ForbiddenException() {
         super(MessageCd.FORBIDDEN, HttpStatus.FORBIDDEN, new String[0]);
     }
+
+    public ForbiddenException(MessageCd messageCd) {
+        super(messageCd, HttpStatus.FORBIDDEN, new String[0]);
+    }
 }

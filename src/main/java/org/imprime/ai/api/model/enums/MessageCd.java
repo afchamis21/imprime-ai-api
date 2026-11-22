@@ -21,6 +21,10 @@ public enum MessageCd implements CodeAttribute {
     //region Auth
     UNAUTHORIZED("AUTH_401"),
     FORBIDDEN("AUTH_403"),
+    ADMIN_ROLE_REQUIRED("ADM_001"),
+    CANNOT_DELETE_SELF("ADM_002"),
+    LAST_ADMIN_PROTECTED("ADM_003"),
+    REASON_REQUIRED("ADM_004"),
     //endregion
 
     //region User
@@ -56,6 +60,7 @@ public enum MessageCd implements CodeAttribute {
     USER_EMAIL_ALREADY_REGISTERED("USR_021"),
     USER_DOCUMENT_ALREADY_REGISTERED("USR_022"),
     USER_PHONE_ALREADY_REGISTERED("USR_023"),
+    USER_NOT_FOUND("USR_024"),
     //endregion
 
     //region Document
@@ -168,7 +173,13 @@ public enum MessageCd implements CodeAttribute {
     PROJECT_ALREADY_COMPLETED("PRJ_003"),
     MODEL_SOURCE_NOT_FOUND("SRC_001"),
     MODEL_SOURCE_SYNC_FAILED("SRC_002"),
-    INSUFFICIENT_BALANCE("FIN_001");
+    INSUFFICIENT_BALANCE("FIN_001"),
+    PAYOUT_NOT_FOUND("FIN_002"),
+    PAYOUT_INVALID_STATE("FIN_003"),
+    REFUND_NOT_FOUND("REF_001"),
+    REFUND_INVALID_AMOUNT("REF_002"),
+    REFUND_ALREADY_PROCESSED("REF_003"),
+    AUDIT_LOG_NOT_FOUND("AUD_001");
     //endregion
     private final String code;
 

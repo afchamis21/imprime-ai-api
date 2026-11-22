@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.request.maker.CreatePrintQueueItemRequest;
 import org.imprime.ai.api.http.request.maker.PrintJobTransitionRequest;
 import org.imprime.ai.api.http.request.maker.ReorderPrintQueueRequest;
+import org.imprime.ai.api.http.request.maker.UpdatePrintQueueItemRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.maker.PrintQueueItemResponse;
 import org.imprime.ai.api.model.Asset;
@@ -15,6 +16,7 @@ import org.imprime.ai.api.model.MakerProject;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.PrintQueueItem;
 import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.PrinterStatus;
 import org.imprime.ai.api.model.enums.ProjectStatus;
@@ -33,6 +35,7 @@ import org.imprime.ai.api.repo.db.MakerProjectRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
 import org.imprime.ai.api.service.MakerCompanyResolver;
+import org.imprime.ai.api.service.MakerOrderSupport;
 import org.imprime.ai.api.service.MakerPrintQueueService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
@@ -74,14 +77,23 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
     private final CompanyRepository companyRepository;
     private final MakerFilamentServiceImpl makerFilamentService;
     private final JsonCodec jsonCodec;
+    private final MakerOrderSupport makerOrderSupport;
+
+    private static final Set<OrderStatusCd> LEFT_PRODUCTION_STATUSES = EnumSet.of(
+            OrderStatusCd.IN_TRANSIT, OrderStatusCd.COMPLETED,
+            OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED, OrderStatusCd.ERROR
+    );
 
     @Override
+    @Transactional
     public PageResponse<PrintQueueItemResponse> listQueue(
             PrintJobStatus status,
             String printerGuid,
             Boolean activeOnly,
+            OrderStatusCd orderStatus,
             Pageable pageable) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
+        syncOrdersInProduction(company);
         List<PrintQueueItem> allJobs = printQueueItemRepository
                 .findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(company.getId(), StatusCd.ACTIVE);
 
@@ -95,6 +107,11 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
                 .toList();
 
         List<PrintQueueItemResponse> mapped = mapResponsesBatch(filtered);
+        if (orderStatus != null) {
+            mapped = mapped.stream()
+                    .filter(item -> orderStatus.equals(item.orderStatus()))
+                    .toList();
+        }
         if (printerGuid != null && !printerGuid.isBlank()) {
             String targetPrinterGuid = printerGuid.trim();
             mapped = mapped.stream()
@@ -190,7 +207,272 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
         job.setScheduledStartAt(scheduledStartAt);
 
         PrintQueueItem saved = printQueueItemRepository.save(job);
-        return toSingleResponse(saved, printer, archiveFile, filament, order, project);
+        return toSingleResponse(saved, printer, archiveFile, filament, order, project,
+                order != null ? makerOrderSupport.dueDates(List.of(order), company).get(order.getId()) : null,
+                order != null ? makerOrderSupport.latestStatuses(List.of(order.getId())).get(order.getId()) : null);
+    }
+
+    @Override
+    @Transactional
+    public PrintQueueItemResponse updateJob(String jobGuid, UpdatePrintQueueItemRequest request) {
+        Company company = makerCompanyResolver.requireActiveMakerCompany();
+        PrintQueueItem job = requireOwnedJob(jobGuid, company);
+
+        boolean wantsUnassign = Boolean.TRUE.equals(request.unassignPrinter());
+        boolean wantsPrinter = request.printerGuid() != null && !request.printerGuid().isBlank();
+        if (wantsPrinter && wantsUnassign) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
+        if (wantsPrinter || wantsUnassign) {
+            Long newAssetId = wantsPrinter ? requireOwnedPrinter(request.printerGuid(), company).getId() : null;
+            if (!Objects.equals(newAssetId, job.getAssetId())) {
+                if (BUSY_PRINTER_JOB_STATUSES.contains(job.getJobStatus())) {
+                    throw new ConflictException(MessageCd.PRINTER_BUSY);
+                }
+                job.setAssetId(newAssetId);
+            }
+        }
+
+        if (request.priority() != null) {
+            job.setPriority(request.priority());
+        }
+
+        if (request.copies() != null) {
+            int completed = job.getCompletedCopies() != null ? job.getCompletedCopies() : 0;
+            if (request.copies() < 1 || request.copies() < completed) {
+                throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+            }
+            job.setCopies(request.copies());
+        }
+
+        PrintQueueItem saved = printQueueItemRepository.save(job);
+        return mapResponsesBatch(List.of(saved)).getFirst();
+    }
+
+    /**
+     * Garante que toda venda do estúdio com status atual "Em produção" tenha um job na fila,
+     * cancela jobs ainda não iniciados de vendas que saíram de produção (Em trânsito, Concluído,
+     * Cancelado, Reembolsado ou com erro) e insere os novos jobs respeitando prioridade e prazo
+     * em relação aos jobs já enfileirados, sem reordenar manualmente os jobs existentes.
+     */
+    private void syncOrdersInProduction(Company company) {
+        List<Order> orders = orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(company.getId(), StatusCd.ACTIVE);
+        if (orders == null || orders.isEmpty()) {
+            return;
+        }
+        Map<Long, OrderStatusCd> statuses = makerOrderSupport.latestStatuses(
+                orders.stream().map(Order::getId).filter(Objects::nonNull).toList());
+        if (statuses == null || statuses.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Order> ordersById = orders.stream()
+                .filter(order -> order.getId() != null)
+                .collect(Collectors.toMap(Order::getId, order -> order, (a, b) -> a));
+
+        List<Order> inProduction = orders.stream()
+                .filter(order -> OrderStatusCd.IN_PRODUCTION.equals(statuses.get(order.getId())))
+                .toList();
+
+        List<PrintQueueItem> activeJobs = printQueueItemRepository
+                .findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(company.getId(), StatusCd.ACTIVE);
+        if (activeJobs == null) {
+            activeJobs = List.of();
+        }
+
+        // Decisão de produto: venda que saiu de produção cancela seus jobs ainda QUEUED.
+        List<PrintQueueItem> toCancel = activeJobs.stream()
+                .filter(job -> job.getOrderId() != null)
+                .filter(job -> PrintJobStatus.QUEUED.equals(job.getJobStatus()))
+                .filter(job -> {
+                    OrderStatusCd orderStatus = statuses.get(job.getOrderId());
+                    return orderStatus != null && LEFT_PRODUCTION_STATUSES.contains(orderStatus);
+                })
+                .toList();
+        Set<Long> cancelledJobIds = new HashSet<>();
+        if (!toCancel.isEmpty()) {
+            toCancel.forEach(job -> {
+                job.setJobStatus(PrintJobStatus.CANCELLED);
+                cancelledJobIds.add(job.getId());
+            });
+            printQueueItemRepository.saveAll(toCancel);
+        }
+
+        // Um job só "ocupa" a venda enquanto está ativo; jobs terminais permitem recriar o job.
+        Set<Long> alreadyQueued = activeJobs.stream()
+                .filter(job -> !cancelledJobIds.contains(job.getId()))
+                .filter(job -> ACTIVE_QUEUE_STATUSES.contains(job.getJobStatus()))
+                .map(PrintQueueItem::getOrderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        List<Order> missing = inProduction.stream()
+                .filter(order -> !alreadyQueued.contains(order.getId()))
+                .toList();
+        if (missing.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Instant> dueDates = makerOrderSupport.dueDates(missing, company);
+        Map<Long, String> buyerNames = makerOrderSupport.buyerNames(missing);
+        Map<Long, List<MakerOrderSupport.ResolvedOrderFile>> filesByOrder = makerOrderSupport.resolveFiles(missing);
+
+        List<Order> sorted = new ArrayList<>(missing);
+        sorted.sort(java.util.Comparator.comparing(
+                (Order order) -> dueDates.getOrDefault(order.getId(), Instant.MAX)));
+
+        List<PrintQueueItem> created = new ArrayList<>(sorted.size());
+        for (Order order : sorted) {
+            List<MakerOrderSupport.ResolvedOrderFile> files = filesByOrder.getOrDefault(order.getId(), List.of());
+            MakerOrderSupport.ResolvedOrderFile firstFile = files.isEmpty() ? null : files.getFirst();
+            String code = order.getOrderCode() != null && !order.getOrderCode().isBlank()
+                    ? order.getOrderCode()
+                    : "#" + order.getId();
+            String title = "Pedido " + code + (files.size() > 1 ? " — " + files.size() + " arquivos" : "");
+
+            PrintQueueItem job = new PrintQueueItem();
+            job.setCompanyId(company.getId());
+            job.setAssetId(null);
+            job.setOrderId(order.getId());
+            job.setTitle(title.length() > 150 ? title.substring(0, 150) : title);
+            // Decisão de produto: venda sem arquivo 3D continua na fila (sinalizada como "sem arquivo" na UI).
+            job.setFileName(firstFile != null ? truncate(firstFile.asset().getName(), 255) : null);
+            job.setMaterial(parseMaterial(firstFile != null ? firstFile.material() : null));
+            job.setColorHex(firstFile != null && firstFile.colorHex() != null && firstFile.colorHex().length() <= 7
+                    ? firstFile.colorHex() : null);
+            job.setProgressPercent(0);
+            job.setJobStatus(PrintJobStatus.QUEUED);
+            job.setPriority(priorityForDueDate(dueDates.get(order.getId())));
+            job.setCopies(1);
+            job.setCompletedCopies(0);
+            job.setCustomerName(truncate(buyerNames.get(order.getId()), 120));
+            created.add(job);
+        }
+
+        List<PrintQueueItem> remaining = activeJobs.stream()
+                .filter(job -> !cancelledJobIds.contains(job.getId()))
+                .sorted(java.util.Comparator.comparing(
+                        (PrintQueueItem job) -> job.getPosition() != null ? job.getPosition() : Integer.MAX_VALUE))
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        List<Order> existingOrderJobs = remaining.stream()
+                .map(job -> job.getOrderId() != null ? ordersById.get(job.getOrderId()) : null)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Long, Instant> existingDueDates = existingOrderJobs.isEmpty()
+                ? Collections.emptyMap()
+                : makerOrderSupport.dueDates(existingOrderJobs, company);
+
+        insertJobsByUrgency(remaining, created, dueDates, existingDueDates);
+
+        int position = 1;
+        for (PrintQueueItem job : remaining) {
+            job.setPosition(position++);
+        }
+        printQueueItemRepository.saveAll(remaining);
+    }
+
+    /**
+     * Insere os novos jobs na ordem já existente, antes do primeiro job QUEUED menos urgente.
+     * Jobs em execução (PRINTING/PAUSED) e a ordem relativa dos jobs existentes são preservados.
+     */
+    private void insertJobsByUrgency(
+            List<PrintQueueItem> ordered,
+            List<PrintQueueItem> created,
+            Map<Long, Instant> createdDueDates,
+            Map<Long, Instant> existingDueDates) {
+        List<PrintQueueItem> pending = new ArrayList<>(created);
+        pending.sort((a, b) -> compareUrgency(
+                a, createdDueDates.get(a.getOrderId()),
+                b, createdDueDates.get(b.getOrderId())));
+
+        for (PrintQueueItem newJob : pending) {
+            Instant newDue = createdDueDates.get(newJob.getOrderId());
+            int insertAt = ordered.size();
+            for (int i = 0; i < ordered.size(); i++) {
+                PrintQueueItem existing = ordered.get(i);
+                if (!PrintJobStatus.QUEUED.equals(existing.getJobStatus())) {
+                    continue;
+                }
+                Instant existingDue = existing.getOrderId() != null
+                        ? existingDueDates.get(existing.getOrderId())
+                        : null;
+                if (isMoreUrgent(newJob.getPriority(), newDue, existing.getPriority(), existingDue)) {
+                    insertAt = i;
+                    break;
+                }
+            }
+            ordered.add(insertAt, newJob);
+        }
+    }
+
+    private static int compareUrgency(PrintQueueItem a, Instant aDue, PrintQueueItem b, Instant bDue) {
+        int byPriority = Integer.compare(priorityRank(b.getPriority()), priorityRank(a.getPriority()));
+        if (byPriority != 0) {
+            return byPriority;
+        }
+        if (aDue != null && bDue != null) {
+            return aDue.compareTo(bDue);
+        }
+        if (aDue != null) {
+            return -1;
+        }
+        return bDue != null ? 1 : 0;
+    }
+
+    private static boolean isMoreUrgent(QueuePriority a, Instant aDue, QueuePriority b, Instant bDue) {
+        int rankA = priorityRank(a);
+        int rankB = priorityRank(b);
+        if (rankA != rankB) {
+            return rankA > rankB;
+        }
+        if (aDue != null && bDue != null) {
+            return aDue.isBefore(bDue);
+        }
+        return aDue != null && bDue == null;
+    }
+
+    private static int priorityRank(QueuePriority priority) {
+        return switch (priority != null ? priority : QueuePriority.NORMAL) {
+            case LOW -> 1;
+            case NORMAL -> 2;
+            case HIGH -> 3;
+            case URGENT -> 4;
+        };
+    }
+
+    static QueuePriority priorityForDueDate(Instant dueAt) {
+        if (dueAt == null) {
+            return QueuePriority.NORMAL;
+        }
+        long hoursLeft = java.time.Duration.between(Instant.now(), dueAt).toHours();
+        if (hoursLeft <= 24) {
+            return QueuePriority.URGENT;
+        }
+        if (hoursLeft <= 48) {
+            return QueuePriority.HIGH;
+        }
+        return QueuePriority.NORMAL;
+    }
+
+    private static org.imprime.ai.api.model.enums.MaterialType parseMaterial(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String normalized = raw.trim().toUpperCase(java.util.Locale.ROOT).replace(' ', '_').replace('-', '_');
+        for (org.imprime.ai.api.model.enums.MaterialType type : org.imprime.ai.api.model.enums.MaterialType.values()) {
+            if (type.name().equals(normalized)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    private static String truncate(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() > max ? value.substring(0, max) : value;
     }
 
     @Override
@@ -215,9 +497,23 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
         PrintQueueItem job = requireOwnedJob(jobGuid, company);
         PrintJobStatus current = job.getJobStatus();
 
-        Asset targetPrinter = (request.printerGuid() != null && !request.printerGuid().isBlank())
-                ? requireOwnedPrinter(request.printerGuid(), company)
-                : assetRepository.findById(job.getAssetId()).orElseThrow(() -> new NotFoundException(MessageCd.PRINTER_NOT_FOUND));
+        Asset targetPrinter;
+        if (request.printerGuid() != null && !request.printerGuid().isBlank()) {
+            targetPrinter = requireOwnedPrinter(request.printerGuid(), company);
+        } else if (job.getAssetId() != null) {
+            targetPrinter = assetRepository.findById(job.getAssetId())
+                    .orElseThrow(() -> new NotFoundException(MessageCd.PRINTER_NOT_FOUND));
+        } else {
+            targetPrinter = null;
+        }
+
+        boolean needsPrinter = switch (request.action()) {
+            case START, PAUSE, RESUME, COMPLETE -> true;
+            default -> false;
+        };
+        if (needsPrinter && targetPrinter == null) {
+            throw new BadRequestException(MessageCd.PRINTER_NOT_FOUND);
+        }
 
         switch (request.action()) {
             case START -> {
@@ -588,6 +884,13 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
                 : projectRepository.findAllByIdIn(projectIds).stream()
                 .collect(Collectors.toMap(MakerProject::getId, p -> p, (a, b) -> a));
 
+        Map<Long, Instant> dueDatesByOrder = ordersById.isEmpty()
+                ? Collections.emptyMap()
+                : makerOrderSupport.dueDates(ordersById.values(), companyRepository.findById(jobs.getFirst().getCompanyId()).orElse(null));
+        Map<Long, OrderStatusCd> statusesByOrder = ordersById.isEmpty()
+                ? Collections.emptyMap()
+                : makerOrderSupport.latestStatuses(ordersById.keySet());
+
         return jobs.stream()
                 .map(job -> toSingleResponse(
                         job,
@@ -595,7 +898,9 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
                         job.getMakerArchiveFileId() != null ? filesById.get(job.getMakerArchiveFileId()) : null,
                         job.getFilamentId() != null ? filamentsById.get(job.getFilamentId()) : null,
                         job.getOrderId() != null ? ordersById.get(job.getOrderId()) : null,
-                        job.getMakerProjectId() != null ? projectsById.get(job.getMakerProjectId()) : null
+                        job.getMakerProjectId() != null ? projectsById.get(job.getMakerProjectId()) : null,
+                        job.getOrderId() != null ? dueDatesByOrder.get(job.getOrderId()) : null,
+                        job.getOrderId() != null ? statusesByOrder.get(job.getOrderId()) : null
                 ))
                 .toList();
     }
@@ -606,7 +911,9 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
             MakerArchiveFile archiveFile,
             Filament filament,
             Order order,
-            MakerProject project) {
+            MakerProject project,
+            Instant orderDueAt,
+            OrderStatusCd orderStatus) {
         return new PrintQueueItemResponse(
                 job.getGuid(),
                 job.getPosition() != null ? job.getPosition() : 0,
@@ -633,7 +940,10 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
                 job.getCustomerName(),
                 job.getFailureReason(),
                 job.getScheduledStartAt(),
-                job.getCreateDt()
+                job.getCreateDt(),
+                orderDueAt,
+                orderStatus,
+                order != null ? order.getCreateDt() : null
         );
     }
 }

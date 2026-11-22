@@ -18,6 +18,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/order-pipeline")
@@ -45,11 +47,13 @@ public class PipelineController {
     })
     @PostMapping(value = "/start", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<BaseResponse<StartOrderResponse>> start(
-            @Parameter(description = "Arquivo do modelo 3D nos formatos `.stl` ou `.3mf`", required = true)
-            @RequestPart("file") MultipartFile file,
+            @Parameter(description = "Arquivo(s) do modelo 3D nos formatos `.stl` ou `.3mf` (1 por mesa)", required = true)
+            @RequestPart("file") List<MultipartFile> files,
+            @Parameter(description = "JSON opcional com metadados por mesa (`OrderPlateMetadataRequest[]`)")
+            @RequestParam(value = "platesMetadata", required = false) String platesMetadata,
             @Parameter(description = "GUID do endereço de entrega pertencente ao cliente", required = true)
             @RequestParam String addressGuid) {
-        return BaseResponse.ok(orderService.start(file, new StartOrderRequest(addressGuid)));
+        return BaseResponse.ok(orderService.start(files, platesMetadata, new StartOrderRequest(addressGuid)));
     }
 
     // TODO

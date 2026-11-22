@@ -18,6 +18,8 @@ public interface MakerArchiveService {
 
     ArchiveFileDownloadResponse generateDownloadUrl(String fileGuid);
 
+    OrderManagementService.OrderFileContent downloadFileContent(String fileGuid);
+
     void deleteArchiveFile(String fileGuid);
 
     PrintQueueItemResponse reprintFile(String fileGuid, ReprintArchiveFileRequest request);

@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -15,6 +16,8 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
     Page<SupportTicket> findAllByUserIdAndStatus(Long userId, StatusCd status, Pageable pageable);
 
     Page<SupportTicket> findAllByUserIdAndTicketStatusAndStatus(Long userId, SupportTicketStatus ticketStatus, StatusCd status, Pageable pageable);
+
+    List<SupportTicket> findAllByStatusOrderByUpdateDtDescCreateDtDesc(StatusCd status);
 
     Optional<SupportTicket> findByGuidAndStatus(String guid, StatusCd status);
 

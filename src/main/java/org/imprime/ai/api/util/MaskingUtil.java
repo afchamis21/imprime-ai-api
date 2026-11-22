@@ -31,4 +31,22 @@ public final class MaskingUtil {
         }
         return trimmed.substring(0, 3) + "***" + trimmed.substring(trimmed.length() - 2);
     }
+
+    public static String maskDocument(String rawDocument) {
+        if (rawDocument == null || rawDocument.isBlank()) {
+            return null;
+        }
+        String digits = rawDocument.replaceAll("\\D", "");
+        if (digits.length() == 11) {
+            return "***." + digits.substring(3, 6) + "." + digits.substring(6, 9) + "-**";
+        }
+        if (digits.length() == 14) {
+            return "**." + digits.substring(2, 5) + "." + digits.substring(5, 8) + "/" + digits.substring(8, 12) + "-**";
+        }
+        String trimmed = rawDocument.trim();
+        if (trimmed.length() <= 4) {
+            return "****";
+        }
+        return trimmed.substring(0, 2) + "***" + trimmed.substring(trimmed.length() - 2);
+    }
 }

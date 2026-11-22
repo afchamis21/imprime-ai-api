@@ -41,9 +41,13 @@ cors:
     - https://imprimeai.shop
     - https://www.imprimeai.shop
     - https://api.imprimeai.shop
+    - https://admin.imprimeai.shop
     - http://localhost:5173
     - http://127.0.0.1:5173
     - http://localhost:4173
+    - http://localhost:5174
+    - http://127.0.0.1:5174
+    - http://localhost:4174
     - ${CORS_ORIGINS:}
 
 websocket:
@@ -51,9 +55,13 @@ websocket:
     - https://imprimeai.shop
     - https://www.imprimeai.shop
     - https://api.imprimeai.shop
+    - https://admin.imprimeai.shop
     - http://localhost:5173
     - http://127.0.0.1:5173
     - http://localhost:4173
+    - http://localhost:5174
+    - http://127.0.0.1:5174
+    - http://localhost:4174
     - ${WS_ALLOWED_ORIGINS:${CORS_ORIGINS:}}
 
 imprime:

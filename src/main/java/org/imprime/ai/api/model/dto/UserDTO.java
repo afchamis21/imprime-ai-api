@@ -2,6 +2,8 @@ package org.imprime.ai.api.model.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.enums.UserRole;
 
 @Schema(description = "Dados básicos de identificação de um usuário")
 public record UserDTO(
@@ -16,16 +18,29 @@ public record UserDTO(
         @Schema(description = "Telefone de contato", example = "11987654321")
         String phoneNumber,
         @Schema(description = "Indica se o usuário é um Maker", example = "false")
-        Boolean isMaker
+        Boolean isMaker,
+        @Schema(description = "URL da foto de perfil do usuário")
+        String avatarUrl,
+        @Schema(description = "Perfil de acesso do usuário (BUYER, DESIGNER, MAKER, ADMIN)", example = "BUYER")
+        UserRole role,
+        @Schema(description = "Status cadastral do usuário", example = "ACTIVE")
+        StatusCd status
 ) {
     public static UserDTO from(User user) {
+        UserRole resolvedRole = user.getRole() != null
+                ? user.getRole()
+                : (user.getCompanyId() != null ? UserRole.MAKER : UserRole.BUYER);
+        StatusCd resolvedStatus = user.getStatus() != null ? user.getStatus() : StatusCd.ACTIVE;
         return new UserDTO(
                 user.getGuid(),
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
                 user.getPhoneNumber(),
-                user.getCompanyId() != null
+                user.getCompanyId() != null,
+                user.getAvatarUrl(),
+                resolvedRole,
+                resolvedStatus
         );
     }
 }

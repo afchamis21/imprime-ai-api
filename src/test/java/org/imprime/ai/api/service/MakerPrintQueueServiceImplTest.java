@@ -2,6 +2,15 @@ package org.imprime.ai.api.service;
 
 import org.imprime.ai.api.http.request.maker.PrintJobTransitionRequest;
 import org.imprime.ai.api.http.request.maker.ReorderPrintQueueRequest;
+import org.imprime.ai.api.http.request.maker.UpdatePrintQueueItemRequest;
+import org.imprime.ai.api.model.Order;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageRequest;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import static org.mockito.ArgumentMatchers.eq;
 import org.imprime.ai.api.http.response.maker.PrintQueueItemResponse;
 import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
@@ -65,6 +74,8 @@ class MakerPrintQueueServiceImplTest {
     private MakerFilamentServiceImpl makerFilamentService;
     @Spy
     private JsonCodec jsonCodec = new JsonCodec();
+    @Mock
+    private MakerOrderSupport makerOrderSupport;
 
     @InjectMocks
     private MakerPrintQueueServiceImpl service;
@@ -150,6 +161,102 @@ class MakerPrintQueueServiceImplTest {
     }
 
     @Test
+    void listQueueSyncsOrdersInProductionWithoutPrinterAndDeadlinePriority() {
+        Order order = new Order();
+        order.setId(900L);
+        order.setGuid("ord-900");
+        order.setOrderCode("PED-900");
+        order.setBuyerId(77L);
+        order.setVendorId(10L);
+        order.setCreateDt(Instant.now().minus(Duration.ofDays(4)));
+
+        Order cancelledOrder = new Order();
+        cancelledOrder.setId(901L);
+        cancelledOrder.setGuid("ord-901");
+        cancelledOrder.setVendorId(10L);
+
+        PrintQueueItem cancelledJob = new PrintQueueItem();
+        cancelledJob.setId(5L);
+        cancelledJob.setGuid("job-5");
+        cancelledJob.setCompanyId(10L);
+        cancelledJob.setOrderId(901L);
+        cancelledJob.setJobStatus(PrintJobStatus.QUEUED);
+
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(order, cancelledOrder));
+        when(makerOrderSupport.latestStatuses(any())).thenReturn(Map.of(
+                900L, OrderStatusCd.IN_PRODUCTION,
+                901L, OrderStatusCd.CANCELLED
+        ));
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(cancelledJob));
+        Instant due = Instant.now().plus(Duration.ofHours(12));
+        when(makerOrderSupport.dueDates(any(), eq(company))).thenReturn(Map.of(900L, due));
+        when(makerOrderSupport.buyerNames(any())).thenReturn(Map.of(900L, "Ana Souza"));
+        when(makerOrderSupport.resolveFiles(any())).thenReturn(Map.of());
+        when(printQueueItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.listQueue(null, null, null, null, PageRequest.of(0, 20));
+
+        assertEquals(PrintJobStatus.CANCELLED, cancelledJob.getJobStatus());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PrintQueueItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(printQueueItemRepository, times(2)).saveAll(captor.capture());
+        List<PrintQueueItem> created = captor.getAllValues().get(1);
+        assertEquals(1, created.size());
+        PrintQueueItem job = created.getFirst();
+        assertEquals(900L, job.getOrderId());
+        assertNull(job.getAssetId());
+        assertEquals(QueuePriority.URGENT, job.getPriority());
+        assertEquals(PrintJobStatus.QUEUED, job.getJobStatus());
+        assertEquals("Ana Souza", job.getCustomerName());
+        assertEquals("Pedido PED-900", job.getTitle());
+        assertEquals(1, job.getPosition());
+    }
+
+    @Test
+    void updateJobReassignsPrinterAndPriorityButRejectsRunningJobs() {
+        PrintQueueItem job = new PrintQueueItem();
+        job.setId(300L);
+        job.setGuid("job-300");
+        job.setCompanyId(10L);
+        job.setAssetId(null);
+        job.setPosition(1);
+        job.setJobStatus(PrintJobStatus.QUEUED);
+        job.setPriority(QueuePriority.NORMAL);
+        job.setCopies(1);
+        job.setCompletedCopies(0);
+
+        when(printQueueItemRepository.findByGuidAndStatus("job-300", StatusCd.ACTIVE)).thenReturn(Optional.of(job));
+
+        assertThrows(BadRequestException.class, () -> service.transitionJob("job-300",
+                new PrintJobTransitionRequest(PrintJobAction.START, null, null)));
+        assertThrows(BadRequestException.class, () -> service.updateJob("job-300",
+                new UpdatePrintQueueItemRequest("prt-100", true, null, null)));
+
+        when(assetRepository.findByGuidAndStatus("prt-100", StatusCd.ACTIVE)).thenReturn(Optional.of(printer));
+        when(printQueueItemRepository.save(any(PrintQueueItem.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(assetRepository.findAllByIdIn(any())).thenReturn(List.of(printer));
+
+        PrintQueueItemResponse updated = service.updateJob("job-300",
+                new UpdatePrintQueueItemRequest("prt-100", null, QueuePriority.URGENT, null));
+
+        assertEquals(100L, job.getAssetId());
+        assertEquals("prt-100", updated.printerGuid());
+        assertEquals(QueuePriority.URGENT, updated.priority());
+
+        job.setJobStatus(PrintJobStatus.PRINTING);
+        Asset other = new Asset();
+        other.setId(101L);
+        other.setGuid("prt-101");
+        other.setCompanyId(10L);
+        when(assetRepository.findByGuidAndStatus("prt-101", StatusCd.ACTIVE)).thenReturn(Optional.of(other));
+        assertThrows(ConflictException.class, () -> service.updateJob("job-300",
+                new UpdatePrintQueueItemRequest("prt-101", null, null, null)));
+    }
+
+    @Test
     void reorderQueueReindexesPositionsAtomicallyAndRejectsDuplicates() {
         assertThrows(BadRequestException.class, () ->
                 service.reorderQueue(new ReorderPrintQueueRequest(List.of("job-1", "job-1")))
@@ -184,5 +291,121 @@ class MakerPrintQueueServiceImplTest {
         assertEquals(1, reordered.get(0).position());
         assertEquals("job-1", reordered.get(1).guid());
         assertEquals(2, reordered.get(1).position());
+    }
+
+    @Test
+    void listQueueCancelsQueuedJobsWhenOrderLeftProductionButKeepsRunningJobs() {
+        Order transitOrder = order(910L, "PED-910");
+        Order productionOrder = order(911L, "PED-911");
+
+        PrintQueueItem queued = job(1L, "job-queued", 910L, PrintJobStatus.QUEUED, 1);
+        PrintQueueItem printing = job(2L, "job-printing", 911L, PrintJobStatus.PRINTING, 2);
+
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(transitOrder, productionOrder));
+        when(makerOrderSupport.latestStatuses(any())).thenReturn(Map.of(
+                910L, OrderStatusCd.IN_TRANSIT,
+                911L, OrderStatusCd.IN_PRODUCTION
+        ));
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(queued, printing));
+
+        service.listQueue(null, null, null, null, PageRequest.of(0, 20));
+
+        assertEquals(PrintJobStatus.CANCELLED, queued.getJobStatus());
+        assertEquals(PrintJobStatus.PRINTING, printing.getJobStatus());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PrintQueueItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(printQueueItemRepository).saveAll(captor.capture());
+        assertEquals(List.of(queued), captor.getValue());
+    }
+
+    @Test
+    void listQueueInsertsNewUrgentJobBeforeLessUrgentQueuedJob() {
+        Order existingOrder = order(800L, "PED-800");
+        Order newOrder = order(900L, "PED-900");
+        PrintQueueItem existingJob = job(1L, "job-existing", 800L, PrintJobStatus.QUEUED, 1);
+        existingJob.setPriority(QueuePriority.NORMAL);
+
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(existingOrder, newOrder));
+        when(makerOrderSupport.latestStatuses(any())).thenReturn(Map.of(
+                800L, OrderStatusCd.IN_PRODUCTION,
+                900L, OrderStatusCd.IN_PRODUCTION
+        ));
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(existingJob));
+        Instant urgentDue = Instant.now().plus(Duration.ofHours(12));
+        Instant laterDue = Instant.now().plus(Duration.ofDays(10));
+        when(makerOrderSupport.dueDates(any(), eq(company)))
+                .thenReturn(Map.of(900L, urgentDue, 800L, laterDue));
+        when(makerOrderSupport.buyerNames(any())).thenReturn(Map.of(900L, "Bruno Lima"));
+        when(makerOrderSupport.resolveFiles(any())).thenReturn(Map.of());
+        when(printQueueItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.listQueue(null, null, null, null, PageRequest.of(0, 20));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PrintQueueItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(printQueueItemRepository).saveAll(captor.capture());
+        List<PrintQueueItem> ordered = captor.getValue();
+        assertEquals(2, ordered.size());
+        assertEquals(900L, ordered.get(0).getOrderId());
+        assertEquals(QueuePriority.URGENT, ordered.get(0).getPriority());
+        assertEquals(1, ordered.get(0).getPosition());
+        assertEquals(800L, ordered.get(1).getOrderId());
+        assertEquals(2, ordered.get(1).getPosition());
+    }
+
+    @Test
+    void listQueueFiltersBySaleOrderStatus() {
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+
+        Order prodOrder = order(900L, "PED-900");
+        Order transitOrder = order(901L, "PED-901");
+        PrintQueueItem prodJob = job(1L, "job-prod", 900L, PrintJobStatus.QUEUED, 1);
+        PrintQueueItem transitJob = job(2L, "job-transit", 901L, PrintJobStatus.QUEUED, 2);
+
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(prodJob, transitJob));
+        when(orderRepository.findAllById(any())).thenReturn(List.of(prodOrder, transitOrder));
+        when(makerOrderSupport.latestStatuses(any())).thenReturn(Map.of(
+                900L, OrderStatusCd.IN_PRODUCTION,
+                901L, OrderStatusCd.IN_TRANSIT
+        ));
+        when(makerOrderSupport.dueDates(any(), any())).thenReturn(Map.of());
+
+        var page = service.listQueue(null, null, null, OrderStatusCd.IN_PRODUCTION, PageRequest.of(0, 20));
+
+        assertEquals(1, page.content().size());
+        assertEquals("job-prod", page.content().getFirst().guid());
+        assertEquals(OrderStatusCd.IN_PRODUCTION, page.content().getFirst().orderStatus());
+    }
+
+    private static Order order(long id, String code) {
+        Order order = new Order();
+        order.setId(id);
+        order.setGuid("ord-" + id);
+        order.setOrderCode(code);
+        order.setVendorId(10L);
+        order.setCreateDt(Instant.now().minus(Duration.ofDays(2)));
+        return order;
+    }
+
+    private static PrintQueueItem job(long id, String guid, Long orderId, PrintJobStatus status, int position) {
+        PrintQueueItem job = new PrintQueueItem();
+        job.setId(id);
+        job.setGuid(guid);
+        job.setCompanyId(10L);
+        job.setOrderId(orderId);
+        job.setPosition(position);
+        job.setJobStatus(status);
+        job.setPriority(QueuePriority.NORMAL);
+        job.setCopies(1);
+        job.setCompletedCopies(0);
+        job.setStatus(StatusCd.ACTIVE);
+        return job;
     }
 }

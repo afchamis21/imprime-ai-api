@@ -13,13 +13,19 @@ import java.util.Optional;
 public interface Model3DRepository extends JpaRepository<Model3D, Long> {
     boolean existsBySlug(String slug);
 
+    Optional<Model3D> findByGuid(String guid);
+
     Optional<Model3D> findByGuidAndStatus(String guid, StatusCd status);
 
     Optional<Model3D> findBySlugAndStatus(String slug, StatusCd status);
 
     List<Model3D> findAllByStatus(StatusCd status);
 
+    List<Model3D> findAllByOrderByCreateDtDesc();
+
     long countByStatus(StatusCd status);
 
     List<Model3D> findAllByIdIn(Collection<Long> ids);
+
+    List<Model3D> findAllByAuthorUserIdInAndStatusOrderByCreateDtDesc(Collection<Long> authorUserIds, StatusCd status);
 }

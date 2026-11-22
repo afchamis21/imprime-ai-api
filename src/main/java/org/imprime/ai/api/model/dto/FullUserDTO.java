@@ -3,6 +3,8 @@ package org.imprime.ai.api.model.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.enums.UserRole;
 import org.jspecify.annotations.NonNull;
 
 import java.util.List;
@@ -21,10 +23,20 @@ public record FullUserDTO(
         String phoneNumber,
         @Schema(description = "Indica se o usuário possui empresa associada como Maker", example = "false")
         Boolean isMaker,
+        @Schema(description = "URL da foto de perfil do usuário")
+        String avatarUrl,
         @Schema(description = "Lista de endereços cadastrados para o usuário")
-        List<AddressDTO> addresses
+        List<AddressDTO> addresses,
+        @Schema(description = "Perfil de acesso do usuário (BUYER, DESIGNER, MAKER, ADMIN)", example = "BUYER")
+        UserRole role,
+        @Schema(description = "Status cadastral do usuário", example = "ACTIVE")
+        StatusCd status
 ) {
     public static FullUserDTO from(@NonNull User user, @NonNull List<Address> addresses) {
+        UserRole resolvedRole = user.getRole() != null
+                ? user.getRole()
+                : (user.getCompanyId() != null ? UserRole.MAKER : UserRole.BUYER);
+        StatusCd resolvedStatus = user.getStatus() != null ? user.getStatus() : StatusCd.ACTIVE;
         return new FullUserDTO(
                 user.getGuid(),
                 user.getFirstName(),
@@ -32,7 +44,10 @@ public record FullUserDTO(
                 user.getEmail(),
                 user.getPhoneNumber(),
                 user.getCompanyId() != null,
-                addresses.stream().map(AddressDTO::from).toList()
+                user.getAvatarUrl(),
+                addresses.stream().map(AddressDTO::from).toList(),
+                resolvedRole,
+                resolvedStatus
         );
     }
 }

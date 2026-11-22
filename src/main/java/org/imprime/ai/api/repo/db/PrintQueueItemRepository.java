@@ -34,5 +34,7 @@ public interface PrintQueueItemRepository extends JpaRepository<PrintQueueItem, 
 
     Optional<PrintQueueItem> findByGuidAndStatus(String guid, StatusCd status);
 
+    List<PrintQueueItem> findAllByCompanyIdAndOrderIdInAndStatus(Long companyId, Collection<Long> orderIds, StatusCd status);
+
     List<PrintQueueItem> findAllByCompanyIdAndGuidInAndStatus(Long companyId, Collection<String> guids, StatusCd status);
 }

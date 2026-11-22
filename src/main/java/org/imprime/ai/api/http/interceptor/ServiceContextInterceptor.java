@@ -38,10 +38,34 @@ public class ServiceContextInterceptor implements HandlerInterceptor {
         }
 
         ctx.setLanguageCd(lang);
+        ctx.setIpAddress(resolveClientIp(request));
+        ctx.setUserAgent(resolveUserAgent(request));
 
         log.info("Starting execution of [{} {}]", request.getMethod(), request.getRequestURI());
 
         return HandlerInterceptor.super.preHandle(request, response, handler);
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            String first = forwarded.split(",")[0].trim();
+            if (!first.isEmpty()) {
+                return first.length() > 64 ? first.substring(0, 64) : first;
+            }
+        }
+        String remoteAddr = request.getRemoteAddr();
+        if (remoteAddr == null) return null;
+        return remoteAddr.length() > 64 ? remoteAddr.substring(0, 64) : remoteAddr;
+    }
+
+    private String resolveUserAgent(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        if (ua == null || ua.isBlank()) {
+            return null;
+        }
+        String trimmed = ua.trim();
+        return trimmed.length() > 500 ? trimmed.substring(0, 500) : trimmed;
     }
 
     @Override

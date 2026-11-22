@@ -4,8 +4,10 @@ import com.oracle.bmc.objectstorage.ObjectStorage;
 import com.oracle.bmc.objectstorage.model.CreatePreauthenticatedRequestDetails;
 import com.oracle.bmc.objectstorage.requests.CreatePreauthenticatedRequestRequest;
 import com.oracle.bmc.objectstorage.requests.DeleteObjectRequest;
+import com.oracle.bmc.objectstorage.requests.GetObjectRequest;
 import com.oracle.bmc.objectstorage.requests.PutObjectRequest;
 import com.oracle.bmc.objectstorage.responses.CreatePreauthenticatedRequestResponse;
+import com.oracle.bmc.objectstorage.responses.GetObjectResponse;
 import com.oracle.bmc.objectstorage.transfer.UploadConfiguration;
 import com.oracle.bmc.objectstorage.transfer.UploadManager;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -177,6 +180,47 @@ public class ObjectStorageService {
             return new PresignedDownloadUrl(url, parExpiresAt);
         } catch (Exception e) {
             log.error("Failed to create OCI preauthenticated download URL for asset [{}]", asset.getGuid(), e);
+            throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        }
+    }
+
+    public byte[] downloadBytes(FileAsset asset) {
+        if (asset == null || isBlank(asset.getAssetUrl())) {
+            throw new IllegalArgumentException("FileAsset must have a valid assetUrl");
+        }
+
+        String rawUrl = asset.getAssetUrl().trim();
+        if (isHttpUrl(rawUrl)) {
+            try (InputStream stream = URI.create(rawUrl).toURL().openStream()) {
+                return stream.readAllBytes();
+            } catch (Exception e) {
+                log.error("Failed to download external HTTP asset [{}]", asset.getGuid(), e);
+                throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+            }
+        }
+
+        OciConfigProperties.ObjectStorageConfig storageConfig = properties.getObjectStorage();
+        if (objectStorage == null || storageConfig == null || isBlank(storageConfig.getNamespace())) {
+            log.error("OCI ObjectStorage is not configured to download asset [{}]", asset.getGuid());
+            throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        }
+
+        ObjectStorageKey storageKey = ObjectStorageKey.of(asset);
+        String fullObjectName = buildFullObjectName(storageKey.getKey());
+
+        GetObjectRequest request = GetObjectRequest.builder()
+                .namespaceName(storageConfig.getNamespace())
+                .bucketName(storageKey.getBucket())
+                .objectName(fullObjectName)
+                .build();
+
+        try {
+            GetObjectResponse response = objectStorage.getObject(request);
+            try (InputStream stream = response.getInputStream()) {
+                return stream.readAllBytes();
+            }
+        } catch (Exception e) {
+            log.error("Failed to download OCI Object Storage asset [{}]", asset.getGuid(), e);
             throw new BadGatewayException(MessageCd.BAD_GATEWAY);
         }
     }

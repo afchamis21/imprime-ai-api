@@ -7,9 +7,11 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.DocumentType;
+import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.PixKeyType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -141,4 +143,17 @@ public class Company extends Auditable {
 
     @Column(name = "OWNER_ID")
     private Long ownerId;
+
+    @Convert(converter = MakerApprovalStatus.Converter.class)
+    @Column(name = "APPROVAL_STATUS", nullable = false, length = 30)
+    private MakerApprovalStatus approvalStatus = MakerApprovalStatus.APPROVED;
+
+    @Column(name = "APPROVAL_REASON", columnDefinition = "text")
+    private String approvalReason;
+
+    @Column(name = "REVIEWED_BY_USER_ID")
+    private Long reviewedByUserId;
+
+    @Column(name = "REVIEWED_AT")
+    private Instant reviewedAt;
 }

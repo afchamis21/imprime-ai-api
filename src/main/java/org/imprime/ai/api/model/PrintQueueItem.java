@@ -24,7 +24,7 @@ public class PrintQueueItem extends Auditable {
     @Column(name = "COMPANY_ID", nullable = false)
     private Long companyId;
 
-    @Column(name = "ASSET_ID", nullable = false)
+    @Column(name = "ASSET_ID")
     private Long assetId;
 
     @Column(name = "MAKER_ARCHIVE_FILE_ID")

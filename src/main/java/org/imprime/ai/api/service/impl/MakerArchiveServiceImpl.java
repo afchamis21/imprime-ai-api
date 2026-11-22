@@ -202,6 +202,26 @@ public class MakerArchiveServiceImpl implements MakerArchiveService {
     }
 
     @Override
+    public org.imprime.ai.api.service.OrderManagementService.OrderFileContent downloadFileContent(String fileGuid) {
+        Company company = makerCompanyResolver.requireActiveMakerCompany();
+        MakerArchiveFile archiveFile = requireOwnedArchiveFile(fileGuid, company);
+
+        FileAsset asset = fileAssetRepository.findById(archiveFile.getFileAssetId())
+                .orElseThrow(() -> new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND));
+
+        byte[] bytes = objectStorageService.downloadBytes(asset);
+        String fileName = archiveFile.getFileName() != null && !archiveFile.getFileName().isBlank()
+                ? archiveFile.getFileName()
+                : (asset.getName() != null ? asset.getName() : "modelo.stl");
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        String contentType = lower.endsWith(".stl") ? "model/stl"
+                : lower.endsWith(".3mf") ? "model/3mf"
+                : lower.endsWith(".glb") ? "model/gltf-binary"
+                : "application/octet-stream";
+        return new org.imprime.ai.api.service.OrderManagementService.OrderFileContent(fileName, contentType, bytes);
+    }
+
+    @Override
     @Transactional
     public void deleteArchiveFile(String fileGuid) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();

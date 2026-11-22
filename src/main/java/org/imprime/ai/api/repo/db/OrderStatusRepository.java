@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,20 @@ public interface OrderStatusRepository extends JpaRepository<OrderStatus, Long> 
     Optional<OrderStatus> findLatestStatusByOrderId(Long orderId);
 
     List<OrderStatus> findAllByOrderIdOrderByStatusDateAsc(Long orderId);
+
+    @Query(value = """
+    SELECT DISTINCT ON (os.order_id) os.order_id AS orderId, os.status_cd AS statusCd
+    FROM order_status os
+    WHERE os.order_id IN (:orderIds)
+    ORDER BY os.order_id, os.status_date DESC, os.order_status_id DESC
+    """, nativeQuery = true)
+    List<LatestOrderStatusView> findLatestStatusesByOrderIds(@Param("orderIds") Collection<Long> orderIds);
+
+    interface LatestOrderStatusView {
+        Long getOrderId();
+
+        String getStatusCd();
+    }
 
     @Query(value = """
     SELECT COUNT(*) FROM (

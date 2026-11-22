@@ -2,6 +2,7 @@ package org.imprime.ai.api.http.response.maker;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.imprime.ai.api.model.enums.MaterialType;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.QueuePriority;
 
@@ -61,6 +62,12 @@ public record PrintQueueItemResponse(
         @Schema(description = "Data/hora agendada de início em UTC (ISO-8601)")
         Instant scheduledStartAt,
         @Schema(description = "Data de criação em UTC (ISO-8601)")
-        Instant createdAt
+        Instant createdAt,
+        @Schema(description = "Prazo de entrega da venda vinculada em UTC (ISO-8601), quando houver pedido")
+        Instant orderDueAt,
+        @Schema(description = "Status atual da venda vinculada", example = "IN_PRODUCTION")
+        OrderStatusCd orderStatus,
+        @Schema(description = "Data da venda vinculada em UTC (ISO-8601)")
+        Instant orderCreatedAt
 ) {
 }

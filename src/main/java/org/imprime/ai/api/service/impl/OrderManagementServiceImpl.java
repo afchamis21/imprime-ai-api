@@ -6,23 +6,38 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.order.UpdateOrderStatusRequest;
 import org.imprime.ai.api.http.response.order.OrderDetailResponse;
+import org.imprime.ai.api.http.response.order.OrderFileResponse;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Order;
+import org.imprime.ai.api.model.OrderFileAsset;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
+import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
+import org.imprime.ai.api.repo.db.FileAssetRepository;
+import org.imprime.ai.api.repo.db.OrderFileAssetRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
+import org.imprime.ai.api.service.ObjectStorageService;
+import org.imprime.ai.api.service.MakerOrderSupport;
 import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -33,9 +48,148 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     private final ChatRepository chatRepository;
     private final CompanyRepository companyRepository;
     private final OrderViewAssembler orderViewAssembler;
+    private final OrderFileAssetRepository orderFileAssetRepository;
+    private final FileAssetRepository fileAssetRepository;
+    private final ObjectStorageService objectStorageService;
+    private final MakerOrderSupport makerOrderSupport;
 
     @Override
     public OrderDetailResponse getOrderDetail(String orderGuid) {
+        Order order = requireAuthorizedOrder(orderGuid);
+        return orderViewAssembler.toDetailResponse(order);
+    }
+
+    @Override
+    public List<OrderFileResponse> listOrderFiles(String orderGuid) {
+        Order order = requireAuthorizedOrder(orderGuid);
+        List<OrderFileAsset> plateAssets = orderFileAssetRepository
+                .findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(order.getId(), StatusCd.ACTIVE);
+
+        if (!plateAssets.isEmpty()) {
+            Set<Long> fileIds = plateAssets.stream()
+                    .map(OrderFileAsset::getFileAssetId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            Map<Long, FileAsset> filesById = fileIds.isEmpty()
+                    ? Map.of()
+                    : fileAssetRepository.findAllByIdIn(fileIds).stream()
+                    .collect(Collectors.toMap(FileAsset::getId, f -> f, (a, b) -> a));
+
+            List<OrderFileResponse> responses = new ArrayList<>(plateAssets.size());
+            int fallbackIndex = 1;
+            for (OrderFileAsset plate : plateAssets) {
+                FileAsset asset = filesById.get(plate.getFileAssetId());
+                if (asset == null) {
+                    continue;
+                }
+                responses.add(new OrderFileResponse(
+                        asset.getGuid(),
+                        asset.getName(),
+                        plate.getPlateNumber() != null ? plate.getPlateNumber() : fallbackIndex,
+                        plate.getPlateName() != null && !plate.getPlateName().isBlank()
+                                ? plate.getPlateName()
+                                : asset.getName(),
+                        plate.getMaterial(),
+                        plate.getColorHex(),
+                        plate.getInfillPercent(),
+                        plate.getSupports(),
+                        plate.getScaleX() != null ? plate.getScaleX() : 1.0,
+                        plate.getScaleY() != null ? plate.getScaleY() : 1.0,
+                        plate.getScaleZ() != null ? plate.getScaleZ() : 1.0,
+                        Boolean.TRUE.equals(plate.getIsMultiColor()),
+                        plate.getPaintingInstructions()
+                ));
+                fallbackIndex++;
+            }
+            return responses;
+        }
+
+        if (order.getFileAssetId() == null) {
+            return listMarketplaceModelFiles(order);
+        }
+
+        return fileAssetRepository.findById(order.getFileAssetId())
+                .map(asset -> List.of(new OrderFileResponse(
+                        asset.getGuid(),
+                        asset.getName(),
+                        1,
+                        asset.getName() != null && !asset.getName().isBlank() ? asset.getName() : "Mesa 1",
+                        null,
+                        null,
+                        null,
+                        null,
+                        1.0,
+                        1.0,
+                        1.0,
+                        false,
+                        null
+                )))
+                .orElseGet(List::of);
+    }
+
+    @Override
+    public OrderFileContent downloadOrderFile(String orderGuid, String fileGuid) {
+        Order order = requireAuthorizedOrder(orderGuid);
+        FileAsset asset = fileAssetRepository.findByGuid(fileGuid)
+                .orElseThrow(() -> new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND));
+
+        boolean belongsToLegacyOrder = Objects.equals(order.getFileAssetId(), asset.getId());
+        boolean belongsToOrderPlate = !belongsToLegacyOrder && orderFileAssetRepository
+                .findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(order.getId(), StatusCd.ACTIVE)
+                .stream()
+                .anyMatch(ofa -> Objects.equals(ofa.getFileAssetId(), asset.getId()));
+
+        if (!belongsToLegacyOrder && !belongsToOrderPlate && !belongsToMarketplaceModel(order, asset)) {
+            throw new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND);
+        }
+
+        byte[] bytes = objectStorageService.downloadBytes(asset);
+        String fileName = asset.getName() != null && !asset.getName().isBlank()
+                ? asset.getName()
+                : "modelo.stl";
+        String contentType = resolveContentType(fileName);
+
+        return new OrderFileContent(fileName, contentType, bytes);
+    }
+
+    private List<MakerOrderSupport.ResolvedOrderFile> marketplaceModelFiles(Order order) {
+        if (makerOrderSupport == null) {
+            return List.of();
+        }
+        Map<Long, List<MakerOrderSupport.ResolvedOrderFile>> resolved = makerOrderSupport.resolveFiles(List.of(order));
+        List<MakerOrderSupport.ResolvedOrderFile> files = resolved != null ? resolved.get(order.getId()) : null;
+        if (files == null) {
+            return List.of();
+        }
+        return files.stream().filter(f -> "MODEL_3D".equals(f.sourceType())).toList();
+    }
+
+    private List<OrderFileResponse> listMarketplaceModelFiles(Order order) {
+        return marketplaceModelFiles(order).stream()
+                .map(f -> new OrderFileResponse(
+                        f.asset().getGuid(),
+                        f.asset().getName(),
+                        f.plateNumber(),
+                        f.plateName() != null ? f.plateName() : f.asset().getName(),
+                        f.material(),
+                        f.colorHex(),
+                        null,
+                        null,
+                        1.0,
+                        1.0,
+                        1.0,
+                        false,
+                        null
+                ))
+                .toList();
+    }
+
+    private boolean belongsToMarketplaceModel(Order order, FileAsset asset) {
+        return marketplaceModelFiles(order).stream()
+                .anyMatch(f -> Objects.equals(f.asset().getId(), asset.getId()));
+    }
+
+    private Order requireAuthorizedOrder(String orderGuid) {
         User caller = ServiceContext.getUserOrThrow();
         Order order = orderRepository.findOrderByGuid(orderGuid)
                 .orElseThrow(() -> new NotFoundException(MessageCd.ORDER_NOT_FOUND));
@@ -49,7 +203,21 @@ public class OrderManagementServiceImpl implements OrderManagementService {
             throw new ForbiddenException();
         }
 
-        return orderViewAssembler.toDetailResponse(order);
+        return order;
+    }
+
+    private String resolveContentType(String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".stl")) {
+            return "model/stl";
+        }
+        if (lower.endsWith(".3mf")) {
+            return "model/3mf";
+        }
+        if (lower.endsWith(".glb")) {
+            return "model/gltf-binary";
+        }
+        return "application/octet-stream";
     }
 
     @Override
@@ -82,6 +250,12 @@ public class OrderManagementServiceImpl implements OrderManagementService {
             throw new ForbiddenException();
         }
 
+        if (OrderStatusCd.IN_TRANSIT.equals(target)
+                && OrderStatusCd.READY_TO_SHIP.equals(current)
+                && (order.getExternalShipmentId() == null || order.getExternalShipmentId().isBlank())) {
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+        }
+
         boolean updatedOrder = false;
         if (OrderStatusCd.IN_TRANSIT.equals(target)
                 && request.trackingCode() != null && !request.trackingCode().isBlank()) {
@@ -106,7 +280,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
             return false;
         }
         OrderStatusCd latestStatus = orderStatusService.findLatest(order).getStatusCd();
-        if (!OrderStatusCd.QUOTING.equals(latestStatus)) {
+        if (!OrderStatusCd.QUOTING.equals(latestStatus) && !OrderStatusCd.CREATED.equals(latestStatus)) {
             return false;
         }
         Optional<Company> companyOpt = companyRepository.findById(caller.getCompanyId());
@@ -127,7 +301,8 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     private boolean isMakerTransitionAllowed(OrderStatusCd from, OrderStatusCd to) {
         return switch (from) {
             case CONFIRMED -> OrderStatusCd.IN_PRODUCTION.equals(to) || OrderStatusCd.CANCELLED.equals(to);
-            case IN_PRODUCTION -> OrderStatusCd.IN_TRANSIT.equals(to) || OrderStatusCd.CANCELLED.equals(to);
+            case IN_PRODUCTION -> OrderStatusCd.READY_TO_SHIP.equals(to) || OrderStatusCd.CANCELLED.equals(to);
+            case READY_TO_SHIP -> OrderStatusCd.IN_PRODUCTION.equals(to) || OrderStatusCd.IN_TRANSIT.equals(to) || OrderStatusCd.CANCELLED.equals(to);
             case COMPLETED, CANCELLED -> OrderStatusCd.REFUNDED.equals(to);
             default -> false;
         };

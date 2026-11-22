@@ -16,6 +16,7 @@ import org.imprime.ai.api.http.request.maker.ReorderPrintQueueRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.maker.PrintQueueItemResponse;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.service.MakerPrintQueueService;
 import org.springdoc.core.annotations.ParameterObject;
@@ -51,8 +52,10 @@ public class MakerPrintQueueController {
             @RequestParam(required = false) String printerGuid,
             @Parameter(description = "Quando true, retorna apenas jobs ativos (`QUEUED`, `PRINTING`, `PAUSED`)")
             @RequestParam(required = false) Boolean activeOnly,
+            @Parameter(description = "Filtrar por status atual da venda vinculada (ex.: `IN_PRODUCTION`)")
+            @RequestParam(required = false) OrderStatusCd orderStatus,
             @ParameterObject @PageableDefault(size = 50, sort = "position") Pageable pageable) {
-        return BaseResponse.ok(makerPrintQueueService.listQueue(status, printerGuid, activeOnly, pageable));
+        return BaseResponse.ok(makerPrintQueueService.listQueue(status, printerGuid, activeOnly, orderStatus, pageable));
     }
 
     @Operation(
@@ -124,5 +127,24 @@ public class MakerPrintQueueController {
     public ResponseEntity<BaseResponse<List<PrintQueueItemResponse>>> reorderQueue(
             @Valid @RequestBody ReorderPrintQueueRequest request) {
         return BaseResponse.ok(makerPrintQueueService.reorderQueue(request));
+    }
+
+    @Operation(
+            summary = "Atualizar job da fila",
+            description = "Atualiza parcialmente um job: troca/remoção da impressora designada (somente jobs não iniciados), prioridade e cópias."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Job atualizado"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Job ou impressora pertence a outro estúdio", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Job ou impressora não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Job em execução não pode trocar de impressora", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PatchMapping("/{jobGuid}")
+    public ResponseEntity<BaseResponse<PrintQueueItemResponse>> updateJob(
+            @Parameter(description = "GUID do job na fila", required = true)
+            @PathVariable String jobGuid,
+            @Valid @RequestBody org.imprime.ai.api.http.request.maker.UpdatePrintQueueItemRequest request) {
+        return BaseResponse.ok(makerPrintQueueService.updateJob(jobGuid, request));
     }
 }

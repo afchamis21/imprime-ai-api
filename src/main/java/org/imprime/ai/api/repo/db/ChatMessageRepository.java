@@ -15,6 +15,8 @@ import java.util.UUID;
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
     Page<ChatMessage> findAllByChatIdOrderByCreateDtDesc(UUID chatId, Pageable pageable);
 
+    List<ChatMessage> findAllByChatIdOrderByCreateDtAsc(UUID chatId);
+
     List<ChatMessage> findTop20ByChatIdOrderByCreateDtDesc(UUID chatId);
 
     Optional<ChatMessage> findByGuidAndChatId(String guid, UUID chatId);

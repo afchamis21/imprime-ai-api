@@ -59,6 +59,7 @@ class ReviewServiceImplTest {
         author.setGuid("user-guid-7");
         author.setFirstName("Lucas");
         author.setLastName("Amorim");
+        author.setAvatarUrl("https://cdn.example/buyer-avatar.png");
 
         product = new Product();
         product.setId(70L);
@@ -98,6 +99,7 @@ class ReviewServiceImplTest {
         );
 
         assertEquals("review-guid-new", response.guid());
+        assertEquals("https://cdn.example/buyer-avatar.png", response.authorAvatarUrl());
         assertEquals(5, response.rating());
         assertEquals(new BigDecimal("4.50"), product.getRatingAvg());
         assertEquals(2, product.getReviewsCount());

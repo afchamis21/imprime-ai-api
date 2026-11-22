@@ -2,6 +2,8 @@ package org.imprime.ai.api.service;
 
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.user.UpdateUserAvatarRequest;
+import org.imprime.ai.api.http.request.user.UpdateUserProfileRequest;
 import org.imprime.ai.api.http.response.user.ModelDownloadResponse;
 import org.imprime.ai.api.http.response.user.UserReviewResponse;
 import org.imprime.ai.api.model.FileAsset;
@@ -10,6 +12,7 @@ import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.PurchasedModel;
 import org.imprime.ai.api.model.Review;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.dto.FullUserDTO;
 import org.imprime.ai.api.model.enums.LicenseType;
 import org.imprime.ai.api.model.enums.ReviewTargetType;
 import org.imprime.ai.api.model.enums.StatusCd;
@@ -179,5 +182,60 @@ class UserHubServiceImplTest {
         assertEquals(StatusCd.INACTIVE, review.getStatus());
         assertEquals(new BigDecimal("0.00"), product.getRatingAvg());
         assertEquals(0, product.getReviewsCount());
+    }
+
+    @Test
+    void updateAvatarPersistsAvatarUrlAndRefreshesCache() {
+        buyer.setFirstName("Lucas");
+        buyer.setLastName("Amorim");
+        buyer.setEmail("lucas@imprime.ai");
+        buyer.setPhoneNumber("11987654321");
+
+        when(userRepository.findById(4L)).thenReturn(Optional.of(buyer));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userService.getFullUserDetails(any(User.class)))
+                .thenAnswer(inv -> FullUserDTO.from(inv.getArgument(0), List.of()));
+
+        FullUserDTO updated = service.updateAvatar(
+                new UpdateUserAvatarRequest("  https://cdn.example/avatar.png  ")
+        );
+
+        assertEquals("https://cdn.example/avatar.png", buyer.getAvatarUrl());
+        assertEquals("https://cdn.example/avatar.png", updated.avatarUrl());
+        assertEquals(
+                "https://cdn.example/avatar.png",
+                ServiceContext.getContext().getUser().map(User::getAvatarUrl).orElse(null)
+        );
+        verify(userRepository).save(buyer);
+        verify(userInMemoryCache).put(buyer);
+
+        FullUserDTO cleared = service.updateAvatar(new UpdateUserAvatarRequest("   "));
+        assertNull(buyer.getAvatarUrl());
+        assertNull(cleared.avatarUrl());
+    }
+
+    @Test
+    void updateProfilePreservesAvatarWhenNullAndUpdatesWhenProvided() {
+        buyer.setFirstName("Lucas");
+        buyer.setLastName("Amorim");
+        buyer.setEmail("lucas@imprime.ai");
+        buyer.setPhoneNumber("11987654321");
+        buyer.setAvatarUrl("https://cdn.example/original.png");
+
+        when(userRepository.findById(4L)).thenReturn(Optional.of(buyer));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userService.getFullUserDetails(any(User.class)))
+                .thenAnswer(inv -> FullUserDTO.from(inv.getArgument(0), List.of()));
+
+        FullUserDTO preserved = service.updateProfile(new UpdateUserProfileRequest(
+                "Lucas", "Amorim", "lucas@imprime.ai", "11987654321", null
+        ));
+        assertEquals("https://cdn.example/original.png", preserved.avatarUrl());
+
+        FullUserDTO replaced = service.updateProfile(new UpdateUserProfileRequest(
+                "Lucas", "Amorim", "lucas@imprime.ai", "11987654321", "  https://cdn.example/updated.png  "
+        ));
+        assertEquals("https://cdn.example/updated.png", buyer.getAvatarUrl());
+        assertEquals("https://cdn.example/updated.png", replaced.avatarUrl());
     }
 }

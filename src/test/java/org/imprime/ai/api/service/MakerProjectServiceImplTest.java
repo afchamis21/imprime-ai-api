@@ -120,7 +120,7 @@ class MakerProjectServiceImplTest {
                 "job-plate-1", 1, "Maquete Torre — Mesa 1/3", null, null, null,
                 "prt-100", "X1C", null, MaterialType.PLA, null, null,
                 new BigDecimal("100.00"), 120, 0, PrintJobStatus.QUEUED, QueuePriority.HIGH, 1, 0,
-                null, null, "prj-40", null, null, null, Instant.now()
+                null, null, "prj-40", null, null, null, Instant.now(), null, null, null
         ));
 
         PrintQueueItemResponse enqueued = service.queueNextPlate("prj-40", new QueueNextPlateRequest(null, null));

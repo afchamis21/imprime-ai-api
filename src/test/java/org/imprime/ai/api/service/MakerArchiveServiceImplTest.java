@@ -16,6 +16,7 @@ import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.PrinterStatus;
 import org.imprime.ai.api.model.enums.QueuePriority;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.FileAssetRepository;
@@ -165,7 +166,7 @@ class MakerArchiveServiceImplTest {
                 "job-1", 1, "Peça Mecânica", "arc-80", "peca.stl", null,
                 "prt-100", "X1C", null, MaterialType.PETG, null, null,
                 new BigDecimal("95.0"), 90, 0, PrintJobStatus.QUEUED, QueuePriority.HIGH, 2, 0,
-                null, null, null, null, null, null, Instant.now()
+                null, null, null, null, null, null, Instant.now(), null, null, null
         );
         when(printQueueService.enqueueBuiltJob(
                 eq(company), eq(printer), eq(archiveFile), any(), any(), any(),
@@ -178,5 +179,40 @@ class MakerArchiveServiceImplTest {
         assertEquals(2, archiveFile.getPrintCount());
         assertNotNull(archiveFile.getLastPrintedAt());
         verify(archiveFileRepository).save(archiveFile);
+    }
+
+    @Test
+    void downloadFileContentStreamsOwnedFileAndRejectsForeignStudio() {
+        MakerArchiveFile archiveFile = new MakerArchiveFile();
+        archiveFile.setId(80L);
+        archiveFile.setGuid("arc-80");
+        archiveFile.setCompanyId(10L);
+        archiveFile.setFileAssetId(90L);
+        archiveFile.setFileName("peca.3mf");
+        archiveFile.setStatus(StatusCd.ACTIVE);
+
+        FileAsset asset = new FileAsset();
+        asset.setId(90L);
+        asset.setName("peca.3mf");
+        byte[] bytes = new byte[]{1, 2, 3};
+
+        when(archiveFileRepository.findByGuidAndStatus("arc-80", StatusCd.ACTIVE)).thenReturn(Optional.of(archiveFile));
+        when(fileAssetRepository.findById(90L)).thenReturn(Optional.of(asset));
+        when(objectStorageService.downloadBytes(asset)).thenReturn(bytes);
+
+        OrderManagementService.OrderFileContent content = service.downloadFileContent("arc-80");
+
+        assertEquals("peca.3mf", content.fileName());
+        assertEquals("model/3mf", content.contentType());
+        assertArrayEquals(bytes, content.bytes());
+
+        MakerArchiveFile foreign = new MakerArchiveFile();
+        foreign.setId(81L);
+        foreign.setGuid("arc-81");
+        foreign.setCompanyId(99L);
+        foreign.setStatus(StatusCd.ACTIVE);
+        when(archiveFileRepository.findByGuidAndStatus("arc-81", StatusCd.ACTIVE)).thenReturn(Optional.of(foreign));
+
+        assertThrows(ForbiddenException.class, () -> service.downloadFileContent("arc-81"));
     }
 }

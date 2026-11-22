@@ -4,12 +4,15 @@ import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.model3d.Model3DCatalogFilter;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.model3d.Model3DCatalogItemResponse;
+import org.imprime.ai.api.http.response.model3d.Model3DDetailResponse;
 import org.imprime.ai.api.http.response.model3d.ModelCustomizationResponse;
+import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Model3D;
 import org.imprime.ai.api.model.ModelCustomization;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.FileFormat3D;
 import org.imprime.ai.api.model.enums.LicenseType;
+import org.imprime.ai.api.model.enums.ModelModerationStatus;
 import org.imprime.ai.api.model.enums.ModelPricingFilter;
 import org.imprime.ai.api.model.enums.ScadParameterType;
 import org.imprime.ai.api.model.enums.StatusCd;
@@ -151,5 +154,73 @@ class Model3DServiceImplTest {
         assertEquals(1, response.parameters().size());
         assertEquals(ScadParameterType.NUMBER, response.parameters().getFirst().type());
         assertEquals("width", response.parameters().getFirst().name());
+    }
+
+    @Test
+    void getModelDetailAndDownloadModelFileStreamSafelyFromBackendEndpoint() {
+        User author = new User();
+        author.setId(7L);
+        author.setGuid("author-7");
+        author.setFirstName("Ana");
+        author.setLastName("Designer");
+
+        Model3D approved = new Model3D();
+        approved.setId(30L);
+        approved.setGuid("mdl-30");
+        approved.setSlug("chaveiro");
+        approved.setName("Chaveiro");
+        approved.setCategory("engineering");
+        approved.setPrice(BigDecimal.ZERO);
+        approved.setFormat(FileFormat3D.STL);
+        approved.setLicense(LicenseType.PERSONAL);
+        approved.setAuthorUserId(7L);
+        approved.setFileAssetId(70L);
+        approved.setModerationStatus(ModelModerationStatus.APPROVED);
+        approved.setStatus(StatusCd.ACTIVE);
+        approved.setViewsCount(0L);
+
+        FileAsset asset = new FileAsset();
+        asset.setId(70L);
+        asset.setGuid("ast-70");
+        asset.setName("chaveiro.stl");
+        asset.setAssetUrl("models/author-7/chaveiro.stl");
+
+        byte[] stlBytes = "solid chaveiro".getBytes();
+        when(model3DRepository.findByGuidAndStatus("chaveiro", StatusCd.ACTIVE)).thenReturn(Optional.empty());
+        when(model3DRepository.findBySlugAndStatus("chaveiro", StatusCd.ACTIVE)).thenReturn(Optional.of(approved));
+        when(model3DRepository.save(any(Model3D.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(author));
+        when(favoriteService.isFavorited(any(), any())).thenReturn(false);
+        when(fileAssetRepository.findById(70L)).thenReturn(Optional.of(asset));
+        when(objectStorageService.downloadBytes(asset)).thenReturn(stlBytes);
+
+        Model3DDetailResponse detail = service.getModelDetail("chaveiro");
+        assertEquals("/models/mdl-30/file", detail.modelFileUrl());
+
+        OrderManagementService.OrderFileContent streamed = service.downloadModelFile("chaveiro");
+        assertEquals("chaveiro.stl", streamed.fileName());
+        assertEquals("model/stl", streamed.contentType());
+        assertArrayEquals(stlBytes, streamed.bytes());
+
+        Model3D pendingModel = new Model3D();
+        pendingModel.setId(31L);
+        pendingModel.setGuid("mdl-31");
+        pendingModel.setAuthorUserId(7L);
+        pendingModel.setFileAssetId(70L);
+        pendingModel.setModerationStatus(ModelModerationStatus.PENDING_REVIEW);
+        pendingModel.setStatus(StatusCd.ACTIVE);
+        when(model3DRepository.findByGuidAndStatus("mdl-31", StatusCd.ACTIVE)).thenReturn(Optional.of(pendingModel));
+
+        assertThrows(NotFoundException.class, () -> service.downloadModelFile("mdl-31"));
+
+        Model3D noAssetModel = new Model3D();
+        noAssetModel.setId(32L);
+        noAssetModel.setGuid("mdl-32");
+        noAssetModel.setFileAssetId(null);
+        noAssetModel.setModerationStatus(ModelModerationStatus.APPROVED);
+        noAssetModel.setStatus(StatusCd.ACTIVE);
+        when(model3DRepository.findByGuidAndStatus("mdl-32", StatusCd.ACTIVE)).thenReturn(Optional.of(noAssetModel));
+
+        assertThrows(NotFoundException.class, () -> service.downloadModelFile("mdl-32"));
     }
 }

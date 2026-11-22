@@ -6,6 +6,9 @@ import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.SupportTicketCategory;
 import org.imprime.ai.api.model.enums.SupportTicketStatus;
+import org.imprime.ai.api.model.enums.TicketPriority;
+
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -36,4 +39,20 @@ public class SupportTicket extends Auditable {
     @Convert(converter = SupportTicketStatus.Converter.class)
     @Column(name = "TICKET_STATUS", nullable = false, length = 30)
     private SupportTicketStatus ticketStatus;
+
+    @Column(name = "IS_DISPUTE", nullable = false)
+    private Boolean isDispute = Boolean.FALSE;
+
+    @Convert(converter = TicketPriority.Converter.class)
+    @Column(name = "PRIORITY", nullable = false, length = 20)
+    private TicketPriority priority = TicketPriority.MEDIUM;
+
+    @Column(name = "ASSIGNED_ADMIN_ID")
+    private Long assignedAdminId;
+
+    @Column(name = "RESOLUTION_NOTES", columnDefinition = "text")
+    private String resolutionNotes;
+
+    @Column(name = "RESOLVED_AT")
+    private Instant resolvedAt;
 }

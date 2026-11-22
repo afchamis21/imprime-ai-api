@@ -3,6 +3,7 @@ package org.imprime.ai.api.http.response.support;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.List;
 
 @Schema(description = "Mensagem pertencente a um chamado de suporte")
 public record SupportTicketMessageResponse(
@@ -17,6 +18,18 @@ public record SupportTicketMessageResponse(
         @Schema(description = "Conteúdo da mensagem")
         String message,
         @Schema(description = "Data e hora de envio em UTC (ISO-8601)")
-        Instant createdAt
+        Instant createdAt,
+        @Schema(description = "URLs de anexos ou fotos de evidência vinculados à mensagem")
+        List<String> attachments
 ) {
+    public SupportTicketMessageResponse(
+            String guid,
+            String senderGuid,
+            String senderName,
+            boolean fromSupport,
+            String message,
+            Instant createdAt
+    ) {
+        this(guid, senderGuid, senderName, fromSupport, message, createdAt, List.of());
+    }
 }

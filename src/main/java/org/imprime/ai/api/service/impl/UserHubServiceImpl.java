@@ -4,6 +4,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.user.UpdateUserAvatarRequest;
 import org.imprime.ai.api.http.request.user.UpdateUserProfileRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.OrderSummaryResponse;
@@ -103,12 +104,37 @@ public class UserHubServiceImpl implements UserHubService {
         user.setLastName(request.lastName());
         user.setEmail(request.email());
         user.setPhoneNumber(request.phoneNumber());
+        if (request.avatarUrl() != null) {
+            user.setAvatarUrl(normalizeAvatarUrl(request.avatarUrl()));
+        }
 
         User saved = userRepository.save(user);
         userInMemoryCache.put(saved);
         ServiceContext.getContext().setUser(saved);
 
         return userService.getFullUserDetails(saved);
+    }
+
+    @Override
+    @Transactional
+    public FullUserDTO updateAvatar(UpdateUserAvatarRequest request) {
+        User caller = ServiceContext.getUserOrThrow();
+        User user = userRepository.findById(caller.getId()).orElseThrow(UnauthorizedException::new);
+
+        user.setAvatarUrl(normalizeAvatarUrl(request != null ? request.avatarUrl() : null));
+
+        User saved = userRepository.save(user);
+        userInMemoryCache.put(saved);
+        ServiceContext.getContext().setUser(saved);
+
+        return userService.getFullUserDetails(saved);
+    }
+
+    private String normalizeAvatarUrl(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            return null;
+        }
+        return avatarUrl.trim();
     }
 
     @Override

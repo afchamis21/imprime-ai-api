@@ -15,17 +15,17 @@ public interface AuthTokenRepository extends JpaRepository<AuthToken, Long> {
     @Modifying
     @Query(value = """
     UPDATE AUTH_TOKEN
-       SET REVOKED = 1
+       SET REVOKED = true
      WHERE USER_ID = :userId
-       AND REVOKED = 0
+       AND (REVOKED = false OR REVOKED IS NULL)
     """, nativeQuery = true)
     void revokeTokensByUserId(Long userId);
 
     @Modifying
     @Query(value = """
     UPDATE AUTH_TOKEN
-       SET REVOKED = 1
-     WHERE AUTH_TOKEN_ID=:authTokenId
+       SET REVOKED = true
+     WHERE AUTH_TOKEN_ID = :authTokenId
     """, nativeQuery = true)
     void revokeToken(Long authTokenId);
 }

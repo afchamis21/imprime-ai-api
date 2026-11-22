@@ -21,7 +21,7 @@ public record RegisterAddressRequest(
 
         @Schema(description = "Bairro (2 a 100 caracteres)", example = "Bela Vista")
         @StringLength(minLength = 2, maxLength = 100, minLengthMessage = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD_LENGTH, maxLengthMessage = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD_LENGTH)
-        @Regex(regex = "^[\\p{L}\\p{N}\\s'.,-]+$", message = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD)
+        @Regex(regex = "^[\\p{L}\\p{N}\\s'.,/-]+$", message = MessageCd.INVALID_ADDRESS_NEIGHBORHOOD)
         String neighborhood,
 
         @Schema(description = "Cidade (2 a 100 caracteres)", example = "São Paulo", requiredMode = Schema.RequiredMode.REQUIRED)

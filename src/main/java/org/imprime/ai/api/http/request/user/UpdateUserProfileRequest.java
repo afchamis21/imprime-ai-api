@@ -26,6 +26,10 @@ public record UpdateUserProfileRequest(
         @Schema(description = "Telefone de contato", example = "11987654321", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "O telefone é obrigatório")
         @Size(min = 8, max = 20, message = "O telefone deve ter entre 8 e 20 caracteres")
-        String phoneNumber
+        String phoneNumber,
+
+        @Schema(description = "URL opcional da foto de perfil obtida via `/media/upload?category=AVATAR`")
+        @Size(max = 1000, message = "A URL do avatar deve ter no máximo 1000 caracteres")
+        String avatarUrl
 ) {
 }

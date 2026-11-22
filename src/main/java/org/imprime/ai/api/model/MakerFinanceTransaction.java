@@ -9,6 +9,7 @@ import org.imprime.ai.api.model.enums.FinanceTransactionType;
 import org.imprime.ai.api.model.enums.PixKeyType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Getter
@@ -59,4 +60,13 @@ public class MakerFinanceTransaction extends Auditable {
 
     @Column(name = "IDEMPOTENCY_KEY", unique = true, length = 100)
     private String idempotencyKey;
+
+    @Column(name = "PROCESSED_BY_USER_ID")
+    private Long processedByUserId;
+
+    @Column(name = "PROCESSED_AT")
+    private Instant processedAt;
+
+    @Column(name = "FAILURE_REASON", columnDefinition = "text")
+    private String failureReason;
 }

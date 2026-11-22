@@ -3,16 +3,22 @@ package org.imprime.ai.api.service;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.order.UpdateOrderStatusRequest;
 import org.imprime.ai.api.http.response.order.OrderDetailResponse;
+import org.imprime.ai.api.http.response.order.OrderFileResponse;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Order;
+import org.imprime.ai.api.model.OrderFileAsset;
 import org.imprime.ai.api.model.OrderStatus;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
+import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
+import org.imprime.ai.api.repo.db.FileAssetRepository;
+import org.imprime.ai.api.repo.db.OrderFileAssetRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.service.impl.OrderManagementServiceImpl;
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -44,6 +51,12 @@ class OrderManagementServiceImplTest {
     private CompanyRepository companyRepository;
     @Mock
     private OrderViewAssembler orderViewAssembler;
+    @Mock
+    private OrderFileAssetRepository orderFileAssetRepository;
+    @Mock
+    private FileAssetRepository fileAssetRepository;
+    @Mock
+    private ObjectStorageService objectStorageService;
 
     @InjectMocks
     private OrderManagementServiceImpl service;
@@ -147,12 +160,13 @@ class OrderManagementServiceImplTest {
     @Test
     void updateOrderStatusPersistsTrackingCodeWhenMovingToInTransit() {
         ServiceContext.getContext().setUser(makerUser);
-        OrderStatus inProduction = new OrderStatus();
-        inProduction.setStatusCd(OrderStatusCd.IN_PRODUCTION);
+        OrderStatus readyToShip = new OrderStatus();
+        readyToShip.setStatusCd(OrderStatusCd.READY_TO_SHIP);
+        order.setExternalShipmentId("me-shipment-123");
 
         when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
-        when(orderStatusService.findLatest(order)).thenReturn(inProduction);
-        when(orderStatusService.canMoveTo(OrderStatusCd.IN_PRODUCTION, OrderStatusCd.IN_TRANSIT)).thenReturn(true);
+        when(orderStatusService.findLatest(order)).thenReturn(readyToShip);
+        when(orderStatusService.canMoveTo(OrderStatusCd.READY_TO_SHIP, OrderStatusCd.IN_TRANSIT)).thenReturn(true);
 
         service.updateOrderStatus("order-guid-10", new UpdateOrderStatusRequest(OrderStatusCd.IN_TRANSIT, null, "BR123456789BR"));
 
@@ -191,5 +205,148 @@ class OrderManagementServiceImplTest {
         assertThrows(ConflictException.class, () ->
                 service.updateOrderStatus("order-guid-10", new UpdateOrderStatusRequest(OrderStatusCd.COMPLETED, null, null))
         );
+    }
+
+    @Test
+    void listOrderFilesReturnsMultiPlateFilesForAuthorizedMaker() {
+        order.setVendorId(null);
+        ServiceContext.getContext().setUser(makerUser);
+
+        OrderStatus quotingStatus = new OrderStatus();
+        quotingStatus.setStatusCd(OrderStatusCd.QUOTING);
+
+        Company company = new Company();
+        company.setId(50L);
+        company.setGuid("company-guid-50");
+
+        FileAsset asset1 = new FileAsset();
+        asset1.setId(101L);
+        asset1.setGuid("file-guid-1");
+        asset1.setName("base.stl");
+
+        FileAsset asset2 = new FileAsset();
+        asset2.setId(102L);
+        asset2.setGuid("file-guid-2");
+        asset2.setName("tampa.stl");
+
+        OrderFileAsset plate1 = new OrderFileAsset();
+        plate1.setOrderId(10L);
+        plate1.setFileAssetId(101L);
+        plate1.setPlateNumber(1);
+        plate1.setPlateName("Mesa 1");
+        plate1.setMaterial("PLA");
+        plate1.setColorHex("#8b5cf6");
+        plate1.setInfillPercent(20);
+        plate1.setSupports(true);
+
+        OrderFileAsset plate2 = new OrderFileAsset();
+        plate2.setOrderId(10L);
+        plate2.setFileAssetId(102L);
+        plate2.setPlateNumber(2);
+        plate2.setPlateName("Mesa 2");
+        plate2.setMaterial("PETG");
+        plate2.setColorHex("#10b981");
+        plate2.setInfillPercent(40);
+        plate2.setSupports(false);
+        plate2.setScaleX(1.5);
+        plate2.setScaleY(1.5);
+        plate2.setScaleZ(1.5);
+
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderStatusService.findLatest(order)).thenReturn(quotingStatus);
+        when(companyRepository.findById(50L)).thenReturn(Optional.of(company));
+        when(chatRepository.existsByOrderGuidAndCompanyGuid("order-guid-10", "company-guid-50")).thenReturn(true);
+        when(orderFileAssetRepository.findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(plate1, plate2));
+        when(fileAssetRepository.findAllByIdIn(Set.of(101L, 102L))).thenReturn(List.of(asset1, asset2));
+
+        List<OrderFileResponse> files = service.listOrderFiles("order-guid-10");
+
+        assertEquals(2, files.size());
+        assertEquals("file-guid-1", files.get(0).fileGuid());
+        assertEquals("Mesa 1", files.get(0).plateName());
+        assertEquals("PLA", files.get(0).material());
+        assertEquals("file-guid-2", files.get(1).fileGuid());
+        assertEquals("Mesa 2", files.get(1).plateName());
+        assertEquals(1.5, files.get(1).scaleX());
+    }
+
+    @Test
+    void listOrderFilesFallsBackToLegacyOrderFileAssetId() {
+        ServiceContext.getContext().setUser(buyer);
+        order.setFileAssetId(77L);
+
+        FileAsset legacyAsset = new FileAsset();
+        legacyAsset.setId(77L);
+        legacyAsset.setGuid("legacy-guid");
+        legacyAsset.setName("peca_legada.stl");
+
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderFileAssetRepository.findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+        when(fileAssetRepository.findById(77L)).thenReturn(Optional.of(legacyAsset));
+
+        List<OrderFileResponse> files = service.listOrderFiles("order-guid-10");
+
+        assertEquals(1, files.size());
+        assertEquals("legacy-guid", files.getFirst().fileGuid());
+        assertEquals("peca_legada.stl", files.getFirst().fileName());
+        assertEquals(1, files.getFirst().plateNumber());
+        assertEquals(1.0, files.getFirst().scaleX());
+    }
+
+    @Test
+    void downloadOrderFileReturnsBytesWhenAssetBelongsToOrder() {
+        ServiceContext.getContext().setUser(makerUser);
+
+        FileAsset asset = new FileAsset();
+        asset.setId(101L);
+        asset.setGuid("file-guid-1");
+        asset.setName("peca.stl");
+
+        OrderFileAsset plate = new OrderFileAsset();
+        plate.setOrderId(10L);
+        plate.setFileAssetId(101L);
+
+        byte[] payload = "solid demo\nendsolid demo\n".getBytes();
+
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(fileAssetRepository.findByGuid("file-guid-1")).thenReturn(Optional.of(asset));
+        when(orderFileAssetRepository.findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(plate));
+        when(objectStorageService.downloadBytes(asset)).thenReturn(payload);
+
+        OrderManagementService.OrderFileContent content = service.downloadOrderFile("order-guid-10", "file-guid-1");
+
+        assertEquals("peca.stl", content.fileName());
+        assertEquals("model/stl", content.contentType());
+        assertArrayEquals(payload, content.bytes());
+    }
+
+    @Test
+    void downloadOrderFileRejectsUnrelatedFileGuidWithNotFound() {
+        ServiceContext.getContext().setUser(buyer);
+        order.setFileAssetId(10L);
+
+        FileAsset unrelated = new FileAsset();
+        unrelated.setId(999L);
+        unrelated.setGuid("other-file-guid");
+        unrelated.setName("secreto.stl");
+
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(fileAssetRepository.findByGuid("other-file-guid")).thenReturn(Optional.of(unrelated));
+        when(orderFileAssetRepository.findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+
+        assertThrows(NotFoundException.class, () -> service.downloadOrderFile("order-guid-10", "other-file-guid"));
+        verifyNoInteractions(objectStorageService);
+    }
+
+    @Test
+    void listOrderFilesRejectsOutsiderWithForbidden() {
+        ServiceContext.getContext().setUser(outsider);
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+
+        assertThrows(ForbiddenException.class, () -> service.listOrderFiles("order-guid-10"));
     }
 }

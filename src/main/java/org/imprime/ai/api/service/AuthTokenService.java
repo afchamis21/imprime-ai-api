@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.config.AuthConfig;
 import org.imprime.ai.api.model.AuthToken;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.InternalErrorException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
 import org.imprime.ai.api.repo.db.AuthTokenRepository;
@@ -45,9 +46,13 @@ public class AuthTokenService {
         try {
             var expiresAt = Instant.now().plus(tokenConfig.getDuration());
             var algorithm = Algorithm.HMAC256(tokenConfig.getKey());
+            UserRole resolvedRole = user.getRole() != null
+                    ? user.getRole()
+                    : (user.getCompanyId() != null ? UserRole.MAKER : UserRole.BUYER);
             String token = JWT.create()
                     .withIssuer(appName)
                     .withSubject(user.getGuid())
+                    .withClaim("role", resolvedRole.name())
                     .withExpiresAt(expiresAt)
                     .sign(algorithm);
 

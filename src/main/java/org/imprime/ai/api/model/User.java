@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.Setter;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.DocumentType;
+import org.imprime.ai.api.model.enums.UserRole;
+
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -47,8 +50,26 @@ public class User extends Auditable {
     @Column(name = "COMPANY_ID")
     private Long companyId;
 
+    @Column(name = "AVATAR_URL", length = 1000)
+    private String avatarUrl;
+
+    @Convert(converter = UserRole.Converter.class)
+    @Column(name = "ROLE", nullable = false, length = 20)
+    private UserRole role = UserRole.BUYER;
+
+    @Column(name = "SUSPENSION_REASON", length = 500)
+    private String suspensionReason;
+
+    @Column(name = "SUSPENDED_AT")
+    private Instant suspendedAt;
+
     @Transient
     public String getFullName() {
         return firstName + " " + lastName;
+    }
+
+    @Transient
+    public boolean isAdmin() {
+        return UserRole.ADMIN.equals(role);
     }
 }

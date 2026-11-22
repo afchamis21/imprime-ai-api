@@ -23,6 +23,7 @@ import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.ReviewRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.ReviewService;
+import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.PageableSortMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -109,9 +110,7 @@ public class ReviewServiceImpl implements ReviewService {
         Review saved = reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);
 
-        String avatarUrl = caller.getCompanyId() != null
-                ? companyRepository.findById(caller.getCompanyId()).map(Company::getAvatarUrl).orElse(null)
-                : null;
+        String avatarUrl = resolveAuthorAvatar(caller, null);
 
         return new ReviewResponse(
                 saved.getGuid(),
@@ -151,9 +150,7 @@ public class ReviewServiceImpl implements ReviewService {
         Review saved = reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);
 
-        String avatarUrl = caller.getCompanyId() != null
-                ? companyRepository.findById(caller.getCompanyId()).map(Company::getAvatarUrl).orElse(null)
-                : null;
+        String avatarUrl = resolveAuthorAvatar(caller, null);
 
         return new ReviewResponse(
                 saved.getGuid(),
@@ -246,9 +243,7 @@ public class ReviewServiceImpl implements ReviewService {
         User author = authorsById.get(review.getAuthorUserId());
         String authorGuid = author != null ? author.getGuid() : null;
         String authorName = author != null ? author.getFullName() : "Usuário";
-        String avatarUrl = (author != null && author.getCompanyId() != null)
-                ? companiesById.getOrDefault(author.getCompanyId(), new Company()).getAvatarUrl()
-                : null;
+        String avatarUrl = resolveAuthorAvatar(author, companiesById);
 
         return new ReviewResponse(
                 review.getGuid(),
@@ -259,5 +254,18 @@ public class ReviewServiceImpl implements ReviewService {
                 review.getComment(),
                 review.getCreateDt()
         );
+    }
+
+    private String resolveAuthorAvatar(User author, Map<Long, Company> companiesById) {
+        if (author == null) {
+            return null;
+        }
+        String companyAvatar = null;
+        if (author.getCompanyId() != null) {
+            companyAvatar = companiesById != null
+                    ? companiesById.getOrDefault(author.getCompanyId(), new Company()).getAvatarUrl()
+                    : companyRepository.findById(author.getCompanyId()).map(Company::getAvatarUrl).orElse(null);
+        }
+        return CatalogDtoMapper.firstNonBlank(companyAvatar, author.getAvatarUrl());
     }
 }

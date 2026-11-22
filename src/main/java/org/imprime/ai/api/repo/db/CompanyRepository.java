@@ -32,7 +32,11 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
 
     Optional<Company> findBySlugAndStatus(String slug, StatusCd status);
 
+    Optional<Company> findFirstByNameIgnoreCaseAndStatus(String name, StatusCd status);
+
     List<Company> findAllByStatus(StatusCd status);
+
+    List<Company> findAllByOrderByCreateDtDesc();
 
     List<Company> findAllByIdIn(Collection<Long> ids);
 

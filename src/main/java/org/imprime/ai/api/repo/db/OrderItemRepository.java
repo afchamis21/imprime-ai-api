@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     List<OrderItem> findAllByOrderIdAndStatusOrderByIdAsc(Long orderId, StatusCd status);
+
+    List<OrderItem> findAllByOrderIdInAndStatus(java.util.Collection<Long> orderIds, StatusCd status);
 }

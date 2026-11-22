@@ -105,4 +105,28 @@ class CorsAndWebSocketConfigTest {
                 "https://api.imprimeai.shop"
         );
     }
+
+    @Test
+    void corsConfigAllowsAdminOriginsAndRejectsUnknownOrigins() {
+        CorsConfigProperties props = new CorsConfigProperties();
+        props.setAllowedOrigins(List.of(
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "http://localhost:4174",
+                "https://admin.imprimeai.shop"
+        ));
+
+        CorsConfig corsConfig = new CorsConfig(props);
+        InspectableCorsRegistry registry = new InspectableCorsRegistry();
+        corsConfig.addCorsMappings(registry);
+
+        CorsConfiguration configuration = registry.configurations().get("/**");
+        assertNotNull(configuration);
+
+        assertEquals("http://localhost:5174", configuration.checkOrigin("http://localhost:5174"));
+        assertEquals("http://127.0.0.1:5174", configuration.checkOrigin("http://127.0.0.1:5174"));
+        assertEquals("http://localhost:4174", configuration.checkOrigin("http://localhost:4174"));
+        assertEquals("https://admin.imprimeai.shop", configuration.checkOrigin("https://admin.imprimeai.shop"));
+        assertNull(configuration.checkOrigin("https://evil-admin.example.com"));
+    }
 }

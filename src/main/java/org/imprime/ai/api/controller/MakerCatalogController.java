@@ -18,11 +18,13 @@ import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.FavoriteStatusResponse;
 import org.imprime.ai.api.http.response.maker.MakerCatalogItemResponse;
+import org.imprime.ai.api.http.response.maker.MakerModelResponse;
 import org.imprime.ai.api.http.response.maker.MakerProfileResponse;
 import org.imprime.ai.api.http.response.maker.PortfolioItemResponse;
 import org.imprime.ai.api.http.response.product.ProductCatalogItemResponse;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.service.MakerCatalogService;
+import org.imprime.ai.api.service.MakerModelService;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -40,6 +42,7 @@ import java.util.List;
 @Tag(name = "Makers (Catálogo Público)", description = "Consulta pública de Makers, perfil de estúdio, portfólio, loja e favoritos")
 public class MakerCatalogController {
     private final MakerCatalogService makerCatalogService;
+    private final MakerModelService makerModelService;
 
     @OptionalAuth
     @Operation(
@@ -131,6 +134,24 @@ public class MakerCatalogController {
             @PathVariable String slugOrGuid,
             @ParameterObject @PageableDefault(size = 12) Pageable pageable) {
         return BaseResponse.ok(makerCatalogService.listMakerProducts(slugOrGuid, pageable));
+    }
+
+    @OptionalAuth
+    @Operation(
+            summary = "Listar modelos 3D públicos de um Maker",
+            description = "Retorna página dos modelos 3D aprovados enviados pelo Maker informado. Autenticação JWT opcional (preenche `favorited`)."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Modelos 3D do Maker retornados com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT inválido ou expirado quando enviado no header", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Maker não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @GetMapping("/{slugOrGuid}/models")
+    public ResponseEntity<BaseResponse<PageResponse<MakerModelResponse>>> listMakerModels(
+            @Parameter(description = "Slug amigável ou GUID do Maker", required = true)
+            @PathVariable String slugOrGuid,
+            @ParameterObject @PageableDefault(size = 12) Pageable pageable) {
+        return BaseResponse.ok(makerModelService.listPublicMakerModels(slugOrGuid, pageable));
     }
 
     @JwtAuthenticated

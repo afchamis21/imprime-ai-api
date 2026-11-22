@@ -16,6 +16,7 @@ import org.imprime.ai.api.model.MakerPortfolioItem;
 import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.FavoriteTargetType;
+import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.MakerCapability;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.MessageCd;
@@ -81,7 +82,9 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
 
     @Override
     public PageResponse<MakerCatalogItemResponse> listMakers(MakerCatalogFilter filter, Pageable pageable) {
-        List<Company> companies = companyRepository.findAllByStatus(StatusCd.ACTIVE);
+        List<Company> companies = companyRepository.findAllByStatus(StatusCd.ACTIVE).stream()
+                .filter(this::isPubliclyApproved)
+                .toList();
         if (companies.isEmpty()) {
             return PageUtils.paginate(List.of(), pageable);
         }
@@ -201,11 +204,20 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                     return java.util.Optional.empty();
                 })
                 .orElseGet(() -> companyRepository.findAllByStatus(StatusCd.ACTIVE).stream()
+                        .filter(this::isPubliclyApproved)
                         .filter(company -> matchesCleanOrLegacySlug(company, slugOrGuid))
                         .findFirst()
                         .orElseThrow(() -> new NotFoundException(MessageCd.MAKER_NOT_FOUND)));
+        if (!isPubliclyApproved(found)) {
+            throw new NotFoundException(MessageCd.MAKER_NOT_FOUND);
+        }
         normalizeLegacySlugIfApplicable(found);
         return found;
+    }
+
+    private boolean isPubliclyApproved(Company company) {
+        return company.getApprovalStatus() == null
+                || MakerApprovalStatus.APPROVED.equals(company.getApprovalStatus());
     }
 
     private boolean matchesCleanOrLegacySlug(Company company, String candidate) {

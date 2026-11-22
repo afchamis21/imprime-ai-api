@@ -10,20 +10,25 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.RequireMaker;
+import org.imprime.ai.api.http.request.maker.CreateMakerModelRequest;
 import org.imprime.ai.api.http.request.maker.CreateMakerProductRequest;
 import org.imprime.ai.api.http.request.maker.CreatePortfolioItemRequest;
 import org.imprime.ai.api.http.request.maker.UpdateMakerProductRequest;
 import org.imprime.ai.api.http.request.maker.UpdatePortfolioItemRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
+import org.imprime.ai.api.http.response.maker.MakerModelResponse;
 import org.imprime.ai.api.http.response.maker.MakerProductResponse;
 import org.imprime.ai.api.http.response.maker.PortfolioItemResponse;
+import org.imprime.ai.api.service.MakerModelService;
 import org.imprime.ai.api.service.MakerStorefrontService;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,6 +37,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Maker — Vitrine e Portfólio", description = "Gerenciamento autenticado do portfólio e produtos da loja do Maker (empresa extraída do JWT)")
 public class MakerStorefrontController {
     private final MakerStorefrontService makerStorefrontService;
+    private final MakerModelService makerModelService;
 
     @Operation(
             summary = "Listar itens do próprio portfólio",
@@ -166,6 +172,58 @@ public class MakerStorefrontController {
             @Parameter(description = "GUID do produto", required = true)
             @PathVariable String productGuid) {
         makerStorefrontService.deleteProduct(productGuid);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
+            summary = "Listar modelos 3D enviados pelo estúdio",
+            description = "Retorna página com todos os modelos 3D enviados pelo estúdio autenticado (em análise, aprovados, recusados ou removidos)."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Modelos 3D retornados com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não possui perfil de Maker", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @GetMapping("/models")
+    public ResponseEntity<BaseResponse<PageResponse<MakerModelResponse>>> listOwnModels(
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+        return BaseResponse.ok(makerModelService.listOwnModels(pageable));
+    }
+
+    @Operation(
+            summary = "Solicitar envio de modelo 3D",
+            description = "Recebe o arquivo 3D (.stl, .3mf, .obj, .glb, .scad) e os metadados via multipart/form-data, publica na fila PENDING_REVIEW para moderação e retorna o modelo criado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Solicitação de envio registrada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Arquivo ou metadados inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não possui perfil de Maker", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PostMapping(value = "/models", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<BaseResponse<MakerModelResponse>> submitModel(
+            @Parameter(description = "Arquivo 3D (.stl, .3mf, .obj, .glb, .scad)", required = true)
+            @RequestPart("file") MultipartFile file,
+            @Parameter(description = "Metadados técnicos e comerciais do modelo 3D", required = true)
+            @RequestPart("metadata") @Valid CreateMakerModelRequest metadata) {
+        return BaseResponse.created(makerModelService.submitModel(file, metadata));
+    }
+
+    @Operation(
+            summary = "Excluir modelo 3D enviado pelo estúdio",
+            description = "Remove logicamente um modelo 3D pertencente ao estúdio autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Modelo removido com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Modelo pertence a outro usuário/estúdio", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Modelo 3D não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @DeleteMapping("/models/{modelGuid}")
+    public ResponseEntity<Void> deleteOwnModel(
+            @Parameter(description = "GUID do modelo 3D", required = true)
+            @PathVariable String modelGuid) {
+        makerModelService.deleteOwnModel(modelGuid);
         return ResponseEntity.noContent().build();
     }
 }

@@ -1,6 +1,7 @@
 package org.imprime.ai.api.service;
 
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.user.UpdateUserAvatarRequest;
 import org.imprime.ai.api.http.request.user.UpdateUserProfileRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.OrderSummaryResponse;
@@ -15,6 +16,8 @@ import org.springframework.data.domain.Pageable;
 
 public interface UserHubService {
     FullUserDTO updateProfile(UpdateUserProfileRequest request);
+
+    FullUserDTO updateAvatar(UpdateUserAvatarRequest request);
 
     PageResponse<OrderSummaryResponse> listUserOrders(OrderStatusCd status, String query, Pageable pageable);
 

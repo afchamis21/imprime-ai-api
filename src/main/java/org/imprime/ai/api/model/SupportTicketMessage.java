@@ -3,6 +3,8 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
 
 @Getter
@@ -26,4 +28,8 @@ public class SupportTicketMessage extends Auditable {
 
     @Column(name = "MESSAGE", nullable = false, columnDefinition = "text")
     private String message;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ATTACHMENTS", columnDefinition = "jsonb")
+    private String attachmentsJson = "[]";
 }

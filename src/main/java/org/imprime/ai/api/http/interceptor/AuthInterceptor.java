@@ -8,10 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.OptionalAuth;
+import org.imprime.ai.api.http.auth.RequireAdmin;
 import org.imprime.ai.api.http.auth.RequireMaker;
 import org.imprime.ai.api.http.auth.SkipAuth;
 import org.imprime.ai.api.model.AuthToken;
 import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
@@ -50,6 +52,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private AuthType resolveFromAnnotatedElement(java.lang.reflect.AnnotatedElement element) {
+        if (hasAnnotation(element, RequireAdmin.class)) {
+            return AuthType.REQUIRE_ADMIN;
+        }
         if (hasAnnotation(element, RequireMaker.class)) {
             return AuthType.REQUIRE_MAKER;
         }
@@ -70,7 +75,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private enum AuthType {
-        REQUIRE_MAKER, JWT, OPTIONAL, NO_AUTH
+        REQUIRE_ADMIN, REQUIRE_MAKER, JWT, OPTIONAL, NO_AUTH
     }
 
     @Override
@@ -84,12 +89,33 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         AuthType authType = getAuthType(handlerMethod);
+        if (authType != AuthType.NO_AUTH && isAdminEndpoint(request)) {
+            authType = AuthType.REQUIRE_ADMIN;
+        }
+
         return switch (authType) {
+            case REQUIRE_ADMIN -> handleAdminAuthentication(request);
             case REQUIRE_MAKER -> handleMakerAuthentication(request);
             case JWT -> handleJwtAuthentication(request);
             case OPTIONAL -> handleOptionalAuthentication(request);
             case NO_AUTH -> true;
         };
+    }
+
+    private boolean isAdminEndpoint(@NonNull HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri != null && ("/api/admin".equals(uri) || uri.startsWith("/api/admin/"));
+    }
+
+    private boolean handleAdminAuthentication(@NonNull HttpServletRequest request) {
+        handleJwtAuthentication(request);
+        User user = ServiceContext.getUserOrThrow();
+        if (!user.isAdmin()) {
+            log.warn("User [{}] with role [{}] attempted to access Admin-only endpoint [{}]",
+                    user.getGuid(), user.getRole(), request.getRequestURI());
+            throw new ForbiddenException(MessageCd.ADMIN_ROLE_REQUIRED);
+        }
+        return true;
     }
 
     private boolean handleMakerAuthentication(@NonNull HttpServletRequest request) {

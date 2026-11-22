@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.user.UpdateUserAvatarRequest;
 import org.imprime.ai.api.http.request.user.UpdateUserProfileRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
@@ -43,7 +44,7 @@ public class UserHubController {
 
     @Operation(
             summary = "Atualizar dados cadastrais do perfil",
-            description = "Atualiza nome, e-mail e telefone do usuário autenticado. Alterações de endereço utilizam `/users/me/addresses`."
+            description = "Atualiza nome, e-mail, telefone e opcionalmente a foto de perfil (`avatarUrl`) do usuário autenticado. Alterações de endereço utilizam `/users/me/addresses`."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Perfil atualizado com sucesso"),
@@ -54,6 +55,21 @@ public class UserHubController {
     public ResponseEntity<BaseResponse<FullUserDTO>> updateProfile(
             @Valid @RequestBody UpdateUserProfileRequest request) {
         return BaseResponse.ok(userHubService.updateProfile(request));
+    }
+
+    @Operation(
+            summary = "Atualizar foto de perfil do usuário",
+            description = "Salva ou remove a URL da foto de perfil (`avatarUrl`) do usuário autenticado no banco de dados."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Foto de perfil atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PatchMapping("/avatar")
+    public ResponseEntity<BaseResponse<FullUserDTO>> updateAvatar(
+            @Valid @RequestBody(required = false) UpdateUserAvatarRequest request) {
+        return BaseResponse.ok(userHubService.updateAvatar(request));
     }
 
     @Operation(

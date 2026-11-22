@@ -27,6 +27,10 @@ public class ServiceContext {
 
     private @Nullable LanguageCd languageCd;
 
+    private @Nullable String ipAddress;
+
+    private @Nullable String userAgent;
+
     private List<Exception> exceptions = new ArrayList<>();
 
     private List<ResponseMessage> messages = new ArrayList<>();
@@ -52,6 +56,8 @@ public class ServiceContext {
         ServiceContext copy = new ServiceContext();
         copy.setUser(ctx.user);
         copy.setLanguageCd(ctx.languageCd);
+        copy.setIpAddress(ctx.ipAddress);
+        copy.setUserAgent(ctx.userAgent);
         copy.setExceptions(ctx.exceptions);
 
         contextHolder.set(copy);

@@ -42,6 +42,20 @@ public class UserInMemoryCache extends DynamicInMemoryCache<UserInMemoryCache.Ke
         super.put(Key.ofGuid(user.getGuid()), user);
     }
 
+    public void evict(Long userId, String guid) {
+        if (userId != null) {
+            super.remove(Key.ofUserId(userId));
+        }
+        if (guid != null && !guid.isBlank()) {
+            super.remove(Key.ofGuid(guid));
+        }
+    }
+
+    public void evict(User user) {
+        if (user == null) return;
+        evict(user.getId(), user.getGuid());
+    }
+
     @Builder
     public record Key(Long userId, String guid) {
         public static Key full(Long userId, String guid) {

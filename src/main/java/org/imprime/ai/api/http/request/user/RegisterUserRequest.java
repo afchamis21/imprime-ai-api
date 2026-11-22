@@ -66,7 +66,9 @@ public record RegisterUserRequest(
         @Schema(description = "Indica se o usuário está se cadastrando como Maker (caso `true`, o campo `company` é obrigatório)", example = "false")
         Boolean isMaker,
         @Schema(description = "Dados da empresa do Maker (obrigatório quando `isMaker` for `true`)")
-        @Nullable RegisterCompanyRequest company
+        @Nullable RegisterCompanyRequest company,
+        @Schema(description = "URL opcional da foto de perfil do usuário")
+        @Nullable String avatarUrl
 ) implements ValidatedRequest {
     @Nullable
     public MessageCd getInvalidReason() {

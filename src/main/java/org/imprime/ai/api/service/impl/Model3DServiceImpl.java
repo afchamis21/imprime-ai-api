@@ -2,6 +2,7 @@ package org.imprime.ai.api.service.impl;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.model3d.Model3DCatalogFilter;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.FavoriteStatusResponse;
@@ -11,11 +12,14 @@ import org.imprime.ai.api.http.response.model3d.ModelAuthorResponse;
 import org.imprime.ai.api.http.response.model3d.ModelCustomizationResponse;
 import org.imprime.ai.api.http.response.model3d.ScadParameterDefinition;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Model3D;
 import org.imprime.ai.api.model.ModelCustomization;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.FavoriteTargetType;
+import org.imprime.ai.api.model.enums.FileFormat3D;
 import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.enums.ModelModerationStatus;
 import org.imprime.ai.api.model.enums.ModelPricingFilter;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.NotFoundException;
@@ -26,6 +30,7 @@ import org.imprime.ai.api.repo.db.ModelCustomizationRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.Model3DService;
 import org.imprime.ai.api.service.ObjectStorageService;
+import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
@@ -56,7 +61,9 @@ public class Model3DServiceImpl implements Model3DService {
 
     @Override
     public PageResponse<Model3DCatalogItemResponse> listModels(Model3DCatalogFilter filter, Pageable pageable) {
-        List<Model3D> activeModels = model3DRepository.findAllByStatus(StatusCd.ACTIVE);
+        List<Model3D> activeModels = model3DRepository.findAllByStatus(StatusCd.ACTIVE).stream()
+                .filter(this::isPubliclyApproved)
+                .toList();
         if (activeModels.isEmpty()) {
             return PageUtils.paginate(List.of(), pageable);
         }
@@ -105,7 +112,7 @@ public class Model3DServiceImpl implements Model3DService {
 
         String modelFileUrl = model.getFileAssetId() != null
                 ? fileAssetRepository.findById(model.getFileAssetId())
-                .map(objectStorageService::buildPublicObjectUrl)
+                .map(asset -> "/models/" + model.getGuid() + "/file")
                 .orElse(null)
                 : null;
 
@@ -141,6 +148,62 @@ public class Model3DServiceImpl implements Model3DService {
     }
 
     @Override
+    public OrderManagementService.OrderFileContent downloadModelFile(String slugOrGuid) {
+        Model3D model = resolveActiveModel(slugOrGuid);
+        if (model.getFileAssetId() == null) {
+            throw new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND);
+        }
+
+        FileAsset asset = fileAssetRepository.findById(model.getFileAssetId())
+                .orElseThrow(() -> new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND));
+
+        byte[] bytes = objectStorageService.downloadBytes(asset);
+        String baseName = model.getSlug() != null && !model.getSlug().isBlank()
+                ? model.getSlug()
+                : model.getGuid();
+        String fileName = asset.getName() != null && !asset.getName().isBlank()
+                ? asset.getName()
+                : baseName + "." + resolveExtension(model.getFormat());
+        String contentType = resolveContentType(fileName, model.getFormat());
+
+        return new OrderManagementService.OrderFileContent(fileName, contentType, bytes);
+    }
+
+    private String resolveExtension(FileFormat3D format) {
+        if (format == null) {
+            return "stl";
+        }
+        return switch (format) {
+            case STL -> "stl";
+            case THREE_MF -> "3mf";
+            case OBJ -> "obj";
+            case GLB -> "glb";
+            case SCAD -> "scad";
+            case GCODE -> "gcode";
+        };
+    }
+
+    private String resolveContentType(String fileName, FileFormat3D format) {
+        String lower = fileName != null ? fileName.toLowerCase(Locale.ROOT) : "";
+        if (lower.endsWith(".stl")) return "model/stl";
+        if (lower.endsWith(".3mf")) return "model/3mf";
+        if (lower.endsWith(".obj")) return "model/obj";
+        if (lower.endsWith(".glb")) return "model/gltf-binary";
+        if (lower.endsWith(".scad") || lower.endsWith(".gcode")) return "text/plain; charset=utf-8";
+
+        if (format != null) {
+            return switch (format) {
+                case STL -> "model/stl";
+                case THREE_MF -> "model/3mf";
+                case OBJ -> "model/obj";
+                case GLB -> "model/gltf-binary";
+                case SCAD, GCODE -> "text/plain; charset=utf-8";
+            };
+        }
+        return "application/octet-stream";
+    }
+
+    @Override
     public FavoriteStatusResponse addFavorite(String modelGuid) {
         Model3D model = model3DRepository.findByGuidAndStatus(modelGuid, StatusCd.ACTIVE)
                 .orElseThrow(() -> new NotFoundException(MessageCd.MODEL_NOT_FOUND));
@@ -172,9 +235,27 @@ public class Model3DServiceImpl implements Model3DService {
     }
 
     private Model3D resolveActiveModel(String slugOrGuid) {
-        return model3DRepository.findByGuidAndStatus(slugOrGuid, StatusCd.ACTIVE)
+        Model3D model = model3DRepository.findByGuidAndStatus(slugOrGuid, StatusCd.ACTIVE)
                 .or(() -> model3DRepository.findBySlugAndStatus(slugOrGuid, StatusCd.ACTIVE))
                 .orElseThrow(() -> new NotFoundException(MessageCd.MODEL_NOT_FOUND));
+        if (!isPubliclyApproved(model) && !isAuthorCaller(model)) {
+            throw new NotFoundException(MessageCd.MODEL_NOT_FOUND);
+        }
+        return model;
+    }
+
+    private boolean isAuthorCaller(Model3D model) {
+        if (model.getAuthorUserId() == null) {
+            return false;
+        }
+        return ServiceContext.getUser()
+                .map(user -> Objects.equals(user.getId(), model.getAuthorUserId()))
+                .orElse(false);
+    }
+
+    private boolean isPubliclyApproved(Model3D model) {
+        return model.getModerationStatus() == null
+                || ModelModerationStatus.APPROVED.equals(model.getModerationStatus());
     }
 
     private ModelAuthorResponse resolveAuthor(Long authorUserId) {

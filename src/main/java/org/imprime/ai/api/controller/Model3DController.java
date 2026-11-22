@@ -25,14 +25,21 @@ import org.imprime.ai.api.http.response.model3d.ModelCustomizationResponse;
 import org.imprime.ai.api.model.enums.ModelPricingFilter;
 import org.imprime.ai.api.model.enums.ReviewTargetType;
 import org.imprime.ai.api.service.Model3DService;
+import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.service.ReviewService;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequiredArgsConstructor
@@ -84,6 +91,34 @@ public class Model3DController {
             @Parameter(description = "Slug amigável ou GUID do modelo 3D", required = true)
             @PathVariable String slugOrGuid) {
         return BaseResponse.ok(model3DService.getModelDetail(slugOrGuid));
+    }
+
+    @OptionalAuth
+    @Operation(
+            summary = "Obter binário do arquivo 3D do modelo",
+            description = "Faz streaming do conteúdo binário do arquivo 3D de um modelo aprovado (ou do próprio autor quando em análise) para renderização no visualizador 3D."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Arquivo 3D retornado com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Modelo ou arquivo 3D não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @GetMapping("/{slugOrGuid}/file")
+    public ResponseEntity<byte[]> getModelFile(
+            @Parameter(description = "Slug amigável ou GUID do modelo 3D", required = true)
+            @PathVariable String slugOrGuid,
+            @RequestParam(defaultValue = "false") boolean download) {
+        OrderManagementService.OrderFileContent content = model3DService.downloadModelFile(slugOrGuid);
+
+        ContentDisposition disposition = ContentDisposition
+                .builder(download ? "attachment" : "inline")
+                .filename(content.fileName(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(content.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
+                .body(content.bytes());
     }
 
     @JwtAuthenticated
