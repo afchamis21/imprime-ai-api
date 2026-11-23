@@ -95,7 +95,7 @@ class MakerPrinterServiceImplTest {
                 .thenReturn(List.of());
 
         PrinterResponse response = service.createPrinter(new CreatePrinterRequest(
-                "P1S #2", "Bambu Lab P1S", null, null, null, "192.168.1.90"
+                "P1S #2", "Bambu Lab P1S", null, null, null, "192.168.1.90", null, null, null
         ));
 
         assertEquals("prt-101", response.guid());
@@ -104,6 +104,9 @@ class MakerPrinterServiceImplTest {
         assertEquals(new BigDecimal("0.400"), response.nozzleDiameterMm());
         assertEquals(300, response.powerWatts());
         assertFalse(response.config().apiKeyConfigured());
+        assertNull(response.purchasePrice());
+        assertNull(response.lifespanHours());
+        assertNull(response.hourlyDepreciationRate());
     }
 
     @Test
@@ -134,7 +137,8 @@ class MakerPrinterServiceImplTest {
         assertThrows(ForbiddenException.class, () -> service.updatePrinter(
                 "prt-100",
                 new UpdatePrinterRequest(null, null, null, null, null, null, null,
-                        List.of(new AmsSlotRequest(1, "fil-55", "Slot A1")), null)
+                        List.of(new AmsSlotRequest(1, "fil-55", "Slot A1")), null,
+                        null, null, null, null, null, null)
         ));
 
         Filament ownedFilament = new Filament();
@@ -153,7 +157,8 @@ class MakerPrinterServiceImplTest {
         service.updatePrinter(
                 "prt-100",
                 new UpdatePrinterRequest(null, null, null, null, null, null, null,
-                        List.of(new AmsSlotRequest(1, "fil-56", "Slot A1")), null)
+                        List.of(new AmsSlotRequest(1, "fil-56", "Slot A1")), null,
+                        null, null, null, null, null, null)
         );
         verify(amsSlotRepository).save(any(PrinterAmsSlot.class));
     }
@@ -185,5 +190,48 @@ class MakerPrinterServiceImplTest {
         PrinterResponse stopped = service.sendCommand("prt-100", new PrinterCommandRequest(PrinterCommandAction.STOP));
         assertEquals(PrinterStatus.ONLINE, stopped.status());
         assertEquals(PrintJobStatus.CANCELLED, runningJob.getJobStatus());
+    }
+
+    @Test
+    void createAndUpdatePrinterPersistAndClearOptionalFinancialFields() {
+        when(assetRepository.save(any(Asset.class))).thenAnswer(inv -> {
+            Asset saved = inv.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(102L);
+                saved.setGuid("prt-102");
+            }
+            return saved;
+        });
+        when(amsSlotRepository.findAllByAssetIdAndStatusOrderBySlotNumberAsc(anyLong(), eq(StatusCd.ACTIVE)))
+                .thenReturn(List.of());
+        when(printQueueItemRepository.findAllByAssetIdAndJobStatusInAndStatus(anyLong(), any(), eq(StatusCd.ACTIVE)))
+                .thenReturn(List.of());
+
+        PrinterResponse created = service.createPrinter(new CreatePrinterRequest(
+                "A1 Mini", "Bambu Lab A1 Mini", null, null, 220, null,
+                new BigDecimal("2199.90"), 3000, new BigDecimal("1.45")
+        ));
+
+        assertEquals(new BigDecimal("2199.90"), created.purchasePrice());
+        assertEquals(3000, created.lifespanHours());
+        assertEquals(new BigDecimal("1.45"), created.hourlyDepreciationRate());
+
+        printer.setPurchasePrice(new BigDecimal("2199.90"));
+        printer.setLifespanHours(3000);
+        printer.setHourlyDepreciationRate(new BigDecimal("1.45"));
+        when(assetRepository.findByGuidAndStatus("prt-100", StatusCd.ACTIVE)).thenReturn(Optional.of(printer));
+
+        PrinterResponse updated = service.updatePrinter(
+                "prt-100",
+                new UpdatePrinterRequest(
+                        null, null, null, null, null, null, null, null, null,
+                        new BigDecimal("2500.00"), null, null,
+                        false, true, true
+                )
+        );
+
+        assertEquals(new BigDecimal("2500.00"), updated.purchasePrice());
+        assertNull(updated.lifespanHours());
+        assertNull(updated.hourlyDepreciationRate());
     }
 }

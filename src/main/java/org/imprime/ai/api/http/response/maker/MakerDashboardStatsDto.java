@@ -12,7 +12,7 @@ public record MakerDashboardStatsDto(
         BigDecimal availableBalance,
         @Schema(description = "Total de vendas concluídas", example = "342")
         long totalSales,
-        @Schema(description = "Impressões ativas no momento", example = "4")
+        @Schema(description = "Impressões pendentes (pedidos com status Em Produção)", example = "4")
         int activePrints,
         @Schema(description = "Média de avaliações do estúdio", example = "4.90")
         BigDecimal averageRating

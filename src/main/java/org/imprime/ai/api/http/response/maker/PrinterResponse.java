@@ -31,6 +31,12 @@ public record PrinterResponse(
         @Schema(description = "Telemetria em tempo real")
         PrinterTelemetryDto telemetry,
         @Schema(description = "Configurações operacionais")
-        PrinterConfigDto config
+        PrinterConfigDto config,
+        @Schema(description = "Valor de aquisição da impressora em BRL (opcional)", example = "4200.00")
+        BigDecimal purchasePrice,
+        @Schema(description = "Vida útil estimada da impressora em horas (opcional)", example = "3000")
+        Integer lifespanHours,
+        @Schema(description = "Taxa horária específica de depreciação/manutenção em BRL/h (opcional)", example = "1.90")
+        BigDecimal hourlyDepreciationRate
 ) {
 }

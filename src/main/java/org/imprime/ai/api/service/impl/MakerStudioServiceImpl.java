@@ -45,6 +45,7 @@ import org.imprime.ai.api.repo.db.MakerProjectRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
 import org.imprime.ai.api.service.ChatRestService;
+import org.imprime.ai.api.service.MakerOrderSupport;
 import org.imprime.ai.api.service.MakerStudioService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.util.CatalogDtoMapper;
@@ -60,6 +61,7 @@ import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -70,9 +72,6 @@ public class MakerStudioServiceImpl implements MakerStudioService {
     private static final BigDecimal DEFAULT_LOW_STOCK_THRESHOLD = new BigDecimal("250.00");
     private static final Set<PrinterStatus> ONLINE_PRINTER_STATUSES = EnumSet.of(
             PrinterStatus.ONLINE, PrinterStatus.PRINTING, PrinterStatus.PAUSED
-    );
-    private static final Set<PrintJobStatus> ACTIVE_PRINT_JOB_STATUSES = EnumSet.of(
-            PrintJobStatus.PRINTING, PrintJobStatus.PAUSED
     );
     private static final Set<ProjectStatus> ACTIVE_PROJECT_STATUSES = EnumSet.of(
             ProjectStatus.PLANNING, ProjectStatus.IN_PROGRESS
@@ -89,12 +88,17 @@ public class MakerStudioServiceImpl implements MakerStudioService {
     private final PrintQueueItemRepository printQueueItemRepository;
     private final MakerProjectRepository projectRepository;
     private final FilamentRepository filamentRepository;
+    private final MakerOrderSupport makerOrderSupport;
+    private final MakerPrintQueueServiceImpl makerPrintQueueService;
 
     @Override
+    @Transactional
     public MakerDashboardResponse getDashboard() {
         Company company = requireMakerCompany();
         MakerBriefResponse makerInfo = orderViewAssembler.toMakerBrief(company);
         MakerFinanceServiceImpl.BalanceSnapshot balance = makerFinanceService.computeBalanceSnapshot(company);
+
+        makerPrintQueueService.syncOrdersInProduction(company);
 
         List<Asset> printers = safeList(assetRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE));
         List<PrintQueueItem> queueJobs = safeList(printQueueItemRepository
@@ -106,15 +110,20 @@ public class MakerStudioServiceImpl implements MakerStudioService {
         List<Order> vendorOrders = safeList(orderRepository
                 .findAllByVendorIdAndStatusOrderByCreateDtDesc(company.getId(), StatusCd.ACTIVE));
 
-        int activePrints = (int) queueJobs.stream()
-                .filter(job -> ACTIVE_PRINT_JOB_STATUSES.contains(job.getJobStatus()))
+        List<Long> vendorOrderIds = vendorOrders.stream()
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Long, OrderStatusCd> orderStatuses = safeMap(makerOrderSupport.latestStatuses(vendorOrderIds));
+        int pendingPrints = (int) vendorOrders.stream()
+                .filter(order -> OrderStatusCd.IN_PRODUCTION.equals(orderStatuses.get(order.getId())))
                 .count();
 
         MakerDashboardStatsDto stats = new MakerDashboardStatsDto(
                 balance != null ? balance.pendingBalance() : BigDecimal.ZERO,
                 balance != null ? balance.availableBalance() : BigDecimal.ZERO,
                 balance != null ? balance.totalSales() : 0L,
-                activePrints,
+                pendingPrints,
                 company.getRatingAvg() != null ? company.getRatingAvg() : BigDecimal.ZERO
         );
 
@@ -223,6 +232,10 @@ public class MakerStudioServiceImpl implements MakerStudioService {
 
     private <T> List<T> safeList(List<T> items) {
         return items != null ? items : List.of();
+    }
+
+    private <K, V> Map<K, V> safeMap(Map<K, V> items) {
+        return items != null ? items : Map.of();
     }
 
     @Override

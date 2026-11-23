@@ -50,6 +50,15 @@ public class Asset extends Auditable {
     @Column(name = "POWER_WATTS", nullable = false)
     private Integer powerWatts = 300;
 
+    @Column(name = "PURCHASE_PRICE", precision = 12, scale = 2)
+    private BigDecimal purchasePrice;
+
+    @Column(name = "LIFESPAN_HOURS")
+    private Integer lifespanHours;
+
+    @Column(name = "HOURLY_DEPRECIATION_RATE", precision = 10, scale = 2)
+    private BigDecimal hourlyDepreciationRate;
+
     @Column(name = "IP_ADDRESS", length = 60)
     private String ipAddress;
 

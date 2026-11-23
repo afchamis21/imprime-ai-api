@@ -80,7 +80,7 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
     private final MakerOrderSupport makerOrderSupport;
 
     private static final Set<OrderStatusCd> LEFT_PRODUCTION_STATUSES = EnumSet.of(
-            OrderStatusCd.IN_TRANSIT, OrderStatusCd.COMPLETED,
+            OrderStatusCd.READY_TO_SHIP, OrderStatusCd.IN_TRANSIT, OrderStatusCd.COMPLETED,
             OrderStatusCd.CANCELLED, OrderStatusCd.REFUNDED, OrderStatusCd.ERROR
     );
 
@@ -255,7 +255,7 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
      * Cancelado, Reembolsado ou com erro) e insere os novos jobs respeitando prioridade e prazo
      * em relação aos jobs já enfileirados, sem reordenar manualmente os jobs existentes.
      */
-    private void syncOrdersInProduction(Company company) {
+    public void syncOrdersInProduction(Company company) {
         List<Order> orders = orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(company.getId(), StatusCd.ACTIVE);
         if (orders == null || orders.isEmpty()) {
             return;

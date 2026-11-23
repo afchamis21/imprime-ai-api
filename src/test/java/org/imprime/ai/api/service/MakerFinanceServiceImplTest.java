@@ -324,6 +324,27 @@ class MakerFinanceServiceImplTest {
         assertEquals(new BigDecimal("-45.00"), filtered.content().getFirst().amount());
     }
 
+    @Test
+    void getSummaryIncludesReadyToShipOrdersInPendingBalance() {
+        Order readyToShipOrder = new Order();
+        readyToShipOrder.setId(201L);
+        readyToShipOrder.setOrderTotal(new BigDecimal("180.50"));
+
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        when(financeTransactionRepository.findAllByCompanyIdAndStatusOrderByTransactionDateDescCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(readyToShipOrder));
+        when(orderStatusService.findLatest(readyToShipOrder)).thenReturn(statusOf(OrderStatusCd.READY_TO_SHIP));
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+
+        MakerFinanceSummaryResponse summary = service.getSummary();
+
+        assertEquals(new BigDecimal("180.50"), summary.pendingBalance());
+        assertEquals(new BigDecimal("0.00"), summary.availableBalance());
+    }
+
     private MakerFinanceTransaction tx(
             String guid,
             Long orderId,

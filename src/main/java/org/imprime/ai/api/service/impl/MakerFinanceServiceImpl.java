@@ -80,6 +80,7 @@ public class MakerFinanceServiceImpl implements MakerFinanceService {
     private static final Set<OrderStatusCd> PENDING_ORDER_STATUSES = Set.of(
             OrderStatusCd.CONFIRMED,
             OrderStatusCd.IN_PRODUCTION,
+            OrderStatusCd.READY_TO_SHIP,
             OrderStatusCd.IN_TRANSIT
     );
 

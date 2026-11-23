@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 
 @Slf4j
@@ -82,25 +83,59 @@ public class MelhorEnvioClient {
     public byte[] download(String absoluteUrl) {
         validateConfiguration();
         URI uri = URI.create(absoluteUrl);
-        String host = uri.getHost();
-        if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null
-                || !(host.equals("melhorenvio.com.br") || host.endsWith(".melhorenvio.com.br"))) {
+        if (isAllowedS3PdfUri(uri)) {
+            try {
+                return downloadPresigned(uri);
+            } catch (RuntimeException exception) {
+                throw logAndRethrow(uri.getHost() + uri.getPath(), exception);
+            }
+        }
+        if (!isMelhorEnvioHost(uri)) {
             throw new IllegalArgumentException("URL de etiqueta fora dos domínios permitidos.");
         }
         String usedToken = accessToken;
         try {
             return downloadWithToken(uri, usedToken);
         } catch (RestClientResponseException exception) {
-            if (exception.getStatusCode().value() != 401) throw exception;
+            if (exception.getStatusCode().value() != 401) throw logAndRethrow(uri.getPath(), exception);
             refreshAccessToken(usedToken);
             return downloadWithToken(uri, accessToken);
+        } catch (RuntimeException exception) {
+            throw logAndRethrow(uri.getPath(), exception);
         }
     }
 
+    static boolean isMelhorEnvioHost(URI uri) {
+        if (uri == null || !"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+            return false;
+        }
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        return host.equals("melhorenvio.com.br") || host.endsWith(".melhorenvio.com.br");
+    }
+
+    static boolean isAllowedS3PdfUri(URI uri) {
+        if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())
+                || uri.getHost() == null || uri.getPath() == null) {
+            return false;
+        }
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        String path = uri.getPath().toLowerCase(Locale.ROOT);
+        if (!path.contains("/pdf/")) {
+            return false;
+        }
+        return host.equals("s3.amazonaws.com")
+                || host.endsWith(".s3.amazonaws.com")
+                || host.matches("^(?:[a-z0-9-]+\\.)?s3\\.[a-z0-9-]+\\.amazonaws\\.com$");
+    }
+
+    public boolean isConfigured() {
+        return accessToken != null && !accessToken.isBlank()
+                && properties.getUserAgent() != null && !properties.getUserAgent().isBlank()
+                && properties.getBaseUrl() != null && properties.getBaseUrl().startsWith("https://");
+    }
+
     public void validateConfiguration() {
-        if (accessToken == null || accessToken.isBlank()
-                || properties.getUserAgent() == null || properties.getUserAgent().isBlank()
-                || properties.getBaseUrl() == null || !properties.getBaseUrl().startsWith("https://")) {
+        if (!isConfigured()) {
             throw new IllegalStateException("Configure MELHOR_ENVIO_BASE_URL, MELHOR_ENVIO_ACCESS_TOKEN e MELHOR_ENVIO_USER_AGENT no backend.");
         }
     }
@@ -128,6 +163,14 @@ public class MelhorEnvioClient {
     private byte[] downloadWithToken(URI uri, String token) {
         return RestClient.create().get().uri(uri)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.USER_AGENT, properties.getUserAgent().trim())
+                .accept(MediaType.APPLICATION_PDF, MediaType.APPLICATION_OCTET_STREAM)
+                .retrieve()
+                .body(byte[].class);
+    }
+
+    private byte[] downloadPresigned(URI uri) {
+        return RestClient.create().get().uri(uri)
                 .header(HttpHeaders.USER_AGENT, properties.getUserAgent().trim())
                 .accept(MediaType.APPLICATION_PDF, MediaType.APPLICATION_OCTET_STREAM)
                 .retrieve()
@@ -174,7 +217,22 @@ public class MelhorEnvioClient {
     }
 
     private RuntimeException logAndRethrow(String path, RuntimeException exception) {
-        log.warn("Melhor Envio request failed for path {} ({})", path, exception.getClass().getSimpleName());
+        if (exception instanceof RestClientResponseException responseEx) {
+            log.warn("Melhor Envio request failed for path {} (HTTP {} - {}): {}",
+                    path,
+                    responseEx.getStatusCode().value(),
+                    exception.getClass().getSimpleName(),
+                    sanitizeBody(responseEx.getResponseBodyAsString()));
+        } else {
+            log.warn("Melhor Envio request failed for path {} ({}): {}",
+                    path, exception.getClass().getSimpleName(), exception.getMessage());
+        }
         return exception;
+    }
+
+    private String sanitizeBody(String rawBody) {
+        if (rawBody == null || rawBody.isBlank()) return "<empty>";
+        String compact = rawBody.replaceAll("\\s+", " ").trim();
+        return compact.length() > 600 ? compact.substring(0, 600) + "..." : compact;
     }
 }

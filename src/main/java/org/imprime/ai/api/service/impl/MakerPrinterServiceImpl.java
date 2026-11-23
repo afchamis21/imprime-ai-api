@@ -40,6 +40,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.Year;
@@ -141,6 +142,9 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         asset.setTrayHeight(BigDecimal.valueOf(request.buildVolume() != null ? request.buildVolume().zMm() : DEFAULT_VOLUME_MM));
         asset.setNozzleDiameterMm(request.nozzleDiameterMm() != null ? request.nozzleDiameterMm() : DEFAULT_NOZZLE_MM);
         asset.setPowerWatts(request.powerWatts() != null ? request.powerWatts() : DEFAULT_POWER_WATTS);
+        asset.setPurchasePrice(scale2OrNull(request.purchasePrice()));
+        asset.setLifespanHours(request.lifespanHours());
+        asset.setHourlyDepreciationRate(scale2OrNull(request.hourlyDepreciationRate()));
         asset.setIpAddress(request.ipAddress());
         asset.setPrinterStatus(PrinterStatus.ONLINE);
         asset.setConfigJson(jsonCodec.toJson(new StoredPrinterConfig(
@@ -181,6 +185,21 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         }
         if (request.powerWatts() != null) {
             asset.setPowerWatts(request.powerWatts());
+        }
+        if (Boolean.TRUE.equals(request.clearPurchasePrice())) {
+            asset.setPurchasePrice(null);
+        } else if (request.purchasePrice() != null) {
+            asset.setPurchasePrice(scale2OrNull(request.purchasePrice()));
+        }
+        if (Boolean.TRUE.equals(request.clearLifespanHours())) {
+            asset.setLifespanHours(null);
+        } else if (request.lifespanHours() != null) {
+            asset.setLifespanHours(request.lifespanHours());
+        }
+        if (Boolean.TRUE.equals(request.clearHourlyDepreciationRate())) {
+            asset.setHourlyDepreciationRate(null);
+        } else if (request.hourlyDepreciationRate() != null) {
+            asset.setHourlyDepreciationRate(scale2OrNull(request.hourlyDepreciationRate()));
         }
         if (request.ipAddress() != null) {
             asset.setIpAddress(request.ipAddress());
@@ -491,8 +510,15 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
                 asset.getSerialNumber(),
                 slotDtos,
                 telemetryDto,
-                configDto
+                configDto,
+                asset.getPurchasePrice(),
+                asset.getLifespanHours(),
+                asset.getHourlyDepreciationRate()
         );
+    }
+
+    private BigDecimal scale2OrNull(BigDecimal value) {
+        return value != null ? value.setScale(2, RoundingMode.HALF_UP) : null;
     }
 
     private Integer computeEtaMinutes(PrintQueueItem activeJob) {

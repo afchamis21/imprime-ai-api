@@ -384,6 +384,26 @@ class MakerPrintQueueServiceImplTest {
         assertEquals(OrderStatusCd.IN_PRODUCTION, page.content().getFirst().orderStatus());
     }
 
+    @Test
+    void listQueueCancelsQueuedJobsWhenOrderMovesToReadyToShip() {
+        Order readyOrder = order(905L, "PED-905");
+        PrintQueueItem queuedJob = job(10L, "job-ready", 905L, PrintJobStatus.QUEUED, 1);
+
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(readyOrder));
+        when(makerOrderSupport.latestStatuses(any())).thenReturn(Map.of(
+                905L, OrderStatusCd.READY_TO_SHIP
+        ));
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(queuedJob));
+        when(printQueueItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.listQueue(null, null, null, null, PageRequest.of(0, 20));
+
+        assertEquals(PrintJobStatus.CANCELLED, queuedJob.getJobStatus());
+        verify(printQueueItemRepository).saveAll(List.of(queuedJob));
+    }
+
     private static Order order(long id, String code) {
         Order order = new Order();
         order.setId(id);

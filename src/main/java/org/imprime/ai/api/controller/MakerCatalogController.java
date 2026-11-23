@@ -8,23 +8,29 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.OptionalAuth;
 import org.imprime.ai.api.http.auth.SkipAuth;
+import org.imprime.ai.api.http.request.common.CreateMakerReviewRequest;
+import org.imprime.ai.api.http.request.common.CreateReviewRequest;
 import org.imprime.ai.api.http.request.maker.MakerCatalogFilter;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.FavoriteStatusResponse;
+import org.imprime.ai.api.http.response.common.ReviewResponse;
 import org.imprime.ai.api.http.response.maker.MakerCatalogItemResponse;
 import org.imprime.ai.api.http.response.maker.MakerModelResponse;
 import org.imprime.ai.api.http.response.maker.MakerProfileResponse;
 import org.imprime.ai.api.http.response.maker.PortfolioItemResponse;
 import org.imprime.ai.api.http.response.product.ProductCatalogItemResponse;
 import org.imprime.ai.api.model.enums.MaterialType;
+import org.imprime.ai.api.model.enums.ReviewTargetType;
 import org.imprime.ai.api.service.MakerCatalogService;
 import org.imprime.ai.api.service.MakerModelService;
+import org.imprime.ai.api.service.ReviewService;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -43,6 +49,7 @@ import java.util.List;
 public class MakerCatalogController {
     private final MakerCatalogService makerCatalogService;
     private final MakerModelService makerModelService;
+    private final ReviewService reviewService;
 
     @OptionalAuth
     @Operation(
@@ -186,6 +193,88 @@ public class MakerCatalogController {
             @Parameter(description = "GUID do Maker", required = true)
             @PathVariable String makerGuid) {
         makerCatalogService.removeFavorite(makerGuid);
+        return ResponseEntity.noContent().build();
+    }
+
+    @SkipAuth
+    @SecurityRequirements
+    @Operation(
+            summary = "Listar avaliações de um Maker",
+            description = "Retorna página com as avaliações publicadas para o Maker informado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avaliações retornadas com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Maker não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @GetMapping("/{slugOrGuid}/reviews")
+    public ResponseEntity<BaseResponse<PageResponse<ReviewResponse>>> listMakerReviews(
+            @Parameter(description = "Slug amigável ou GUID do Maker", required = true)
+            @PathVariable String slugOrGuid,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        return BaseResponse.ok(reviewService.listReviews(ReviewTargetType.MAKER, slugOrGuid, pageable));
+    }
+
+    @JwtAuthenticated
+    @Operation(
+            summary = "Publicar avaliação em um Maker",
+            description = "Cria uma avaliação para o Maker vinculada a uma compra concluída e recebida pelo usuário autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Avaliação publicada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Nenhuma compra concluída elegível ou dados inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Pedido informado não pertence ao usuário", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Maker ou pedido não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Todas as compras concluídas com este Maker já foram avaliadas", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PostMapping("/{slugOrGuid}/reviews")
+    public ResponseEntity<BaseResponse<ReviewResponse>> createMakerReview(
+            @Parameter(description = "Slug amigável ou GUID do Maker", required = true)
+            @PathVariable String slugOrGuid,
+            @Valid @RequestBody CreateMakerReviewRequest request) {
+        return BaseResponse.created(reviewService.createMakerReview(slugOrGuid, request));
+    }
+
+    @JwtAuthenticated
+    @Operation(
+            summary = "Editar avaliação de um Maker",
+            description = "Atualiza uma avaliação publicada pelo próprio usuário autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avaliação atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados de avaliação inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Maker ou avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PutMapping("/{slugOrGuid}/reviews/{reviewGuid}")
+    public ResponseEntity<BaseResponse<ReviewResponse>> updateMakerReview(
+            @Parameter(description = "Slug amigável ou GUID do Maker", required = true)
+            @PathVariable String slugOrGuid,
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid,
+            @Valid @RequestBody CreateReviewRequest request) {
+        return BaseResponse.ok(reviewService.updateReview(ReviewTargetType.MAKER, slugOrGuid, reviewGuid, request));
+    }
+
+    @JwtAuthenticated
+    @Operation(
+            summary = "Excluir avaliação de um Maker",
+            description = "Remove uma avaliação publicada pelo próprio usuário autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Avaliação excluída com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o autor da avaliação", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Maker ou avaliação não encontrada", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @DeleteMapping("/{slugOrGuid}/reviews/{reviewGuid}")
+    public ResponseEntity<Void> deleteMakerReview(
+            @Parameter(description = "Slug amigável ou GUID do Maker", required = true)
+            @PathVariable String slugOrGuid,
+            @Parameter(description = "GUID da avaliação", required = true)
+            @PathVariable String reviewGuid) {
+        reviewService.deleteReview(ReviewTargetType.MAKER, slugOrGuid, reviewGuid);
         return ResponseEntity.noContent().build();
     }
 }

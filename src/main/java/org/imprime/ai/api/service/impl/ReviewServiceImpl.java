@@ -3,25 +3,31 @@ package org.imprime.ai.api.service.impl;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.ServiceContext;
+import org.imprime.ai.api.http.request.common.CreateMakerReviewRequest;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.ReviewResponse;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Model3D;
+import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.Review;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.ReviewTargetType;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
+import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.ReviewRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
+import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.ReviewService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.PageableSortMapper;
@@ -52,6 +58,8 @@ public class ReviewServiceImpl implements ReviewService {
     private final Model3DRepository model3DRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
+    private final OrderStatusService orderStatusService;
 
     @Override
     public PageResponse<ReviewResponse> listReviews(
@@ -92,6 +100,12 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public ReviewResponse createReview(ReviewTargetType targetType, String targetGuid, CreateReviewRequest request) {
+        if (targetType == ReviewTargetType.MAKER) {
+            return createMakerReview(
+                    targetGuid,
+                    new CreateMakerReviewRequest(request.rating(), request.comment(), null)
+            );
+        }
         User caller = ServiceContext.getUserOrThrow();
         Long targetId = resolveTargetId(targetType, targetGuid);
 
@@ -100,12 +114,101 @@ public class ReviewServiceImpl implements ReviewService {
             throw new ConflictException(MessageCd.REVIEW_ALREADY_EXISTS);
         }
 
+        return saveAndRespond(caller, targetType, targetId, null, request.rating(), request.comment());
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse createOrderMakerReview(String orderGuid, CreateReviewRequest request) {
+        User caller = ServiceContext.getUserOrThrow();
+        Order order = orderRepository.findOrderByGuid(orderGuid)
+                .filter(o -> StatusCd.ACTIVE.equals(o.getStatus()))
+                .orElseThrow(() -> new NotFoundException(MessageCd.ORDER_NOT_FOUND));
+
+        if (!Objects.equals(caller.getId(), order.getBuyerId())) {
+            throw new ForbiddenException();
+        }
+        if (order.getVendorId() == null) {
+            throw new NotFoundException(MessageCd.MAKER_NOT_FOUND);
+        }
+        companyRepository.findById(order.getVendorId())
+                .filter(c -> StatusCd.ACTIVE.equals(c.getStatus()))
+                .orElseThrow(() -> new NotFoundException(MessageCd.MAKER_NOT_FOUND));
+
+        if (!OrderStatusCd.COMPLETED.equals(orderStatusService.findLatest(order).getStatusCd())) {
+            throw new BadRequestException(MessageCd.REVIEW_ORDER_NOT_ELIGIBLE);
+        }
+        if (reviewRepository.existsByAuthorUserIdAndTargetTypeAndOrderIdAndStatus(
+                caller.getId(), ReviewTargetType.MAKER, order.getId(), StatusCd.ACTIVE)) {
+            throw new ConflictException(MessageCd.REVIEW_ALREADY_EXISTS);
+        }
+
+        return saveAndRespond(caller, ReviewTargetType.MAKER, order.getVendorId(), order.getId(),
+                request.rating(), request.comment());
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse createMakerReview(String makerGuidOrSlug, CreateMakerReviewRequest request) {
+        User caller = ServiceContext.getUserOrThrow();
+        Long companyId = resolveTargetId(ReviewTargetType.MAKER, makerGuidOrSlug);
+
+        if (request.orderGuid() != null && !request.orderGuid().isBlank()) {
+            String orderGuid = request.orderGuid().trim();
+            Order order = orderRepository.findOrderByGuid(orderGuid)
+                    .filter(o -> StatusCd.ACTIVE.equals(o.getStatus()))
+                    .orElseThrow(() -> new NotFoundException(MessageCd.ORDER_NOT_FOUND));
+            if (!Objects.equals(order.getVendorId(), companyId)) {
+                throw new BadRequestException(MessageCd.REVIEW_ORDER_NOT_ELIGIBLE);
+            }
+            return createOrderMakerReview(
+                    order.getGuid(),
+                    new CreateReviewRequest(request.rating(), request.comment())
+            );
+        }
+
+        List<Order> buyerOrders = orderRepository.findAllByBuyerIdAndVendorIdAndStatusOrderByCreateDtDesc(
+                caller.getId(), companyId, StatusCd.ACTIVE
+        );
+        List<Order> completedOrders = buyerOrders.stream()
+                .filter(o -> OrderStatusCd.COMPLETED.equals(orderStatusService.findLatest(o).getStatusCd()))
+                .toList();
+        if (completedOrders.isEmpty()) {
+            throw new BadRequestException(MessageCd.REVIEW_ORDER_NOT_ELIGIBLE);
+        }
+
+        Set<Long> reviewedOrderIds = reviewRepository
+                .findAllByAuthorUserIdAndTargetTypeAndTargetIdAndStatus(
+                        caller.getId(), ReviewTargetType.MAKER, companyId, StatusCd.ACTIVE
+                )
+                .stream()
+                .map(Review::getOrderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Order chosenOrder = completedOrders.stream()
+                .filter(o -> !reviewedOrderIds.contains(o.getId()))
+                .findFirst()
+                .orElseThrow(() -> new ConflictException(MessageCd.REVIEW_ALREADY_EXISTS));
+
+        return saveAndRespond(caller, ReviewTargetType.MAKER, companyId, chosenOrder.getId(),
+                request.rating(), request.comment());
+    }
+
+    private ReviewResponse saveAndRespond(
+            User caller,
+            ReviewTargetType targetType,
+            Long targetId,
+            Long orderId,
+            Integer rating,
+            String comment) {
         Review review = new Review();
         review.setAuthorUserId(caller.getId());
         review.setTargetType(targetType);
         review.setTargetId(targetId);
-        review.setRating(request.rating());
-        review.setComment(request.comment().trim());
+        review.setOrderId(orderId);
+        review.setRating(rating);
+        review.setComment(comment.trim());
 
         Review saved = reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);

@@ -154,6 +154,7 @@ public enum MessageCd implements CodeAttribute {
     //region Review & Favorite
     REVIEW_NOT_FOUND("REV_001"),
     REVIEW_ALREADY_EXISTS("REV_002"),
+    REVIEW_ORDER_NOT_ELIGIBLE("REV_003"),
     FAVORITE_NOT_FOUND("FAV_001"),
     //endregion
 

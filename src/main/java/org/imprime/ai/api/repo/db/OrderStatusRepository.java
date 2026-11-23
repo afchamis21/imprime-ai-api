@@ -15,7 +15,7 @@ public interface OrderStatusRepository extends JpaRepository<OrderStatus, Long> 
     @Query(value = """
     SELECT * FROM ORDER_STATUS os
     WHERE os.ORDER_ID = :orderId
-    ORDER BY os.STATUS_DATE DESC
+    ORDER BY os.STATUS_DATE DESC, os.ORDER_STATUS_ID DESC
     FETCH NEXT 1 ROWS ONLY
     """, nativeQuery = true)
     Optional<OrderStatus> findLatestStatusByOrderId(Long orderId);

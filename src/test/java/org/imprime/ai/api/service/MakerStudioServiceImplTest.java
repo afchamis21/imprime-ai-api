@@ -38,6 +38,7 @@ import org.imprime.ai.api.repo.db.MakerProjectRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
 import org.imprime.ai.api.service.impl.MakerFinanceServiceImpl;
+import org.imprime.ai.api.service.impl.MakerPrintQueueServiceImpl;
 import org.imprime.ai.api.service.impl.MakerStudioServiceImpl;
 import org.imprime.ai.api.util.JsonCodec;
 import org.junit.jupiter.api.AfterEach;
@@ -53,6 +54,7 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -86,6 +88,10 @@ class MakerStudioServiceImplTest {
     private MakerProjectRepository projectRepository;
     @Mock
     private FilamentRepository filamentRepository;
+    @Mock
+    private MakerOrderSupport makerOrderSupport;
+    @Mock
+    private MakerPrintQueueServiceImpl makerPrintQueueService;
 
     @InjectMocks
     private MakerStudioServiceImpl service;
@@ -273,14 +279,19 @@ class MakerStudioServiceImplTest {
                 .thenReturn(List.of(lowStock, healthyStock));
         when(chatRestService.listChats(ChatRoleFilter.MAKER, null, null, PageRequest.of(0, 5)))
                 .thenReturn(new PageResponse<>(List.of(chatSummary), 0, 5, 1, 1, true, true));
-        List<Order> vendorOrders = List.of(new Order());
+        Order vendorOrder = new Order();
+        vendorOrder.setId(501L);
+        List<Order> vendorOrders = List.of(vendorOrder);
         when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(20L, StatusCd.ACTIVE))
                 .thenReturn(vendorOrders);
+        when(makerOrderSupport.latestStatuses(List.of(501L)))
+                .thenReturn(Map.of(501L, OrderStatusCd.IN_PRODUCTION));
         when(orderViewAssembler.filterAndPaginate(eq(vendorOrders), isNull(), isNull(), isNull(), isNull(), eq(PageRequest.of(0, 5))))
                 .thenReturn(new PageResponse<>(List.of(orderSummary), 0, 5, 1, 1, true, true));
 
         MakerDashboardResponse dashboard = service.getDashboard();
 
+        verify(makerPrintQueueService).syncOrdersInProduction(company);
         assertEquals("Studio Impressão", dashboard.makerInfo().name());
         assertEquals(new BigDecimal("820.00"), dashboard.stats().availableBalance());
         assertEquals(new BigDecimal("120.00"), dashboard.stats().pendingBalance());
@@ -298,5 +309,55 @@ class MakerStudioServiceImplTest {
         assertNotNull(dashboard.fleetSummary().activeJob());
         assertEquals("Voron 2.4", dashboard.fleetSummary().activeJob().printerName());
         assertEquals(30, dashboard.fleetSummary().activeJob().etaMinutes());
+    }
+
+    @Test
+    void getDashboardCountsAllInProductionOrdersAsPendingPrintsEvenWithoutActivePrinterJobs() {
+        Order inProd1 = new Order();
+        inProd1.setId(601L);
+        Order inProd2 = new Order();
+        inProd2.setId(602L);
+        Order readyOrder = new Order();
+        readyOrder.setId(603L);
+        Order completedOrder = new Order();
+        completedOrder.setId(604L);
+
+        PrintQueueItem queuedJob = new PrintQueueItem();
+        queuedJob.setGuid("job-queued");
+        queuedJob.setJobStatus(PrintJobStatus.QUEUED);
+
+        List<Order> vendorOrders = List.of(inProd1, inProd2, readyOrder, completedOrder);
+
+        when(companyRepository.findById(20L)).thenReturn(Optional.of(company));
+        when(orderViewAssembler.toMakerBrief(company)).thenReturn(new MakerBriefResponse(
+                "comp-20", "studio-impressao", "Studio Impressão", null, BigDecimal.ZERO, 0, true
+        ));
+        when(makerFinanceService.computeBalanceSnapshot(company))
+                .thenReturn(new MakerFinanceServiceImpl.BalanceSnapshot(BigDecimal.ZERO, new BigDecimal("300.00"), 1L));
+        when(assetRepository.findAllByCompanyIdAndStatus(20L, StatusCd.ACTIVE)).thenReturn(List.of());
+        when(printQueueItemRepository.findAllByCompanyIdAndStatusOrderByPositionAscCreateDtAsc(20L, StatusCd.ACTIVE))
+                .thenReturn(List.of(queuedJob));
+        when(projectRepository.findAllByCompanyIdAndStatus(20L, StatusCd.ACTIVE)).thenReturn(List.of());
+        when(filamentRepository.findAllByCompanyIdAndStatus(20L, StatusCd.ACTIVE)).thenReturn(List.of());
+        when(chatRestService.listChats(ChatRoleFilter.MAKER, null, null, PageRequest.of(0, 5)))
+                .thenReturn(new PageResponse<>(List.of(), 0, 5, 0, 0, true, true));
+        when(orderRepository.findAllByVendorIdAndStatusOrderByCreateDtDesc(20L, StatusCd.ACTIVE))
+                .thenReturn(vendorOrders);
+        when(makerOrderSupport.latestStatuses(List.of(601L, 602L, 603L, 604L)))
+                .thenReturn(Map.of(
+                        601L, OrderStatusCd.IN_PRODUCTION,
+                        602L, OrderStatusCd.IN_PRODUCTION,
+                        603L, OrderStatusCd.READY_TO_SHIP,
+                        604L, OrderStatusCd.COMPLETED
+                ));
+        when(orderViewAssembler.filterAndPaginate(eq(vendorOrders), isNull(), isNull(), isNull(), isNull(), eq(PageRequest.of(0, 5))))
+                .thenReturn(new PageResponse<>(List.of(), 0, 5, 0, 0, true, true));
+
+        MakerDashboardResponse dashboard = service.getDashboard();
+
+        verify(makerPrintQueueService).syncOrdersInProduction(company);
+        assertEquals(2, dashboard.stats().activePrints());
+        assertEquals(1, dashboard.fleetSummary().queuedJobs());
+        assertEquals(0, dashboard.fleetSummary().printingPrinters());
     }
 }

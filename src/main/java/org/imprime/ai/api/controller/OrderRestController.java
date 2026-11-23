@@ -10,8 +10,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
+import org.imprime.ai.api.http.request.common.CreateReviewRequest;
 import org.imprime.ai.api.http.request.order.UpdateOrderStatusRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
+import org.imprime.ai.api.http.response.common.ReviewResponse;
 import org.imprime.ai.api.http.response.order.OrderDetailResponse;
 import org.imprime.ai.api.http.response.order.OrderFileResponse;
 import org.imprime.ai.api.http.response.order.OrderShipmentResponse;
@@ -19,6 +21,7 @@ import org.imprime.ai.api.model.dto.CompanyChoiceDTO;
 import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.service.OrderService;
 import org.imprime.ai.api.service.OrderShipmentService;
+import org.imprime.ai.api.service.ReviewService;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -39,6 +42,7 @@ public class OrderRestController {
     private final OrderManagementService orderManagementService;
     private final OrderService orderService;
     private final OrderShipmentService orderShipmentService;
+    private final ReviewService reviewService;
 
     @Operation(
             summary = "Obter detalhes de um pedido",
@@ -104,6 +108,26 @@ public class OrderRestController {
             @PathVariable String orderGuid,
             @Valid @RequestBody UpdateOrderStatusRequest request) {
         return BaseResponse.ok(orderManagementService.updateOrderStatus(orderGuid, request));
+    }
+
+    @Operation(
+            summary = "Avaliar o Maker de um pedido concluído",
+            description = "Publica uma avaliação (1 a 5 estrelas e comentário) para o Maker responsável pelo pedido após o recebimento/conclusão (status COMPLETED)."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Avaliação publicada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Pedido não elegível ou dados de avaliação inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Apenas o comprador do pedido pode avaliar", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Pedido ou Maker não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Este pedido já foi avaliado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PostMapping("/{orderGuid}/review")
+    public ResponseEntity<BaseResponse<ReviewResponse>> createOrderMakerReview(
+            @Parameter(description = "GUID do pedido", required = true)
+            @PathVariable String orderGuid,
+            @Valid @RequestBody CreateReviewRequest request) {
+        return BaseResponse.created(reviewService.createOrderMakerReview(orderGuid, request));
     }
 
     @Operation(
