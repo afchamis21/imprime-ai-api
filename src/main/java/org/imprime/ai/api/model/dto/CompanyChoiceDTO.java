@@ -13,7 +13,9 @@ public record CompanyChoiceDTO(
         @Schema(description = "Endereço da empresa")
         AddressDTO address,
         @Schema(description = "Distância estimada até o endereço de entrega do comprador")
-        Distance distance
+        Distance distance,
+        @Schema(description = "Indica se o estúdio está online agora", example = "true")
+        boolean online
 ) {
     @Schema(description = "Distância calculada entre o Maker e o endereço de entrega")
     public record Distance(

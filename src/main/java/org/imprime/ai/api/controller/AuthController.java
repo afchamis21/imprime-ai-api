@@ -15,9 +15,11 @@ import org.imprime.ai.api.http.request.user.RegisterUserRequest;
 import org.imprime.ai.api.http.response.AuthResponse;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.service.AuthService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -74,5 +76,23 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<BaseResponse<AuthResponse>> refresh(@RequestBody RefreshTokenRequest request) {
         return BaseResponse.ok(authService.refresh(request));
+    }
+
+    @SkipAuth
+    @SecurityRequirements
+    @Operation(
+            operationId = "logout",
+            summary = "Encerrar sessão (Logout)",
+            description = "Revoga o refresh token informado (quando presente) e marca o Maker associado como offline imediatamente."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Sessão encerrada com sucesso")
+    })
+    @PostMapping("/logout")
+    public ResponseEntity<BaseResponse<Void>> logout(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody(required = false) RefreshTokenRequest request) {
+        authService.logout(authorizationHeader, request);
+        return BaseResponse.ok(null);
     }
 }

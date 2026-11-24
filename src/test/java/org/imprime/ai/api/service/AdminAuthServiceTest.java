@@ -154,6 +154,30 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void refreshPreservesRawRefreshTokenWhenNotRotatedAndEntityTokenIsTransientNull() {
+        DecodedJWT jwt = mock(DecodedJWT.class);
+        when(jwt.getSubject()).thenReturn("admin-guid-6");
+        when(jwt.getToken()).thenReturn("refresh-raw");
+        when(authTokenService.validateToken("refresh-raw", AuthToken.TokenType.REFRESH)).thenReturn(jwt);
+
+        AuthToken storedRefresh = buildToken(6L, AuthToken.TokenType.REFRESH, null, Instant.now().plusSeconds(6900));
+        when(authTokenService.findByToken("refresh-raw")).thenReturn(Optional.of(storedRefresh));
+
+        User admin = buildUser(6L, "admin-guid-6", UserRole.ADMIN, StatusCd.ACTIVE);
+        when(userService.findUserById(6L)).thenReturn(Optional.of(admin));
+
+        AuthToken newAccess = buildToken(6L, AuthToken.TokenType.ACCESS, "new-admin-access", Instant.now().plusSeconds(300));
+        when(authTokenService.generateToken(admin, AuthToken.TokenType.ACCESS)).thenReturn(newAccess);
+
+        AuthResponse response = adminAuthService.refresh(new RefreshTokenRequest("refresh-raw"));
+
+        assertEquals("new-admin-access", response.accessToken().token());
+        assertEquals("refresh-raw", response.refreshToken().token());
+        verify(authTokenService, never()).revoke(any());
+        verify(authTokenService, never()).persist(any());
+    }
+
+    @Test
     void logoutRevokesTokensInvalidatesCacheAndRecordsAudit() {
         User admin = buildUser(5L, "admin-guid-5", UserRole.ADMIN, StatusCd.ACTIVE);
         ServiceContext.getContext().setUser(admin);

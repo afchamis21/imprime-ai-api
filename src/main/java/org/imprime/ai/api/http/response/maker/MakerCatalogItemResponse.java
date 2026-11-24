@@ -56,6 +56,12 @@ public record MakerCatalogItemResponse(
         @Schema(description = "Indica se o Maker foi verificado pela plataforma", example = "true")
         boolean verified,
         @Schema(description = "Data de ingresso na plataforma em UTC (ISO-8601)", example = "2024-03-10T12:00:00Z")
-        Instant createdAt
+        Instant createdAt,
+        @Schema(description = "Latitude aproximada do endereço principal do estúdio", example = "-23.55052")
+        Double latitude,
+        @Schema(description = "Longitude aproximada do endereço principal do estúdio", example = "-46.63331")
+        Double longitude,
+        @Schema(description = "URLs de prévia das peças do portfólio público do Maker (até 6)")
+        List<String> portfolioImages
 ) {
 }

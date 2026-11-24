@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.auth.RequireMaker;
 import org.imprime.ai.api.http.request.maker.PatchMakerProfileRequest;
 import org.imprime.ai.api.http.request.maker.UpdateMakerProfileRequest;
@@ -16,8 +17,11 @@ import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.OrderSummaryResponse;
 import org.imprime.ai.api.http.response.maker.MakerDashboardResponse;
+import org.imprime.ai.api.http.response.maker.MakerPresenceResponse;
 import org.imprime.ai.api.http.response.maker.MakerStudioProfileResponse;
+import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.service.MakerStudioService;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +30,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 @RestController
@@ -35,6 +40,7 @@ import java.time.LocalDate;
 @Tag(name = "Maker — Dashboard, Pedidos e Perfil", description = "Visão executiva, histórico de pedidos recebidos e perfil operacional do estúdio Maker")
 public class MakerStudioController {
     private final MakerStudioService makerStudioService;
+    private final MakerPresenceCache makerPresenceCache;
 
     @Operation(
             summary = "Obter dashboard executivo do Maker",
@@ -117,5 +123,25 @@ public class MakerStudioController {
     public ResponseEntity<BaseResponse<MakerStudioProfileResponse>> patchProfile(
             @Valid @RequestBody PatchMakerProfileRequest request) {
         return BaseResponse.ok(makerStudioService.patchStudioProfile(request));
+    }
+
+    @Operation(
+            summary = "Registrar heartbeat de presença online do Maker",
+            description = "Renova o TTL de presença online do estúdio vinculado ao Maker autenticado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Presença renovada com sucesso"),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não possui perfil de Maker", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PostMapping("/presence/ping")
+    public ResponseEntity<BaseResponse<MakerPresenceResponse>> pingPresence() {
+        User caller = ServiceContext.getUserOrThrow();
+        Instant lastSeenAt = makerPresenceCache.markOnline(caller.getCompanyId());
+        return BaseResponse.ok(new MakerPresenceResponse(
+                lastSeenAt != null,
+                lastSeenAt,
+                makerPresenceCache.getTtl().toSeconds()
+        ));
     }
 }

@@ -48,6 +48,9 @@ imprime:
       default-language: en_us
       crypto:
         secret: ${CRYPTO_SECRET:imprime-ai-dev-crypto-key}
+      presence:
+        ttl: ${MAKER_PRESENCE_TTL:4m}
+        max-size: ${MAKER_PRESENCE_MAX_SIZE:10000}
 
 oci:
   object-storage:

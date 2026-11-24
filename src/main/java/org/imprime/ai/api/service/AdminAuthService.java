@@ -91,6 +91,7 @@ public class AdminAuthService {
 
         AuthToken refreshToken = authTokenService.findByToken(jwt.getToken())
                 .orElseThrow(UnauthorizedException::new);
+        refreshToken.setToken(jwt.getToken());
 
         if (Boolean.TRUE.equals(refreshToken.getRevoked()) || refreshToken.isExpired()) {
             throw new UnauthorizedException();

@@ -16,9 +16,11 @@ import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Filament;
 import org.imprime.ai.api.model.MakerFinanceTransaction;
+import org.imprime.ai.api.model.MakerQuoteSettings;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.OrderStatus;
 import org.imprime.ai.api.model.PrintQueueItem;
+import org.imprime.ai.api.model.QuoteSettings;
 import org.imprime.ai.api.model.enums.CostCategory;
 import org.imprime.ai.api.model.enums.ExpenseCategory;
 import org.imprime.ai.api.model.enums.FinanceTransactionStatus;
@@ -30,17 +32,24 @@ import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
+import org.imprime.ai.api.repo.cache.MakerQuoteSettingsInMemoryCache;
+import org.imprime.ai.api.repo.cache.QuoteSettingsInMemoryCache;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.MakerFinanceTransactionRepository;
+import org.imprime.ai.api.repo.db.MakerQuoteSettingsRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
+import org.imprime.ai.api.repo.db.QuoteSettingsRepository;
 import org.imprime.ai.api.service.MakerCompanyResolver;
 import org.imprime.ai.api.service.MakerFinanceService;
 import org.imprime.ai.api.service.OrderStatusService;
+import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.MaskingUtil;
 import org.imprime.ai.api.util.PageUtils;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -92,6 +101,11 @@ public class MakerFinanceServiceImpl implements MakerFinanceService {
     private final AssetRepository assetRepository;
     private final PrintQueueItemRepository printQueueItemRepository;
     private final FilamentRepository filamentRepository;
+    private final QuoteSettingsInMemoryCache quoteSettingsInMemoryCache;
+    private final QuoteSettingsRepository quoteSettingsRepository;
+    private final MakerQuoteSettingsRepository makerQuoteSettingsRepository;
+    private final MakerQuoteSettingsInMemoryCache makerQuoteSettingsInMemoryCache;
+    private final JsonCodec jsonCodec;
 
     @Override
     public MakerFinanceSummaryResponse getSummary() {
@@ -262,12 +276,75 @@ public class MakerFinanceServiceImpl implements MakerFinanceService {
         }
 
         Company saved = companyRepository.save(company);
+        if (request.kwhRate() != null || request.hourlyDepreciationRate() != null) {
+            syncPersistedQuoteModuleRates(saved, request.kwhRate(), request.hourlyDepreciationRate());
+            makerQuoteSettingsInMemoryCache.evictAfterCommit(saved.getId());
+        }
         return new FinanceRatesResponse(
                 resolveKwhRate(saved),
                 resolveDepreciationRate(saved),
                 MaskingUtil.maskPixKey(saved.getPixKeyType(), saved.getPixKey()),
                 saved.getPixKeyType()
         );
+    }
+
+    private void syncPersistedQuoteModuleRates(
+            Company company,
+            BigDecimal kwhRate,
+            BigDecimal hourlyDepreciationRate) {
+        List<MakerQuoteSettings> existingRows = makerQuoteSettingsRepository
+                .findByCompanyIdAndStatusOrderByExecutionOrderAscIdAsc(company.getId(), StatusCd.ACTIVE);
+        if (existingRows == null || existingRows.isEmpty()) {
+            return;
+        }
+
+        List<QuoteSettings> catalog = quoteSettingsInMemoryCache.getAllOrdered();
+        if (catalog == null || catalog.isEmpty()) {
+            catalog = quoteSettingsRepository.findByStatusOrderByPhaseOrderAscExecutionOrderAscIdAsc(StatusCd.ACTIVE);
+        }
+        if (catalog == null || catalog.isEmpty()) {
+            return;
+        }
+
+        Long powerCatalogId = null;
+        Long depreciationCatalogId = null;
+        for (QuoteSettings module : catalog) {
+            if (module == null || module.getCode() == null) {
+                continue;
+            }
+            if ("POWER".equalsIgnoreCase(module.getCode().trim())) {
+                powerCatalogId = module.getId();
+            } else if ("DEPRECIATION".equalsIgnoreCase(module.getCode().trim())) {
+                depreciationCatalogId = module.getId();
+            }
+        }
+
+        List<MakerQuoteSettings> updatedRows = new ArrayList<>();
+        for (MakerQuoteSettings row : existingRows) {
+            if (kwhRate != null && Objects.equals(row.getQuoteSettingsId(), powerCatalogId)) {
+                ObjectNode node = asMutableObject(row.getConfigJson());
+                node.put("kwhRate", kwhRate.setScale(4, RoundingMode.HALF_UP));
+                row.setConfigJson(jsonCodec.toJson(node));
+                updatedRows.add(row);
+            } else if (hourlyDepreciationRate != null && Objects.equals(row.getQuoteSettingsId(), depreciationCatalogId)) {
+                ObjectNode node = asMutableObject(row.getConfigJson());
+                node.put("hourlyDepreciationRate", hourlyDepreciationRate.setScale(2, RoundingMode.HALF_UP));
+                row.setConfigJson(jsonCodec.toJson(node));
+                updatedRows.add(row);
+            }
+        }
+
+        if (!updatedRows.isEmpty()) {
+            makerQuoteSettingsRepository.saveAll(updatedRows);
+        }
+    }
+
+    private ObjectNode asMutableObject(String json) {
+        JsonNode node = jsonCodec.readTree(json);
+        if (node instanceof ObjectNode objNode) {
+            return objNode;
+        }
+        return jsonCodec.createObjectNode();
     }
 
     public BalanceSnapshot computeBalanceSnapshot(Company company) {

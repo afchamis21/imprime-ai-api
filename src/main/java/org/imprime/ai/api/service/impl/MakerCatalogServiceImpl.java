@@ -23,6 +23,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.ShippingOption;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.MakerPortfolioItemRepository;
@@ -43,6 +44,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -52,6 +55,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class MakerCatalogServiceImpl implements MakerCatalogService {
     private static final double EARTH_RADIUS_KM = 6371.0;
+    private static final int MAX_PORTFOLIO_PREVIEW_IMAGES = 6;
 
     private static final Map<String, String> PORTFOLIO_SORT_MAPPING = Map.of(
             "createdAt", "createDt",
@@ -79,6 +83,7 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
     private final FavoriteServiceImpl favoriteService;
     private final OrderViewAssembler orderViewAssembler;
     private final JsonCodec jsonCodec;
+    private final MakerPresenceCache makerPresenceCache;
 
     @Override
     public PageResponse<MakerCatalogItemResponse> listMakers(MakerCatalogFilter filter, Pageable pageable) {
@@ -94,9 +99,16 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 addressRepository.findAllByOwnerTypeAndOwnerIdInAndStatus(EntityType.COMPANY, companyIds, StatusCd.ACTIVE)
         );
         Set<Long> favoritedIds = favoriteService.findFavoritedTargetIds(FavoriteTargetType.MAKER);
+        Map<Long, List<String>> portfolioImagesByCompany = buildPortfolioPreviewsByCompany(companies);
 
         List<MakerCatalogItemResponse> items = companies.stream()
-                .map(company -> toCatalogItem(company, addressesByCompany.get(company.getId()), filter, favoritedIds))
+                .map(company -> toCatalogItem(
+                        company,
+                        addressesByCompany.get(company.getId()),
+                        filter,
+                        favoritedIds,
+                        portfolioImagesByCompany.get(company.getId())
+                ))
                 .filter(item -> matchesFilter(item, filter))
                 .sorted(buildComparator(pageable))
                 .toList();
@@ -142,7 +154,8 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 Boolean.TRUE.equals(company.getAcceptingCustomQuotes()),
                 favorited,
                 isOwner,
-                CatalogDtoMapper.readSocialLinks(company, jsonCodec)
+                CatalogDtoMapper.readSocialLinks(company, jsonCodec),
+                makerPresenceCache.isCompanyOnline(company)
         );
     }
 
@@ -245,11 +258,60 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
         }
     }
 
+    private Map<Long, List<String>> buildPortfolioPreviewsByCompany(List<Company> companies) {
+        List<Long> publicCompanyIds = companies.stream()
+                .filter(company -> !Boolean.FALSE.equals(company.getPublicPortfolioEnabled()))
+                .map(Company::getId)
+                .toList();
+        if (publicCompanyIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<MakerPortfolioItem> portfolioItems =
+                portfolioItemRepository.findAllByCompanyIdInAndStatusOrderByCreateDtDesc(publicCompanyIds, StatusCd.ACTIVE);
+        if (portfolioItems == null || portfolioItems.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, LinkedHashSet<String>> collectedByCompany = new HashMap<>();
+        for (MakerPortfolioItem item : portfolioItems) {
+            if (item == null || item.getCompanyId() == null) {
+                continue;
+            }
+            LinkedHashSet<String> urls = collectedByCompany.computeIfAbsent(
+                    item.getCompanyId(),
+                    ignored -> new LinkedHashSet<>()
+            );
+            if (urls.size() >= MAX_PORTFOLIO_PREVIEW_IMAGES) {
+                continue;
+            }
+            addPreviewUrl(urls, item.getCoverImageUrl());
+            for (String url : jsonCodec.readStringList(item.getImageUrlsJson())) {
+                if (urls.size() >= MAX_PORTFOLIO_PREVIEW_IMAGES) {
+                    break;
+                }
+                addPreviewUrl(urls, url);
+            }
+        }
+
+        Map<Long, List<String>> result = new HashMap<>();
+        collectedByCompany.forEach((companyId, urls) -> result.put(companyId, List.copyOf(urls)));
+        return result;
+    }
+
+    private void addPreviewUrl(Set<String> urls, String candidate) {
+        if (urls.size() >= MAX_PORTFOLIO_PREVIEW_IMAGES || candidate == null || candidate.isBlank()) {
+            return;
+        }
+        urls.add(candidate.trim());
+    }
+
     private MakerCatalogItemResponse toCatalogItem(
             Company company,
             Address address,
             MakerCatalogFilter filter,
-            Set<Long> favoritedIds) {
+            Set<Long> favoritedIds,
+            List<String> portfolioImages) {
         BigDecimal distanceKm = calculateDistanceKm(filter, address);
         List<MaterialType> materials = jsonCodec.readEnumList(company.getMaterialsJson(), MaterialType.class);
         List<String> tags = jsonCodec.readStringList(company.getTagsJson());
@@ -275,10 +337,13 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 company.getBadge(),
                 company.getCoverUrl(),
                 company.getAvatarUrl(),
-                Boolean.TRUE.equals(company.getOnline()) && !Boolean.TRUE.equals(company.getVacationMode()),
+                makerPresenceCache.isCompanyOnline(company),
                 favoritedIds.contains(company.getId()),
                 Boolean.TRUE.equals(company.getVerified()),
-                company.getCreateDt()
+                company.getCreateDt(),
+                address != null ? address.getLatitude() : null,
+                address != null ? address.getLongitude() : null,
+                portfolioImages != null ? portfolioImages : List.of()
         );
     }
 

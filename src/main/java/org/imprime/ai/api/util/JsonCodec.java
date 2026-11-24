@@ -5,8 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JavaType;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -109,5 +111,29 @@ public class JsonCodec {
             log.warn("Failed to deserialize JSON list of {}: {}", elementType.getSimpleName(), e.getMessage());
             return List.of();
         }
+    }
+
+    public ObjectNode createObjectNode() {
+        return objectMapper.createObjectNode();
+    }
+
+    public JsonNode readTree(String json) {
+        if (json == null || json.isBlank()) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            JsonNode tree = objectMapper.readTree(json);
+            return tree != null ? tree : objectMapper.createObjectNode();
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON tree: {}", e.getMessage());
+            return objectMapper.createObjectNode();
+        }
+    }
+
+    public JsonNode valueToTree(Object value) {
+        if (value == null) {
+            return objectMapper.createObjectNode();
+        }
+        return objectMapper.valueToTree(value);
     }
 }

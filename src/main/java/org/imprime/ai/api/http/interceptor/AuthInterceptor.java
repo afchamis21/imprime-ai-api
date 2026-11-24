@@ -17,6 +17,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
 import org.jspecify.annotations.NonNull;
@@ -37,6 +38,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final AuthTokenService authTokenService;
     private final UserService userService;
+    private final MakerPresenceCache makerPresenceCache;
 
     private AuthType getAuthType(@NonNull HandlerMethod handlerMethod) {
         Method method = handlerMethod.getMethod();
@@ -158,6 +160,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
         ServiceContext ctx = ServiceContext.getContext();
         ctx.setUser(user);
+        makerPresenceCache.markUserActivity(user);
 
         return true;
     }

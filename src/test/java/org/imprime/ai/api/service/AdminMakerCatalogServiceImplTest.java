@@ -5,8 +5,10 @@ import org.imprime.ai.api.http.request.admin.AdminMakerApproveRequest;
 import org.imprime.ai.api.http.request.admin.AdminMakerStatusRequest;
 import org.imprime.ai.api.http.request.admin.AdminModerationReasonRequest;
 import org.imprime.ai.api.http.request.admin.AdminProductStatusRequest;
+import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.admin.AdminCatalogProductResponse;
 import org.imprime.ai.api.http.response.admin.AdminMakerDetailResponse;
+import org.imprime.ai.api.http.response.admin.AdminMakerSummaryResponse;
 import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Filament;
@@ -20,6 +22,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -34,8 +37,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,11 +68,13 @@ class AdminMakerCatalogServiceImplTest {
     @Mock
     private AdminAuditService adminAuditService;
 
+    private MakerPresenceCache makerPresenceCache;
     private AdminMakerCatalogServiceImpl service;
     private User admin;
 
     @BeforeEach
     void setUp() {
+        makerPresenceCache = new MakerPresenceCache(Duration.ofMinutes(4), 1_000L);
         service = new AdminMakerCatalogServiceImpl(
                 companyRepository,
                 userRepository,
@@ -76,7 +83,8 @@ class AdminMakerCatalogServiceImplTest {
                 filamentRepository,
                 productRepository,
                 adminAuditService,
-                new JsonCodec()
+                new JsonCodec(),
+                makerPresenceCache
         );
         admin = new User();
         admin.setId(1L);
@@ -197,5 +205,63 @@ class AdminMakerCatalogServiceImplTest {
                 any(),
                 any()
         );
+    }
+
+    @Test
+    void listAndDetailReflectRealtimePresenceCacheAndVacationMode() {
+        User owner1 = new User();
+        owner1.setId(41L);
+        owner1.setGuid("owner-41");
+        owner1.setFirstName("Ana");
+        owner1.setLastName("Forge");
+        owner1.setEmail("ana@forge.ai");
+
+        User owner2 = new User();
+        owner2.setId(42L);
+        owner2.setGuid("owner-42");
+        owner2.setFirstName("Bruno");
+        owner2.setLastName("Forge");
+        owner2.setEmail("bruno@forge.ai");
+
+        Company onlineMaker = new Company();
+        onlineMaker.setId(301L);
+        onlineMaker.setGuid("maker-guid-301");
+        onlineMaker.setName("Online Forge");
+        onlineMaker.setOwnerId(41L);
+        onlineMaker.setVacationMode(false);
+        onlineMaker.setApprovalStatus(MakerApprovalStatus.APPROVED);
+        onlineMaker.setStatus(StatusCd.ACTIVE);
+
+        Company vacationMaker = new Company();
+        vacationMaker.setId(302L);
+        vacationMaker.setGuid("maker-guid-302");
+        vacationMaker.setName("Vacation Forge");
+        vacationMaker.setOwnerId(42L);
+        vacationMaker.setVacationMode(true);
+        vacationMaker.setApprovalStatus(MakerApprovalStatus.APPROVED);
+        vacationMaker.setStatus(StatusCd.ACTIVE);
+
+        makerPresenceCache.markOnline(301L);
+        makerPresenceCache.markOnline(302L);
+
+        when(companyRepository.findAllByOrderByCreateDtDesc()).thenReturn(List.of(onlineMaker, vacationMaker));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner1, owner2));
+        when(addressRepository.findAllByOwnerTypeAndOwnerIdInAndStatus(eq(EntityType.COMPANY), any(), eq(StatusCd.ACTIVE)))
+                .thenReturn(List.of());
+        when(productRepository.findAllByStatus(StatusCd.ACTIVE)).thenReturn(List.of());
+
+        PageResponse<AdminMakerSummaryResponse> onlineList = service.listMakers(null, null, true, null, PageRequest.of(0, 10));
+        assertEquals(1, onlineList.totalElements());
+        assertEquals("maker-guid-301", onlineList.content().getFirst().guid());
+        assertTrue(onlineList.content().getFirst().online());
+
+        when(companyRepository.findByGuid("maker-guid-302")).thenReturn(Optional.of(vacationMaker));
+        when(userRepository.findById(42L)).thenReturn(Optional.of(owner2));
+        when(assetRepository.findAllByCompanyIdAndStatus(302L, StatusCd.ACTIVE)).thenReturn(List.of());
+        when(filamentRepository.findAllByCompanyIdAndStatus(302L, StatusCd.ACTIVE)).thenReturn(List.of());
+        when(productRepository.findAllByOrderByCreateDtDesc()).thenReturn(List.of());
+
+        AdminMakerDetailResponse vacationDetail = service.getMakerDetail("maker-guid-302");
+        assertFalse(vacationDetail.online());
     }
 }

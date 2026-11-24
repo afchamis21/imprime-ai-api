@@ -61,6 +61,8 @@ public record MakerProfileResponse(
         @Schema(description = "Indica se o usuário autenticado é o proprietário deste estúdio", example = "false")
         boolean isOwner,
         @Schema(description = "Links sociais e contato público")
-        MakerSocialLinksDto socialLinks
+        MakerSocialLinksDto socialLinks,
+        @Schema(description = "Indica se o estúdio está online agora", example = "true")
+        boolean online
 ) {
 }

@@ -8,6 +8,7 @@ import org.imprime.ai.api.model.AuthToken;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
 import org.imprime.ai.api.websocket.AuthenticatedUserPrincipal;
@@ -27,6 +28,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private final AuthTokenService authTokenService;
     private final UserService userService;
+    private final MakerPresenceCache makerPresenceCache;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -39,6 +41,13 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         // Authenticate when establishing the STOMP session.
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             authenticate(accessor);
+            if (accessor.getUser() instanceof AuthenticatedUserPrincipal principal) {
+                makerPresenceCache.markUserActivity(principal.user());
+            }
+        } else if (StompCommand.SEND.equals(accessor.getCommand())) {
+            if (accessor.getUser() instanceof AuthenticatedUserPrincipal principal) {
+                makerPresenceCache.markUserActivity(principal.user());
+            }
         }
 
         return message;

@@ -11,9 +11,11 @@ import org.imprime.ai.api.http.response.maker.PayoutResponse;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Filament;
 import org.imprime.ai.api.model.MakerFinanceTransaction;
+import org.imprime.ai.api.model.MakerQuoteSettings;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.OrderStatus;
 import org.imprime.ai.api.model.PrintQueueItem;
+import org.imprime.ai.api.model.QuoteSettings;
 import org.imprime.ai.api.model.enums.CostCategory;
 import org.imprime.ai.api.model.enums.ExpenseCategory;
 import org.imprime.ai.api.model.enums.FinanceTransactionStatus;
@@ -24,19 +26,25 @@ import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
+import org.imprime.ai.api.repo.cache.MakerQuoteSettingsInMemoryCache;
+import org.imprime.ai.api.repo.cache.QuoteSettingsInMemoryCache;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.MakerFinanceTransactionRepository;
+import org.imprime.ai.api.repo.db.MakerQuoteSettingsRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
+import org.imprime.ai.api.repo.db.QuoteSettingsRepository;
 import org.imprime.ai.api.service.impl.MakerFinanceServiceImpl;
+import org.imprime.ai.api.util.JsonCodec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 
@@ -71,6 +79,16 @@ class MakerFinanceServiceImplTest {
     private PrintQueueItemRepository printQueueItemRepository;
     @Mock
     private FilamentRepository filamentRepository;
+    @Mock
+    private QuoteSettingsInMemoryCache quoteSettingsInMemoryCache;
+    @Mock
+    private QuoteSettingsRepository quoteSettingsRepository;
+    @Mock
+    private MakerQuoteSettingsRepository makerQuoteSettingsRepository;
+    @Mock
+    private MakerQuoteSettingsInMemoryCache makerQuoteSettingsInMemoryCache;
+    @Spy
+    private JsonCodec jsonCodec = new JsonCodec();
 
     @InjectMocks
     private MakerFinanceServiceImpl service;
@@ -274,6 +292,8 @@ class MakerFinanceServiceImplTest {
     void updateRatesUpdatesCompanyRatesAndMasksPix() {
         when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
         when(companyRepository.save(any(Company.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(makerQuoteSettingsRepository.findByCompanyIdAndStatusOrderByExecutionOrderAscIdAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
 
         FinanceRatesResponse updated = service.updateRates(new UpdateFinanceRatesRequest(
                 new BigDecimal("0.9850"),
@@ -286,6 +306,59 @@ class MakerFinanceServiceImplTest {
         assertEquals(new BigDecimal("3.25"), updated.hourlyDepreciationRate());
         assertEquals(PixKeyType.PHONE, updated.pixKeyType());
         assertEquals("+55***88", updated.pixKeyMasked());
+        verify(makerQuoteSettingsInMemoryCache).evictAfterCommit(10L);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void updateRatesSyncsPersistedPowerAndDepreciationModulesAndEvictsCache() {
+        QuoteSettings powerCatalog = new QuoteSettings();
+        powerCatalog.setId(2L);
+        powerCatalog.setCode("POWER");
+
+        QuoteSettings depCatalog = new QuoteSettings();
+        depCatalog.setId(3L);
+        depCatalog.setCode("DEPRECIATION");
+
+        MakerQuoteSettings powerRow = new MakerQuoteSettings();
+        powerRow.setCompanyId(10L);
+        powerRow.setQuoteSettingsId(2L);
+        powerRow.setConfigJson("{\"kwhRate\":0.90,\"defaultPowerWatts\":420}");
+        powerRow.setStatus(StatusCd.ACTIVE);
+
+        MakerQuoteSettings depRow = new MakerQuoteSettings();
+        depRow.setCompanyId(10L);
+        depRow.setQuoteSettingsId(3L);
+        depRow.setConfigJson("{\"depreciationMode\":\"FIXED_HOURLY\",\"hourlyDepreciationRate\":2.00}");
+        depRow.setStatus(StatusCd.ACTIVE);
+
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        when(companyRepository.save(any(Company.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(makerQuoteSettingsRepository.findByCompanyIdAndStatusOrderByExecutionOrderAscIdAsc(10L, StatusCd.ACTIVE))
+                .thenReturn(List.of(powerRow, depRow));
+        when(quoteSettingsInMemoryCache.getAllOrdered()).thenReturn(List.of(powerCatalog, depCatalog));
+        when(makerQuoteSettingsRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateRates(new UpdateFinanceRatesRequest(
+                new BigDecimal("1.1234"),
+                new BigDecimal("4.75"),
+                null,
+                null
+        ));
+
+        ArgumentCaptor<List<MakerQuoteSettings>> captor = ArgumentCaptor.forClass(List.class);
+        verify(makerQuoteSettingsRepository).saveAll(captor.capture());
+        assertEquals(2, captor.getValue().size());
+
+        var powerNode = jsonCodec.readTree(powerRow.getConfigJson());
+        assertEquals(0, new BigDecimal("1.1234").compareTo(powerNode.get("kwhRate").decimalValue()));
+        assertEquals(420, powerNode.get("defaultPowerWatts").asInt());
+
+        var depNode = jsonCodec.readTree(depRow.getConfigJson());
+        assertEquals(0, new BigDecimal("4.75").compareTo(depNode.get("hourlyDepreciationRate").decimalValue()));
+        assertEquals("FIXED_HOURLY", depNode.get("depreciationMode").asString());
+
+        verify(makerQuoteSettingsInMemoryCache).evictAfterCommit(10L);
     }
 
     @Test

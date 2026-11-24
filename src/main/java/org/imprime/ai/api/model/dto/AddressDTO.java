@@ -21,7 +21,11 @@ public record AddressDTO(
         @Schema(description = "Logradouro e número", example = "Av. Paulista, 1106")
         String addressLine1,
         @Schema(description = "Complemento do endereço (opcional)", example = "Andar 7")
-        @Nullable String addressLine2
+        @Nullable String addressLine2,
+        @Schema(description = "Latitude do endereço (opcional)", example = "-23.5614")
+        @Nullable Double latitude,
+        @Schema(description = "Longitude do endereço (opcional)", example = "-46.6559")
+        @Nullable Double longitude
 ) {
     public static AddressDTO from(Address address) {
         return new AddressDTO(
@@ -32,7 +36,9 @@ public record AddressDTO(
                 address.getState(),
                 address.getCountry(),
                 address.getAddressLine1(),
-                address.getAddressLine2()
+                address.getAddressLine2(),
+                address.getLatitude(),
+                address.getLongitude()
         );
     }
 }

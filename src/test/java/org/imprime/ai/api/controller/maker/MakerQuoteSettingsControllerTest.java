@@ -1,10 +1,11 @@
 package org.imprime.ai.api.controller.maker;
 
-import org.imprime.ai.api.http.request.maker.UpdateMakerQuoteSettingsRequest;
-import org.imprime.ai.api.http.response.maker.MakerQuoteSettingsResponse;
-import org.imprime.ai.api.model.enums.QuoteDepreciationMode;
-import org.imprime.ai.api.model.enums.QuotePricingStrategy;
+import org.imprime.ai.api.http.request.maker.UpdateMakerQuoteModulesRequest;
+import org.imprime.ai.api.http.response.maker.MakerQuoteModuleConfigResponse;
+import org.imprime.ai.api.http.response.maker.MakerQuoteSettingsBundleResponse;
+import org.imprime.ai.api.model.enums.QuoteModuleType;
 import org.imprime.ai.api.service.MakerQuoteSettingsService;
+import org.imprime.ai.api.util.JsonCodec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,8 +18,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,61 +37,80 @@ class MakerQuoteSettingsControllerTest {
     private MakerQuoteSettingsService makerQuoteSettingsService;
 
     private MockMvc mockMvc;
+    private JsonCodec jsonCodec;
 
     @BeforeEach
     void setUp() {
+        jsonCodec = new JsonCodec();
         MakerQuoteSettingsController controller = new MakerQuoteSettingsController(makerQuoteSettingsService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
     @Test
-    void getSettingsReturnsCurrentQuoteSettings() throws Exception {
-        MakerQuoteSettingsResponse response = new MakerQuoteSettingsResponse(
-                new BigDecimal("0.9200"),
-                300,
-                QuoteDepreciationMode.FIXED_HOURLY,
-                new BigDecimal("2.50"),
-                new BigDecimal("3500.00"),
-                3000,
-                new BigDecimal("0.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("35.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("50.00"),
-                new BigDecimal("0.00"),
-                QuotePricingStrategy.MARKUP,
+    void getSettingsReturnsModularBundle() throws Exception {
+        MakerQuoteSettingsBundleResponse response = new MakerQuoteSettingsBundleResponse(
                 false,
-                null
+                null,
+                new MakerQuoteSettingsBundleResponse.CompanyRatesSnapshot(
+                        new BigDecimal("0.9200"),
+                        new BigDecimal("2.50"),
+                        new BigDecimal("20.00")
+                ),
+                List.of(
+                        new MakerQuoteModuleConfigResponse(
+                                "POWER",
+                                "Energia Elétrica",
+                                "Consumo elétrico",
+                                QuoteModuleType.BASE_COST,
+                                10,
+                                20,
+                                true,
+                                true,
+                                true,
+                                null,
+                                jsonCodec.readTree("{\"kwhRate\":0.92,\"defaultPowerWatts\":300}"),
+                                jsonCodec.readTree("{\"group\":\"energy\",\"syncFinanceField\":\"kwhRate\"}")
+                        )
+                )
         );
         when(makerQuoteSettingsService.getSettings()).thenReturn(response);
 
         mockMvc.perform(get("/maker/quote-settings"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.kwhRate").value(0.92))
-                .andExpect(jsonPath("$.data.defaultPowerWatts").value(300))
-                .andExpect(jsonPath("$.data.depreciationMode").value("FIXED_HOURLY"))
-                .andExpect(jsonPath("$.data.pricingStrategy").value("MARKUP"))
-                .andExpect(jsonPath("$.data.customized").value(false));
+                .andExpect(jsonPath("$.data.customized").value(false))
+                .andExpect(jsonPath("$.data.companyRates.kwhRate").value(0.92))
+                .andExpect(jsonPath("$.data.companyRates.minOrderValue").value(20.0))
+                .andExpect(jsonPath("$.data.modules[0].code").value("POWER"))
+                .andExpect(jsonPath("$.data.modules[0].config.defaultPowerWatts").value(300))
+                .andExpect(jsonPath("$.data.modules[0].uiSchema.syncFinanceField").value("kwhRate"));
     }
 
     @Test
-    void updateSettingsDelegatesValidatedPayloadToService() throws Exception {
-        MakerQuoteSettingsResponse response = new MakerQuoteSettingsResponse(
-                new BigDecimal("1.1000"),
-                350,
-                QuoteDepreciationMode.MACHINE_LIFECYCLE,
-                new BigDecimal("2.10"),
-                new BigDecimal("4200.00"),
-                2500,
-                new BigDecimal("0.65"),
-                new BigDecimal("12.00"),
-                new BigDecimal("45.00"),
-                new BigDecimal("6.00"),
-                new BigDecimal("55.00"),
-                new BigDecimal("4.99"),
-                QuotePricingStrategy.MARGIN_ON_PRICE,
+    void updateSettingsDelegatesValidatedModularPayloadToService() throws Exception {
+        MakerQuoteSettingsBundleResponse response = new MakerQuoteSettingsBundleResponse(
                 true,
-                Instant.parse("2026-11-22T20:30:00Z")
+                Instant.parse("2026-11-23T21:10:00Z"),
+                new MakerQuoteSettingsBundleResponse.CompanyRatesSnapshot(
+                        new BigDecimal("0.9800"),
+                        new BigDecimal("2.80"),
+                        new BigDecimal("0.00")
+                ),
+                List.of(
+                        new MakerQuoteModuleConfigResponse(
+                                "POWER",
+                                "Energia Elétrica",
+                                "Consumo elétrico",
+                                QuoteModuleType.BASE_COST,
+                                10,
+                                20,
+                                true,
+                                true,
+                                true,
+                                null,
+                                jsonCodec.readTree("{\"kwhRate\":0.98,\"defaultPowerWatts\":320}"),
+                                jsonCodec.createObjectNode()
+                        )
+                )
         );
         when(makerQuoteSettingsService.updateSettings(any())).thenReturn(response);
 
@@ -96,32 +118,27 @@ class MakerQuoteSettingsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "kwhRate": 1.10,
-                                  "defaultPowerWatts": 350,
-                                  "depreciationMode": "MACHINE_LIFECYCLE",
-                                  "hourlyDepreciationRate": 2.10,
-                                  "defaultMachinePrice": 4200.00,
-                                  "defaultMachineLifespanHours": 2500,
-                                  "defaultMaintenanceHourlyCost": 0.65,
-                                  "failureRatePercent": 12.00,
-                                  "laborHourlyRate": 45.00,
-                                  "fixedPackagingCost": 6.00,
-                                  "defaultProfitMarginPercent": 55.00,
-                                  "additionalFeePercent": 4.99,
-                                  "pricingStrategy": "MARGIN_ON_PRICE"
+                                  "modules": [
+                                    {
+                                      "code": "POWER",
+                                      "enabled": true,
+                                      "executionOrder": 20,
+                                      "config": { "kwhRate": 0.98, "defaultPowerWatts": 320 }
+                                    }
+                                  ]
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.kwhRate").value(1.10))
-                .andExpect(jsonPath("$.data.depreciationMode").value("MACHINE_LIFECYCLE"))
-                .andExpect(jsonPath("$.data.pricingStrategy").value("MARGIN_ON_PRICE"))
-                .andExpect(jsonPath("$.data.customized").value(true));
+                .andExpect(jsonPath("$.data.customized").value(true))
+                .andExpect(jsonPath("$.data.companyRates.kwhRate").value(0.98))
+                .andExpect(jsonPath("$.data.modules[0].code").value("POWER"))
+                .andExpect(jsonPath("$.data.modules[0].config.defaultPowerWatts").value(320));
 
-        ArgumentCaptor<UpdateMakerQuoteSettingsRequest> captor =
-                ArgumentCaptor.forClass(UpdateMakerQuoteSettingsRequest.class);
+        ArgumentCaptor<UpdateMakerQuoteModulesRequest> captor =
+                ArgumentCaptor.forClass(UpdateMakerQuoteModulesRequest.class);
         verify(makerQuoteSettingsService).updateSettings(captor.capture());
-        assertEquals(350, captor.getValue().defaultPowerWatts());
-        assertEquals(QuoteDepreciationMode.MACHINE_LIFECYCLE, captor.getValue().depreciationMode());
-        assertEquals(QuotePricingStrategy.MARGIN_ON_PRICE, captor.getValue().pricingStrategy());
+        assertEquals(1, captor.getValue().modules().size());
+        assertEquals("POWER", captor.getValue().modules().getFirst().code());
+        assertTrue(captor.getValue().modules().getFirst().enabled());
     }
 }

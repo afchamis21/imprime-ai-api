@@ -12,6 +12,7 @@ import org.imprime.ai.api.model.dto.CompanyChoiceDTO;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.CompanyDAO;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.util.SlugUtil;
@@ -29,6 +30,7 @@ public class CompanyService {
     private final AddressService addressService;
     private final CompanyRepository companyRepository;
     private final CompanyDAO companyDAO;
+    private final MakerPresenceCache makerPresenceCache;
 
     @Transactional
     public Company registerCompany(RegisterCompanyRequest request, User owner) {
@@ -83,7 +85,13 @@ public class CompanyService {
             double value = useKilometers ? meters / 1000.0 : meters;
             String unit = useKilometers ? "km" : "m";
 
-            return new CompanyChoiceDTO(match.company().getName(), match.company().getGuid(), AddressDTO.from(match.address()), new CompanyChoiceDTO.Distance(BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP), unit));
+            return new CompanyChoiceDTO(
+                    match.company().getName(),
+                    match.company().getGuid(),
+                    AddressDTO.from(match.address()),
+                    new CompanyChoiceDTO.Distance(BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP), unit),
+                    makerPresenceCache.isCompanyOnline(match.company())
+            );
         }).toList();
     }
 

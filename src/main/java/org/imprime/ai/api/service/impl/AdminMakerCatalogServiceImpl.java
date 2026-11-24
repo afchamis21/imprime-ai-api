@@ -28,6 +28,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -64,6 +65,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
     private final ProductRepository productRepository;
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
+    private final MakerPresenceCache makerPresenceCache;
 
     @Override
     public PageResponse<AdminMakerSummaryResponse> listMakers(
@@ -102,7 +104,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
         List<AdminMakerSummaryResponse> filtered = companies.stream()
                 .filter(c -> approvalStatus == null || approvalStatus.equals(resolveApprovalStatus(c)))
                 .filter(c -> verified == null || verified.equals(Boolean.TRUE.equals(c.getVerified())))
-                .filter(c -> online == null || online.equals(Boolean.TRUE.equals(c.getOnline())))
+                .filter(c -> online == null || online.equals(makerPresenceCache.isCompanyOnline(c)))
                 .filter(c -> matchesMakerQuery(c, ownersById.get(c.getOwnerId()), addressesByCompanyId.get(c.getId()), normalizedQuery))
                 .map(c -> toMakerSummary(
                         c,
@@ -361,7 +363,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 resolveApprovalStatus(company),
                 company.getApprovalReason(),
                 Boolean.TRUE.equals(company.getVerified()),
-                Boolean.TRUE.equals(company.getOnline()),
+                makerPresenceCache.isCompanyOnline(company),
                 Boolean.TRUE.equals(company.getVacationMode()),
                 company.getStatus() != null ? company.getStatus() : StatusCd.ACTIVE,
                 printersCount,
@@ -437,7 +439,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 reviewedByName,
                 company.getReviewedAt(),
                 Boolean.TRUE.equals(company.getVerified()),
-                Boolean.TRUE.equals(company.getOnline()),
+                makerPresenceCache.isCompanyOnline(company),
                 Boolean.TRUE.equals(company.getVacationMode()),
                 company.getStatus() != null ? company.getStatus() : StatusCd.ACTIVE,
                 company.getRatingAvg() != null ? company.getRatingAvg() : BigDecimal.ZERO,

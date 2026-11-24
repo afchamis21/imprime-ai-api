@@ -23,13 +23,14 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthTokenService {
 
-    @Value("{spring.application.name}")
+    @Value("${spring.application.name:Imprime Ai}")
     private String appName;
 
     private final AuthTokenRepository authTokenRepository;
@@ -52,6 +53,7 @@ public class AuthTokenService {
             String token = JWT.create()
                     .withIssuer(appName)
                     .withSubject(user.getGuid())
+                    .withJWTId(UUID.randomUUID().toString())
                     .withClaim("role", resolvedRole.name())
                     .withExpiresAt(expiresAt)
                     .sign(algorithm);
@@ -75,6 +77,9 @@ public class AuthTokenService {
             @NonNull String token,
             @NonNull AuthToken.TokenType tokenType
     ) {
+        if (token.isBlank()) {
+            throw new UnauthorizedException();
+        }
         return switch (tokenType) {
             case ACCESS -> validateToken(token, authConfig.getAccessToken());
             case REFRESH -> validateToken(token, authConfig.getRefreshToken());

@@ -1,10 +1,10 @@
 package org.imprime.ai.api.service;
 
-import org.imprime.ai.api.http.request.maker.UpdateMakerQuoteSettingsRequest;
-import org.imprime.ai.api.http.response.maker.MakerQuoteSettingsResponse;
+import org.imprime.ai.api.http.request.maker.UpdateMakerQuoteModulesRequest;
+import org.imprime.ai.api.http.response.maker.MakerQuoteSettingsBundleResponse;
 
 public interface MakerQuoteSettingsService {
-    MakerQuoteSettingsResponse getSettings();
+    MakerQuoteSettingsBundleResponse getSettings();
 
-    MakerQuoteSettingsResponse updateSettings(UpdateMakerQuoteSettingsRequest request);
+    MakerQuoteSettingsBundleResponse updateSettings(UpdateMakerQuoteModulesRequest request);
 }

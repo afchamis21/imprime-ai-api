@@ -14,6 +14,7 @@ import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,6 +45,7 @@ class AuthInterceptorAdminTest {
     @Mock
     private HttpServletResponse response;
 
+    private MakerPresenceCache makerPresenceCache;
     private AuthInterceptor interceptor;
 
     static class AnnotatedAdminController {
@@ -56,9 +59,15 @@ class AuthInterceptorAdminTest {
         }
     }
 
+    static class AuthenticatedUserController {
+        public void me() {
+        }
+    }
+
     @BeforeEach
     void setUp() {
-        interceptor = new AuthInterceptor(authTokenService, userService);
+        makerPresenceCache = new MakerPresenceCache(Duration.ofMinutes(4), 1_000L);
+        interceptor = new AuthInterceptor(authTokenService, userService, makerPresenceCache);
         ServiceContext.clear();
     }
 
@@ -145,6 +154,32 @@ class AuthInterceptorAdminTest {
 
         assertTrue(allowed);
         verifyNoInteractions(authTokenService, userService);
+    }
+
+    @Test
+    void marksMakerPresenceOnAuthenticatedRequestOnlyForActiveUsersWithCompany() throws Exception {
+        HandlerMethod handler = handler(new AuthenticatedUserController(), "me");
+        when(request.getRequestURI()).thenReturn("/user/me");
+
+        // Buyer without companyId -> does not register company presence
+        mockValidTokenForUser("buyer-guid", UserRole.BUYER, StatusCd.ACTIVE, null);
+        assertTrue(interceptor.preHandle(request, response, handler));
+        assertFalse(makerPresenceCache.isOnline(50L));
+
+        ServiceContext.clear();
+
+        // Active Maker with companyId -> marks company online
+        mockValidTokenForUser("maker-guid", UserRole.MAKER, StatusCd.ACTIVE, 50L);
+        assertTrue(interceptor.preHandle(request, response, handler));
+        assertTrue(makerPresenceCache.isOnline(50L));
+
+        ServiceContext.clear();
+        makerPresenceCache.markOffline(50L);
+
+        // Suspended Maker -> throws 401 and does not mark online
+        mockValidTokenForUser("suspended-maker", UserRole.MAKER, StatusCd.SUSPENDED, 50L);
+        assertThrows(UnauthorizedException.class, () -> interceptor.preHandle(request, response, handler));
+        assertFalse(makerPresenceCache.isOnline(50L));
     }
 
     private HandlerMethod handler(Object bean, String methodName) throws NoSuchMethodException {

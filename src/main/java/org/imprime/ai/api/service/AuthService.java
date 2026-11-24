@@ -16,6 +16,7 @@ import org.imprime.ai.api.model.dto.TokenDTO;
 import org.imprime.ai.api.model.dto.UserDTO;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -28,10 +29,13 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final AuthConfig authConfig;
     private final UserService userService;
     private final AuthTokenService authTokenService;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final MakerPresenceCache makerPresenceCache;
 
     /**
      * This is meant to simulate a password hash comparison even when an email match isn't found, making it very much
@@ -59,11 +63,13 @@ public class AuthService {
             throw new UnauthorizedException();
         }
 
+        makerPresenceCache.markUserActivity(user);
         return generateTokens(user);
     }
 
+    @Transactional
     public AuthResponse refresh(RefreshTokenRequest request) {
-        if (request == null) {
+        if (request == null || request.token() == null || request.token().isBlank()) {
             throw new UnauthorizedException();
         }
 
@@ -73,8 +79,9 @@ public class AuthService {
 
         AuthToken refreshToken = authTokenService.findByToken(jwt.getToken())
                 .orElseThrow(UnauthorizedException::new);
+        refreshToken.setToken(jwt.getToken());
 
-        if (refreshToken.getRevoked()) {
+        if (Boolean.TRUE.equals(refreshToken.getRevoked())) {
             throw new UnauthorizedException();
         }
 
@@ -139,9 +146,36 @@ public class AuthService {
     }
 
     @Transactional
+    public void logout(@Nullable String authorizationHeader, @Nullable RefreshTokenRequest request) {
+        if (authorizationHeader != null && authorizationHeader.startsWith(BEARER_PREFIX)) {
+            String accessJwt = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+            if (!accessJwt.isBlank()) {
+                try {
+                    DecodedJWT jwt = authTokenService.validateToken(accessJwt, AuthToken.TokenType.ACCESS);
+                    userService.findUserByGuid(jwt.getSubject())
+                            .ifPresent(makerPresenceCache::markUserOffline);
+                } catch (UnauthorizedException ignored) {
+                    // Access token may already be expired when the user logs out.
+                }
+            }
+        }
+
+        if (request != null && request.token() != null && !request.token().isBlank()) {
+            authTokenService.findByToken(request.token()).ifPresent(refreshToken -> {
+                if (!Boolean.TRUE.equals(refreshToken.getRevoked())) {
+                    authTokenService.revoke(refreshToken);
+                }
+                userService.findUserById(refreshToken.getUserId())
+                        .ifPresent(makerPresenceCache::markUserOffline);
+            });
+        }
+    }
+
+    @Transactional
     public AuthResponse register(RegisterUserRequest request) {
         try {
             User user = userService.registerUser(request);
+            makerPresenceCache.markUserActivity(user);
             return generateTokens(user);
         } catch (RuntimeException e) {
             throw e;

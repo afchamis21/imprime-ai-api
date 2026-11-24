@@ -10,12 +10,15 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.RequireMaker;
+import org.imprime.ai.api.http.request.maker.CalculateMakerQuoteRequest;
 import org.imprime.ai.api.http.request.maker.CreateMakerQuoteRequest;
 import org.imprime.ai.api.http.request.maker.UpdateMakerQuoteStatusRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
+import org.imprime.ai.api.http.response.maker.MakerQuoteCalculationResponse;
 import org.imprime.ai.api.http.response.maker.MakerQuoteHistoryResponse;
 import org.imprime.ai.api.model.enums.QuoteHistoryStatus;
+import org.imprime.ai.api.service.MakerQuoteCalculationService;
 import org.imprime.ai.api.service.MakerQuoteHistoryService;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +33,23 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Maker — Orçamentos 3D", description = "Histórico de orçamentos calculados e salvos pelo estúdio")
 public class MakerQuoteHistoryController {
     private final MakerQuoteHistoryService makerQuoteHistoryService;
+    private final MakerQuoteCalculationService makerQuoteCalculationService;
+
+    @Operation(
+            summary = "Calcular orçamento em tempo real",
+            description = "Executa o motor modular de orçamento 3D combinando catálogo global, módulos configurados do estúdio e overrides pontuais."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Cálculo realizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados de entrada inválidos", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não possui perfil de Maker", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PostMapping("/calculate")
+    public ResponseEntity<BaseResponse<MakerQuoteCalculationResponse>> calculateQuote(
+            @Valid @RequestBody CalculateMakerQuoteRequest request) {
+        return BaseResponse.ok(makerQuoteCalculationService.calculateQuote(request));
+    }
 
     @Operation(
             summary = "Listar histórico de orçamentos do Maker",
