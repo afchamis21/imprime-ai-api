@@ -180,7 +180,15 @@ public enum MessageCd implements CodeAttribute {
     REFUND_NOT_FOUND("REF_001"),
     REFUND_INVALID_AMOUNT("REF_002"),
     REFUND_ALREADY_PROCESSED("REF_003"),
-    AUDIT_LOG_NOT_FOUND("AUD_001");
+    AUDIT_LOG_NOT_FOUND("AUD_001"),
+    //endregion
+
+    //region Catalog
+    PRINTER_CATALOG_NOT_FOUND("PRT_CAT_001"),
+    PRINTER_CATALOG_ALREADY_EXISTS("PRT_CAT_002"),
+    FILAMENT_CATALOG_NOT_FOUND("FIL_CAT_001"),
+    FILAMENT_CATALOG_ALREADY_EXISTS("FIL_CAT_002"),
+    INVALID_TEMPERATURE_RANGE("CAT_001");
     //endregion
     private final String code;
 

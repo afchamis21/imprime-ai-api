@@ -39,6 +39,29 @@ public record ChatDetailResponse(
         @Schema(description = "Data de criação do chat em UTC (ISO-8601)")
         Instant createdAt,
         @Schema(description = "Data da última mensagem em UTC (ISO-8601)")
-        Instant lastMessageAt
+        Instant lastMessageAt,
+        @Schema(description = "Anotações privadas do vendedor vinculadas a este chat (visível apenas ao Maker)")
+        String sellerNotes
 ) {
+    public ChatDetailResponse(
+            UUID chatId,
+            String orderGuid,
+            String orderCode,
+            String projectTitle,
+            BigDecimal agreedOrQuotedPrice,
+            OrderStatusCd orderStatus,
+            NegotiationStatus negotiationStatus,
+            int unreadCount,
+            UserDTO client,
+            MakerBriefResponse maker,
+            List<MessageDTO> recentMessages,
+            Instant createdAt,
+            Instant lastMessageAt
+    ) {
+        this(
+                chatId, orderGuid, orderCode, projectTitle, agreedOrQuotedPrice,
+                orderStatus, negotiationStatus, unreadCount, client, maker,
+                recentMessages, createdAt, lastMessageAt, null
+        );
+    }
 }

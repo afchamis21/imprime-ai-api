@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import org.imprime.ai.api.http.response.model3d.ScadParameterDefinition;
 import org.imprime.ai.api.model.enums.FileFormat3D;
 import org.imprime.ai.api.model.enums.LicenseType;
 import org.imprime.ai.api.model.enums.MaterialType;
@@ -70,6 +71,50 @@ public record CreateMakerModelRequest(
         List<String> imageUrls,
 
         @Schema(description = "Tags de busca e recomendação técnica")
-        List<String> tags
+        List<String> tags,
+
+        @Schema(description = "Código-fonte OpenSCAD (obrigatório quando customizable = true e nenhum arquivo .scad for enviado)")
+        @Size(max = 200000, message = "O código OpenSCAD deve ter no máximo 200000 caracteres")
+        String scadCode,
+
+        @Schema(description = "Lista opcional de definições de parâmetros OpenSCAD; quando omitida, é extraída automaticamente do scadCode")
+        List<ScadParameterDefinition> parameters
 ) {
+    public CreateMakerModelRequest(
+            String name,
+            String category,
+            BigDecimal price,
+            String description,
+            FileFormat3D format,
+            LicenseType license,
+            MaterialType recommendedMaterial,
+            Integer estimatedWeightGrams,
+            BigDecimal widthMm,
+            BigDecimal depthMm,
+            BigDecimal heightMm,
+            Boolean customizable,
+            String coverImageUrl,
+            List<String> imageUrls,
+            List<String> tags
+    ) {
+        this(
+                name,
+                category,
+                price,
+                description,
+                format,
+                license,
+                recommendedMaterial,
+                estimatedWeightGrams,
+                widthMm,
+                depthMm,
+                heightMm,
+                customizable,
+                coverImageUrl,
+                imageUrls,
+                tags,
+                null,
+                null
+        );
+    }
 }

@@ -17,6 +17,7 @@ import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Filament;
+import org.imprime.ai.api.model.PrinterCatalog;
 import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.AuditAction;
@@ -33,6 +34,7 @@ import org.imprime.ai.api.repo.db.AddressRepository;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.AdminAuditService;
@@ -46,7 +48,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -62,6 +66,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
     private final AddressRepository addressRepository;
     private final AssetRepository assetRepository;
     private final FilamentRepository filamentRepository;
+    private final PrinterCatalogRepository printerCatalogRepository;
     private final ProductRepository productRepository;
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
@@ -393,11 +398,29 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 .findFirst()
                 .orElse(companyAddresses.isEmpty() ? null : companyAddresses.getFirst());
 
-        List<AdminMakerPrinterItem> printers = company.getId() != null
-                ? assetRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE).stream()
-                        .map(this::toPrinterItem)
-                        .toList()
+        List<Asset> activeAssets = company.getId() != null
+                ? assetRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE)
                 : List.of();
+        Set<Long> catalogIds = new LinkedHashSet<>();
+        if (company.getPrimaryPrinterCatalogId() != null) {
+            catalogIds.add(company.getPrimaryPrinterCatalogId());
+        }
+        activeAssets.stream()
+                .map(Asset::getPrinterCatalogId)
+                .filter(Objects::nonNull)
+                .forEach(catalogIds::add);
+        Map<Long, PrinterCatalog> catalogById = new HashMap<>();
+        if (!catalogIds.isEmpty()) {
+            printerCatalogRepository.findAllByIdIn(catalogIds)
+                    .forEach(pc -> catalogById.put(pc.getId(), pc));
+        }
+
+        List<AdminMakerPrinterItem> printers = activeAssets.stream()
+                .map(asset -> toPrinterItem(
+                        asset,
+                        asset.getPrinterCatalogId() != null ? catalogById.get(asset.getPrinterCatalogId()) : null
+                ))
+                .toList();
 
         List<AdminMakerFilamentItem> filaments = company.getId() != null
                 ? filamentRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE).stream()
@@ -411,6 +434,10 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                         .map(p -> toCatalogProduct(p, company))
                         .toList()
                 : List.of();
+
+        PrinterCatalog primaryCatalog = company.getPrimaryPrinterCatalogId() != null
+                ? catalogById.get(company.getPrimaryPrinterCatalogId())
+                : null;
 
         return new AdminMakerDetailResponse(
                 company.getGuid(),
@@ -451,11 +478,20 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 filaments,
                 products,
                 company.getCreateDt(),
-                company.getUpdateDt()
+                company.getUpdateDt(),
+                !Boolean.FALSE.equals(company.getAcceptingCustomQuotes()),
+                Boolean.TRUE.equals(company.getSupportsMulticolor()),
+                company.getMaxMulticolorSlots() != null ? company.getMaxMulticolorSlots() : 1,
+                Boolean.TRUE.equals(company.getOffersPostProcessing()),
+                Boolean.TRUE.equals(company.getOffersPainting()),
+                Boolean.TRUE.equals(company.getOffersCadModeling()),
+                Boolean.TRUE.equals(company.getSupportsExpressOrders()),
+                company.getMinLayerHeightMm(),
+                primaryCatalog != null ? primaryCatalog.getGuid() : null
         );
     }
 
-    private AdminMakerPrinterItem toPrinterItem(Asset asset) {
+    private AdminMakerPrinterItem toPrinterItem(Asset asset, PrinterCatalog catalog) {
         return new AdminMakerPrinterItem(
                 asset.getGuid(),
                 asset.getName(),
@@ -466,7 +502,11 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 asset.getTrayDepth(),
                 asset.getTrayHeight(),
                 asset.getNozzleDiameterMm(),
-                asset.getPrinterStatus()
+                asset.getPrinterStatus(),
+                catalog != null ? catalog.getGuid() : null,
+                catalog != null ? catalog.getFullDisplayName() : null,
+                Boolean.TRUE.equals(asset.getSupportsMulticolor()) || (catalog != null && Boolean.TRUE.equals(catalog.getSupportsMulticolor())),
+                asset.getMulticolorSlots() != null ? asset.getMulticolorSlots() : 1
         );
     }
 

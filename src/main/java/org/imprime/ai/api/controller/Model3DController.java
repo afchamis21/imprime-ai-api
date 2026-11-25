@@ -237,11 +237,10 @@ public class Model3DController {
         return ResponseEntity.noContent().build();
     }
 
-    @SkipAuth
-    @SecurityRequirements
+    @OptionalAuth
     @Operation(
             summary = "Obter definição de customização OpenSCAD",
-            description = "Retorna o script OpenSCAD paramétrico e o esquema dinâmico de parâmetros para renderização e compilação no navegador."
+            description = "Retorna o script OpenSCAD paramétrico e o esquema dinâmico de parâmetros para renderização e compilação no navegador. Autenticação JWT opcional."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Dados de customização retornados com sucesso"),

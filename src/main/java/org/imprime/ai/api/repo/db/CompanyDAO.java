@@ -5,6 +5,7 @@ import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.dto.CompanyAndAddress;
 import org.imprime.ai.api.model.enums.DocumentType;
 import org.imprime.ai.api.model.enums.EntityType;
+import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -34,6 +35,29 @@ public class CompanyDAO {
                 SELECT
                     c.company_id AS company_id,
                     c.name AS company_name,
+                    c.slug AS company_slug,
+                    c.primary_printer AS company_primary_printer,
+                    c.primary_printer_catalog_id AS company_primary_printer_catalog_id,
+                    c.supports_multicolor AS company_supports_multicolor,
+                    c.max_multicolor_slots AS company_max_multicolor_slots,
+                    c.accepting_custom_quotes AS company_accepting_custom_quotes,
+                    c.vacation_mode AS company_vacation_mode,
+                    c.offers_post_processing AS company_offers_post_processing,
+                    c.offers_painting AS company_offers_painting,
+                    c.offers_cad_modeling AS company_offers_cad_modeling,
+                    c.supports_express_orders AS company_supports_express_orders,
+                    c.min_layer_height_mm AS company_min_layer_height_mm,
+                    c.materials::text AS company_materials,
+                    c.capabilities::text AS company_capabilities,
+                    c.rating_avg AS company_rating_avg,
+                    c.reviews_count AS company_reviews_count,
+                    c.prints_done AS company_prints_done,
+                    c.verified AS company_verified,
+                    c.online AS company_online,
+                    c.avatar_url AS company_avatar_url,
+                    c.min_lead_time_days AS company_min_lead_time_days,
+                    c.max_lead_time_days AS company_max_lead_time_days,
+                    c.approval_status AS company_approval_status,
                     c.document AS company_document,
                     c.document_type AS company_document_type,
                     c.address_id AS company_address_id,
@@ -75,7 +99,11 @@ public class CompanyDAO {
                  AND a.status = 'A'
                  AND a.latitude IS NOT NULL
                  AND a.longitude IS NOT NULL
-                WHERE ST_DWithin(
+                WHERE c.status = 'A'
+                  AND (c.approval_status IS NULL OR c.approval_status = 'APPROVED')
+                  AND COALESCE(c.vacation_mode, FALSE) = FALSE
+                  AND COALESCE(c.accepting_custom_quotes, TRUE) = TRUE
+                  AND ST_DWithin(
                     ST_SetSRID(ST_MakePoint(a.longitude, a.latitude), 4326)::geography,
                     ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography,
                     :radiusMeters
@@ -100,6 +128,38 @@ public class CompanyDAO {
         Company company = new Company();
         company.setId(rs.getLong("company_id"));
         company.setName(rs.getString("company_name"));
+        company.setSlug(rs.getString("company_slug"));
+        company.setPrimaryPrinter(rs.getString("company_primary_printer"));
+        long primaryCatalogId = rs.getLong("company_primary_printer_catalog_id");
+        company.setPrimaryPrinterCatalogId(rs.wasNull() ? null : primaryCatalogId);
+        company.setSupportsMulticolor(rs.getBoolean("company_supports_multicolor"));
+        int maxSlots = rs.getInt("company_max_multicolor_slots");
+        company.setMaxMulticolorSlots(rs.wasNull() ? 1 : maxSlots);
+        boolean acceptingQuotes = rs.getBoolean("company_accepting_custom_quotes");
+        company.setAcceptingCustomQuotes(rs.wasNull() || acceptingQuotes);
+        company.setVacationMode(rs.getBoolean("company_vacation_mode"));
+        company.setOffersPostProcessing(rs.getBoolean("company_offers_post_processing"));
+        company.setOffersPainting(rs.getBoolean("company_offers_painting"));
+        company.setOffersCadModeling(rs.getBoolean("company_offers_cad_modeling"));
+        company.setSupportsExpressOrders(rs.getBoolean("company_supports_express_orders"));
+        company.setMinLayerHeightMm(rs.getBigDecimal("company_min_layer_height_mm"));
+        company.setMaterialsJson(rs.getString("company_materials"));
+        company.setCapabilitiesJson(rs.getString("company_capabilities"));
+        company.setRatingAvg(rs.getBigDecimal("company_rating_avg"));
+        company.setReviewsCount(rs.getInt("company_reviews_count"));
+        company.setPrintsDone(rs.getInt("company_prints_done"));
+        company.setVerified(rs.getBoolean("company_verified"));
+        company.setOnline(rs.getBoolean("company_online"));
+        company.setAvatarUrl(rs.getString("company_avatar_url"));
+        int minLead = rs.getInt("company_min_lead_time_days");
+        if (!rs.wasNull()) {
+            company.setMinLeadTimeDays(minLead);
+        }
+        int maxLead = rs.getInt("company_max_lead_time_days");
+        if (!rs.wasNull()) {
+            company.setMaxLeadTimeDays(maxLead);
+        }
+        company.setApprovalStatus(parseApprovalStatus(rs.getString("company_approval_status")));
         company.setDocument(rs.getString("company_document"));
         company.setDocumentType(parseDocumentType(rs.getString("company_document_type")));
         company.setAddressId(rs.getLong("company_address_id"));
@@ -145,6 +205,15 @@ public class CompanyDAO {
         }
 
         DocumentType.Converter converter = new DocumentType.Converter();
+        return converter.convertToEntityAttribute(code);
+    }
+
+    private MakerApprovalStatus parseApprovalStatus(String code) {
+        if (code == null) {
+            return null;
+        }
+
+        MakerApprovalStatus.Converter converter = new MakerApprovalStatus.Converter();
         return converter.convertToEntityAttribute(code);
     }
 

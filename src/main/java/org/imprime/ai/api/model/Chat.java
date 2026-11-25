@@ -31,4 +31,7 @@ public class Chat extends Auditable {
 
     @Column(name = "last_message_at")
     private Instant lastMessageAt;
+
+    @Column(name = "seller_notes", columnDefinition = "text")
+    private String sellerNotes;
 }

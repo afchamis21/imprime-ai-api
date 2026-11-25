@@ -7,9 +7,11 @@ import org.imprime.ai.api.http.request.maker.CreateMakerModelRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.maker.MakerModelResponse;
 import org.imprime.ai.api.http.response.model3d.ModelAuthorResponse;
+import org.imprime.ai.api.http.response.model3d.ScadParameterDefinition;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Model3D;
+import org.imprime.ai.api.model.ModelCustomization;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.FavoriteTargetType;
 import org.imprime.ai.api.model.enums.FileFormat3D;
@@ -18,10 +20,13 @@ import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.ModelModerationStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
+import org.imprime.ai.api.model.exception.InternalErrorException;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
+import org.imprime.ai.api.repo.db.ModelCustomizationRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.FileAssetService;
 import org.imprime.ai.api.service.MakerCompanyResolver;
@@ -29,13 +34,16 @@ import org.imprime.ai.api.service.MakerModelService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
+import org.imprime.ai.api.util.ScadParameterParser;
 import org.imprime.ai.api.util.SlugUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -52,6 +60,7 @@ public class MakerModelServiceImpl implements MakerModelService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final Model3DRepository model3DRepository;
+    private final ModelCustomizationRepository modelCustomizationRepository;
     private final FileAssetService fileAssetService;
     private final FavoriteServiceImpl favoriteService;
     private final JsonCodec jsonCodec;
@@ -94,12 +103,53 @@ public class MakerModelServiceImpl implements MakerModelService {
         User caller = ServiceContext.getUserOrThrow();
         Company company = makerCompanyResolver.requireActiveMakerCompany();
 
-        FileAsset asset = fileAssetService.upload(file, FileAsset.AssetType.MODEL);
-        FileFormat3D format = request.format() != null
-                ? request.format()
-                : inferFormatFromFilename(asset.getName());
-
+        boolean hasFile = file != null && !file.isEmpty();
+        String trimmedScad = trimToNull(request.scadCode());
+        boolean isCustomizable = Boolean.TRUE.equals(request.customizable()) || trimmedScad != null;
         String uniqueSlug = SlugUtil.ensureUniqueSlug(request.name(), model3DRepository::existsBySlug);
+
+        FileAsset asset;
+        FileFormat3D format;
+        Long fileSizeBytes;
+
+        if (isCustomizable) {
+            if (trimmedScad == null) {
+                if (hasFile && isScadFilename(file.getOriginalFilename())) {
+                    trimmedScad = readUtf8Scad(file);
+                }
+                if (trimmedScad == null) {
+                    throw new BadRequestException(
+                            "Informe o código OpenSCAD ou envie um arquivo .scad para modelos parametrizados.",
+                            MessageCd.INVALID_REQUEST_BODY
+                    );
+                }
+            }
+
+            if (hasFile) {
+                asset = fileAssetService.upload(file, FileAsset.AssetType.MODEL);
+                fileSizeBytes = file.getSize();
+            } else {
+                byte[] scadBytes = trimmedScad.getBytes(StandardCharsets.UTF_8);
+                asset = fileAssetService.uploadBytes(
+                        scadBytes,
+                        uniqueSlug + ".scad",
+                        "text/plain; charset=utf-8",
+                        FileAsset.AssetType.MODEL
+                );
+                fileSizeBytes = (long) scadBytes.length;
+            }
+            format = FileFormat3D.SCAD;
+        } else {
+            if (!hasFile) {
+                throw new BadRequestException(MessageCd.FILE_EMPTY);
+            }
+            asset = fileAssetService.upload(file, FileAsset.AssetType.MODEL);
+            format = request.format() != null
+                    ? request.format()
+                    : inferFormatFromFilename(asset.getName());
+            fileSizeBytes = file.getSize();
+        }
+
         List<String> imageUrls = sanitizeStringList(request.imageUrls(), 10);
         String coverImageUrl = CatalogDtoMapper.firstNonBlank(
                 trimToNull(request.coverImageUrl()),
@@ -125,8 +175,8 @@ public class MakerModelServiceImpl implements MakerModelService {
         model.setWidthMm(request.widthMm());
         model.setDepthMm(request.depthMm());
         model.setHeightMm(request.heightMm());
-        model.setFileSizeBytes(file != null ? file.getSize() : null);
-        model.setCustomizable(Boolean.TRUE.equals(request.customizable()));
+        model.setFileSizeBytes(fileSizeBytes);
+        model.setCustomizable(isCustomizable);
         model.setCoverImageUrl(coverImageUrl);
         model.setImageUrlsJson(jsonCodec.toJsonArray(imageUrls));
         model.setTagsJson(jsonCodec.toJsonArray(tags));
@@ -134,7 +184,34 @@ public class MakerModelServiceImpl implements MakerModelService {
         model.setModerationStatus(ModelModerationStatus.PENDING_REVIEW);
 
         Model3D saved = model3DRepository.save(model);
+
+        if (isCustomizable) {
+            List<ScadParameterDefinition> resolvedParams = ScadParameterParser.sanitize(request.parameters());
+            if (resolvedParams.isEmpty()) {
+                resolvedParams = ScadParameterParser.parse(trimmedScad);
+            }
+            ModelCustomization customization = new ModelCustomization();
+            customization.setModel3dId(saved.getId());
+            customization.setScadCode(trimmedScad);
+            customization.setParametersSchemaJson(jsonCodec.toJsonArray(resolvedParams));
+            customization.setStatus(StatusCd.ACTIVE);
+            modelCustomizationRepository.save(customization);
+        }
+
         return toResponse(saved, caller, company, false);
+    }
+
+    private boolean isScadFilename(String filename) {
+        String ext = StringUtils.getFilenameExtension(filename);
+        return ext != null && "scad".equalsIgnoreCase(ext.trim());
+    }
+
+    private String readUtf8Scad(MultipartFile file) {
+        try {
+            return trimToNull(new String(file.getBytes(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new InternalErrorException("Não foi possível ler o arquivo OpenSCAD enviado.");
+        }
     }
 
     @Override

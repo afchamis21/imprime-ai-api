@@ -9,15 +9,18 @@ import org.imprime.ai.api.http.response.admin.AdminModelDetailResponse;
 import org.imprime.ai.api.http.response.admin.AdminModelSummaryResponse;
 import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Model3D;
+import org.imprime.ai.api.model.ModelCustomization;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.AuditAction;
 import org.imprime.ai.api.model.enums.FileFormat3D;
 import org.imprime.ai.api.model.enums.ModelModerationStatus;
+import org.imprime.ai.api.model.enums.ScadParameterType;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
+import org.imprime.ai.api.repo.db.ModelCustomizationRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.impl.AdminModelModerationServiceImpl;
 import org.imprime.ai.api.util.JsonCodec;
@@ -30,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,6 +53,8 @@ class AdminModelModerationServiceImplTest {
     @Mock
     private FileAssetRepository fileAssetRepository;
     @Mock
+    private ModelCustomizationRepository modelCustomizationRepository;
+    @Mock
     private ObjectStorageService objectStorageService;
     @Mock
     private AdminAuditService adminAuditService;
@@ -62,6 +68,7 @@ class AdminModelModerationServiceImplTest {
                 model3DRepository,
                 userRepository,
                 fileAssetRepository,
+                modelCustomizationRepository,
                 objectStorageService,
                 adminAuditService,
                 new JsonCodec()
@@ -173,5 +180,52 @@ class AdminModelModerationServiceImplTest {
 
         when(fileAssetRepository.findById(99L)).thenReturn(Optional.empty());
         assertThrows(NotFoundException.class, () -> service.downloadModelFile("mdl-200"));
+    }
+
+    @Test
+    void getModelDetailAndDownloadExposeScadCodeAndParameters() {
+        String scadSource = """
+                // Largura (mm)
+                width = 80; // [20:5:200]
+                rounded = true;
+                cube([width, 40, 20]);
+                """;
+
+        Model3D scadModel = new Model3D();
+        scadModel.setId(300L);
+        scadModel.setGuid("mdl-scad-300");
+        scadModel.setSlug("caixa-parametrica");
+        scadModel.setName("Caixa Paramétrica");
+        scadModel.setCategory("home");
+        scadModel.setPrice(BigDecimal.ZERO);
+        scadModel.setFormat(FileFormat3D.SCAD);
+        scadModel.setCustomizable(true);
+        scadModel.setFileAssetId(null);
+        scadModel.setModerationStatus(ModelModerationStatus.PENDING_REVIEW);
+        scadModel.setStatus(StatusCd.ACTIVE);
+
+        ModelCustomization customization = new ModelCustomization();
+        customization.setModel3dId(300L);
+        customization.setScadCode(scadSource);
+        customization.setParametersSchemaJson("[]");
+        customization.setStatus(StatusCd.ACTIVE);
+
+        when(model3DRepository.findByGuid("mdl-scad-300")).thenReturn(Optional.of(scadModel));
+        when(modelCustomizationRepository.findByModel3dIdAndStatus(300L, StatusCd.ACTIVE))
+                .thenReturn(Optional.of(customization));
+
+        AdminModelDetailResponse detail = service.getModelDetail("mdl-scad-300");
+        assertEquals(scadSource, detail.scadCode());
+        assertNotNull(detail.scadParameters());
+        assertEquals(2, detail.scadParameters().size());
+        assertEquals("width", detail.scadParameters().get(0).name());
+        assertEquals(ScadParameterType.NUMBER, detail.scadParameters().get(0).type());
+        assertEquals("rounded", detail.scadParameters().get(1).name());
+        assertEquals(ScadParameterType.BOOLEAN, detail.scadParameters().get(1).type());
+
+        OrderManagementService.OrderFileContent scadFile = service.downloadModelFile("mdl-scad-300");
+        assertEquals("caixa-parametrica.scad", scadFile.fileName());
+        assertEquals("text/plain; charset=utf-8", scadFile.contentType());
+        assertArrayEquals(scadSource.getBytes(StandardCharsets.UTF_8), scadFile.bytes());
     }
 }

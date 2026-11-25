@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -91,13 +92,13 @@ public class OrderService {
 
         // 5. Create the Order and its OrderFileAsset plate records
         Order order = new Order();
+        List<OrderFileAsset> plateEntities = new ArrayList<>(uploadedAssets.size());
         try {
             order.setToAddressId(address.getId());
             order.setBuyerId(caller.getId());
             order.setFileAssetId(uploadedAssets.getFirst().getId());
             order = orderRepository.save(order);
 
-            List<OrderFileAsset> plateEntities = new ArrayList<>(uploadedAssets.size());
             for (int i = 0; i < uploadedAssets.size(); i++) {
                 FileAsset asset = uploadedAssets.get(i);
                 OrderPlateMetadataRequest meta = i < platesMetadata.size() ? platesMetadata.get(i) : null;
@@ -115,9 +116,9 @@ public class OrderService {
         // 5.3 Create the Quoting Status
         orderStatusService.move(order, OrderStatusCd.QUOTING);
 
-        // 6-7. Fetch list of makers
+        // 6-7. Fetch list of eligible makers for order requirements
         try {
-            List<CompanyChoiceDTO> companyChoiceDTOS = companyService.findCompaniesForAddress(address, 100);
+            List<CompanyChoiceDTO> companyChoiceDTOS = companyService.findCompaniesForOrder(address, plateEntities, 100);
             return new StartOrderResponse(order.getGuid(), AddressDTO.from(address), companyChoiceDTOS);
         } catch (Exception e) {
             log.error("Error searching companies for order. Returning Order Guid to the UI", e);
@@ -150,12 +151,57 @@ public class OrderService {
         entity.setScaleX(positiveOrDefault(meta != null ? meta.scaleX() : null, 1.0));
         entity.setScaleY(positiveOrDefault(meta != null ? meta.scaleY() : null, 1.0));
         entity.setScaleZ(positiveOrDefault(meta != null ? meta.scaleZ() : null, 1.0));
-        entity.setIsMultiColor(Boolean.TRUE.equals(meta != null ? meta.isMultiColor() : null));
+        entity.setDimensionXMm(positiveBigDecimalOrNull(meta != null ? meta.dimensionXMm() : null));
+        entity.setDimensionYMm(positiveBigDecimalOrNull(meta != null ? meta.dimensionYMm() : null));
+        entity.setDimensionZMm(positiveBigDecimalOrNull(meta != null ? meta.dimensionZMm() : null));
+
+        boolean explicitMulti = Boolean.TRUE.equals(meta != null ? meta.isMultiColor() : null);
+        int resolvedColors = meta != null && meta.colorCount() != null && meta.colorCount() > 0
+                ? meta.colorCount()
+                : (explicitMulti ? 2 : 1);
+        entity.setColorCount(resolvedColors);
+        entity.setIsMultiColor(explicitMulti || resolvedColors > 1);
+        entity.setLayerHeightMm(positiveBigDecimalOrNull(meta != null ? meta.layerHeightMm() : null));
+        entity.setUrgency(truncate(meta != null ? meta.urgency() : null, 20));
         entity.setPaintingInstructions(
                 meta != null && meta.paintingInstructions() != null && !meta.paintingInstructions().isBlank()
                         ? meta.paintingInstructions().trim()
                         : null);
+        entity.setQuantity(meta != null && meta.quantity() != null && meta.quantity() > 0 ? meta.quantity() : 1);
+        entity.setWallCount(meta != null && meta.wallCount() != null && meta.wallCount() > 0 ? meta.wallCount() : null);
+        entity.setInfillPattern(truncate(meta != null ? meta.infillPattern() : null, 40));
+        entity.setAdhesionType(truncate(meta != null ? meta.adhesionType() : null, 40));
+        entity.setSupportType(truncate(meta != null ? meta.supportType() : null, 40));
+        entity.setFinish(truncate(meta != null ? meta.finish() : null, 40));
+        entity.setTolerance(truncate(meta != null ? meta.tolerance() : null, 40));
+        entity.setPlateNotes(
+                meta != null && meta.notes() != null && !meta.notes().isBlank()
+                        ? meta.notes().trim()
+                        : null);
+        if (meta != null && meta.colors() != null && !meta.colors().isEmpty()) {
+            List<String> cleanedColors = meta.colors().stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(c -> !c.isEmpty())
+                    .toList();
+            if (!cleanedColors.isEmpty()) {
+                entity.setColorsJson(jsonCodec.toJsonArray(cleanedColors));
+                if (entity.getColorHex() == null) {
+                    entity.setColorHex(truncate(cleanedColors.getFirst(), 30));
+                }
+            }
+        }
+        entity.setEstimatedWeightGrams(positiveBigDecimalOrNull(meta != null ? meta.estimatedWeightGrams() : null));
+        entity.setEstimatedPrintTimeMinutes(
+                meta != null && meta.estimatedPrintTimeMinutes() != null && meta.estimatedPrintTimeMinutes() > 0
+                        ? meta.estimatedPrintTimeMinutes()
+                        : null);
+        entity.setEstimatedPriceBrl(positiveBigDecimalOrNull(meta != null ? meta.estimatedPriceBrl() : null));
         return entity;
+    }
+
+    private static @Nullable BigDecimal positiveBigDecimalOrNull(@Nullable BigDecimal value) {
+        return value != null && value.compareTo(BigDecimal.ZERO) > 0 ? value : null;
     }
 
     private void cleanupUploadedAssets(List<FileAsset> assets) {
@@ -189,12 +235,15 @@ public class OrderService {
             throw new BadRequestException(MessageCd.INTERNAL_SERVER_ERROR); // TODO
         }
 
-        Optional<Address> optionalAddress = addressService.findById(optionalOrder.get().getToAddressId());
+        Order order = optionalOrder.get();
+        Optional<Address> optionalAddress = addressService.findById(order.getToAddressId());
         if (optionalAddress.isEmpty()) {
             throw new BadRequestException(MessageCd.INTERNAL_SERVER_ERROR); // TODO
         }
 
-        return companyService.findCompaniesForAddress(optionalAddress.get(), max);
+        List<OrderFileAsset> plates = orderFileAssetRepository
+                .findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(order.getId(), StatusCd.ACTIVE);
+        return companyService.findCompaniesForOrder(optionalAddress.get(), plates, max);
     }
 
     public Optional<Order> findByGuid(String guid) {
@@ -237,8 +286,26 @@ public class OrderService {
                 copy.setScaleX(src.getScaleX());
                 copy.setScaleY(src.getScaleY());
                 copy.setScaleZ(src.getScaleZ());
+                copy.setDimensionXMm(src.getDimensionXMm());
+                copy.setDimensionYMm(src.getDimensionYMm());
+                copy.setDimensionZMm(src.getDimensionZMm());
+                copy.setColorCount(src.getColorCount());
+                copy.setLayerHeightMm(src.getLayerHeightMm());
+                copy.setUrgency(src.getUrgency());
                 copy.setIsMultiColor(src.getIsMultiColor());
                 copy.setPaintingInstructions(src.getPaintingInstructions());
+                copy.setQuantity(src.getQuantity());
+                copy.setWallCount(src.getWallCount());
+                copy.setInfillPattern(src.getInfillPattern());
+                copy.setAdhesionType(src.getAdhesionType());
+                copy.setSupportType(src.getSupportType());
+                copy.setFinish(src.getFinish());
+                copy.setTolerance(src.getTolerance());
+                copy.setPlateNotes(src.getPlateNotes());
+                copy.setColorsJson(src.getColorsJson());
+                copy.setEstimatedWeightGrams(src.getEstimatedWeightGrams());
+                copy.setEstimatedPrintTimeMinutes(src.getEstimatedPrintTimeMinutes());
+                copy.setEstimatedPriceBrl(src.getEstimatedPriceBrl());
                 clonedFiles.add(copy);
             }
             orderFileAssetRepository.saveAll(clonedFiles);

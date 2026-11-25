@@ -27,6 +27,7 @@ import org.imprime.ai.api.repo.db.AddressRepository;
 import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.impl.AdminMakerCatalogServiceImpl;
@@ -64,6 +65,8 @@ class AdminMakerCatalogServiceImplTest {
     @Mock
     private FilamentRepository filamentRepository;
     @Mock
+    private PrinterCatalogRepository printerCatalogRepository;
+    @Mock
     private ProductRepository productRepository;
     @Mock
     private AdminAuditService adminAuditService;
@@ -81,6 +84,7 @@ class AdminMakerCatalogServiceImplTest {
                 addressRepository,
                 assetRepository,
                 filamentRepository,
+                printerCatalogRepository,
                 productRepository,
                 adminAuditService,
                 new JsonCodec(),

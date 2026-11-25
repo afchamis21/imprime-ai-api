@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import org.imprime.ai.api.model.enums.MakerCapability;
+import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PixKeyType;
 import org.imprime.ai.api.model.enums.ShippingOption;
 
@@ -89,6 +90,73 @@ public record PatchMakerProfileRequest(
 
         @Schema(description = "Links sociais e contato público")
         @Valid
-        MakerSocialLinksRequest socialLinks
+        MakerSocialLinksRequest socialLinks,
+
+        @Schema(description = "Nome da impressora principal")
+        @Size(max = 120, message = "O nome da impressora principal deve ter no máximo 120 caracteres")
+        String primaryPrinter,
+
+        @Schema(description = "GUID da impressora principal vinculada ao catálogo")
+        String primaryPrinterCatalogGuid,
+
+        @Schema(description = "Indica se imprime colorido / multicolor")
+        Boolean supportsMulticolor,
+
+        @Schema(description = "Número máximo de cores/slots simultâneos")
+        @Min(value = 1, message = "O número de cores/slots deve ser pelo menos 1")
+        Integer maxMulticolorSlots,
+
+        @Schema(description = "Materiais operados pelo Maker")
+        List<MaterialType> materials,
+
+        @Schema(description = "Oferece pós-processamento")
+        Boolean offersPostProcessing,
+
+        @Schema(description = "Oferece pintura")
+        Boolean offersPainting,
+
+        @Schema(description = "Oferece modelagem CAD")
+        Boolean offersCadModeling,
+
+        @Schema(description = "Aceita pedidos expressos")
+        Boolean supportsExpressOrders,
+
+        @Schema(description = "Menor altura de camada atendida em mm")
+        BigDecimal minLayerHeightMm,
+
+        @Schema(description = "Observações técnicas do estúdio")
+        @Size(max = 500, message = "As observações técnicas devem ter no máximo 500 caracteres")
+        String technicalNotes
 ) {
+    public PatchMakerProfileRequest(
+            String name,
+            String handle,
+            String tagline,
+            String bio,
+            PixKeyType pixKeyType,
+            String pixKey,
+            String city,
+            String state,
+            String avatarUrl,
+            String coverUrl,
+            List<MakerCapability> capabilities,
+            Integer responseTimeHours,
+            Integer minLeadTimeDays,
+            Integer maxLeadTimeDays,
+            BigDecimal minOrderValue,
+            List<ShippingOption> shippingOptions,
+            Boolean vacationMode,
+            String vacationMessage,
+            Boolean acceptingCustomQuotes,
+            Boolean publicPortfolioEnabled,
+            MakerSocialLinksRequest socialLinks
+    ) {
+        this(
+                name, handle, tagline, bio, pixKeyType, pixKey, city, state, avatarUrl, coverUrl,
+                capabilities, responseTimeHours, minLeadTimeDays, maxLeadTimeDays, minOrderValue,
+                shippingOptions, vacationMode, vacationMessage, acceptingCustomQuotes,
+                publicPortfolioEnabled, socialLinks,
+                null, null, null, null, null, null, null, null, null, null, null
+        );
+    }
 }

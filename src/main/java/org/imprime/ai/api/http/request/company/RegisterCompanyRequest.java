@@ -6,12 +6,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.request.address.RegisterAddressRequest;
 import org.imprime.ai.api.http.request.base.ValidatedRequest;
 import org.imprime.ai.api.model.enums.DocumentType;
+import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.validator.annotations.DocumentTypes;
 import org.imprime.ai.api.validator.annotations.Regex;
 import org.imprime.ai.api.validator.annotations.Required;
 import org.imprime.ai.api.validator.annotations.StringLength;
 import org.imprime.ai.api.validator.reflection.ValidatorEngine;
+
+import java.math.BigDecimal;
+import java.util.List;
 
 @Slf4j
 @Schema(description = "Dados para cadastro de empresa (Maker)")
@@ -34,9 +38,57 @@ public record RegisterCompanyRequest(
 
         @Schema(description = "Endereço sede da empresa", requiredMode = Schema.RequiredMode.REQUIRED)
         @Required(message = MessageCd.MISSING_COMPANY_ADDRESS)
-        RegisterAddressRequest address
+        RegisterAddressRequest address,
+
+        @Schema(description = "Lista de impressoras selecionadas do catálogo fixo (1 ou mais)")
+        List<RegisterMakerPrinterRequest> printers,
+
+        @Schema(description = "GUID da impressora principal do catálogo (fallback de entrada única)")
+        String primaryPrinterCatalogGuid,
+
+        @Schema(description = "Indica se o Maker aceita pedidos de orçamento personalizado (padrão true)")
+        Boolean acceptingCustomQuotes,
+
+        @Schema(description = "Indica se o setup do Maker imprime colorido / multicolor")
+        Boolean supportsMulticolor,
+
+        @Schema(description = "Número máximo de cores/slots simultâneos no estúdio")
+        Integer maxMulticolorSlots,
+
+        @Schema(description = "Materiais operados pelo Maker (quando omitido, herda dos modelos de impressora)")
+        List<MaterialType> materials,
+
+        @Schema(description = "Oferece pós-processamento / lixamento / acabamento")
+        Boolean offersPostProcessing,
+
+        @Schema(description = "Oferece pintura artística ou automotiva")
+        Boolean offersPainting,
+
+        @Schema(description = "Oferece modelagem CAD sob medida")
+        Boolean offersCadModeling,
+
+        @Schema(description = "Aceita pedidos expressos com prioridade")
+        Boolean supportsExpressOrders,
+
+        @Schema(description = "Menor altura de camada atendida em mm (ex: 0.08)")
+        BigDecimal minLayerHeightMm,
+
+        @Schema(description = "Observações técnicas do estúdio")
+        String technicalNotes
 
 ) implements ValidatedRequest {
+
+    public RegisterCompanyRequest(
+            String name,
+            DocumentType documentType,
+            String document,
+            RegisterAddressRequest address
+    ) {
+        this(
+                name, documentType, document, address,
+                null, null, null, null, null, null, null, null, null, null, null, null
+        );
+    }
 
     @Nullable
     @Override
@@ -53,6 +105,17 @@ public record RegisterCompanyRequest(
         MessageCd invalidDocumentMessage = documentType.validate(document);
         if (invalidDocumentMessage != null) {
             return invalidDocumentMessage;
+        }
+
+        if (printers != null) {
+            for (RegisterMakerPrinterRequest printer : printers) {
+                if (printer == null || printer.printerCatalogGuid() == null || printer.printerCatalogGuid().isBlank()) {
+                    return MessageCd.VALIDATION_ERROR;
+                }
+                if (printer.quantity() != null && (printer.quantity() < 1 || printer.quantity() > 20)) {
+                    return MessageCd.VALIDATION_ERROR;
+                }
+            }
         }
 
         // Nested validation

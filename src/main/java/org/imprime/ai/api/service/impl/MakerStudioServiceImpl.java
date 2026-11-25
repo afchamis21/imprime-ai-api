@@ -23,10 +23,12 @@ import org.imprime.ai.api.model.Filament;
 import org.imprime.ai.api.model.MakerProject;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.PrintQueueItem;
+import org.imprime.ai.api.model.PrinterCatalog;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.ChatRoleFilter;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MakerCapability;
+import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
@@ -44,6 +46,7 @@ import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.MakerProjectRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.service.ChatRestService;
 import org.imprime.ai.api.service.MakerOrderSupport;
 import org.imprime.ai.api.service.MakerStudioService;
@@ -58,7 +61,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -90,6 +95,7 @@ public class MakerStudioServiceImpl implements MakerStudioService {
     private final FilamentRepository filamentRepository;
     private final MakerOrderSupport makerOrderSupport;
     private final MakerPrintQueueServiceImpl makerPrintQueueService;
+    private final PrinterCatalogRepository printerCatalogRepository;
 
     @Override
     @Transactional
@@ -295,6 +301,22 @@ public class MakerStudioServiceImpl implements MakerStudioService {
         company.setPublicPortfolioEnabled(request.publicPortfolioEnabled() == null || request.publicPortfolioEnabled());
         company.setSocialLinksJson(serializeSocialLinks(request.socialLinks()));
 
+        applyTechnicalProfileFields(
+                company,
+                request.primaryPrinter(),
+                request.primaryPrinterCatalogGuid(),
+                request.supportsMulticolor(),
+                request.maxMulticolorSlots(),
+                request.materials(),
+                request.offersPostProcessing(),
+                request.offersPainting(),
+                request.offersCadModeling(),
+                request.supportsExpressOrders(),
+                request.minLayerHeightMm(),
+                request.technicalNotes(),
+                request.capabilities() != null
+        );
+
         Address address = updateCompanyCityState(company, request.city().trim(), request.state().trim());
         Company saved = companyRepository.save(company);
         return toStudioProfileResponse(saved, address);
@@ -382,6 +404,22 @@ public class MakerStudioServiceImpl implements MakerStudioService {
             company.setSocialLinksJson(jsonCodec.toJson(merged));
         }
 
+        applyTechnicalProfileFields(
+                company,
+                request.primaryPrinter(),
+                request.primaryPrinterCatalogGuid(),
+                request.supportsMulticolor(),
+                request.maxMulticolorSlots(),
+                request.materials(),
+                request.offersPostProcessing(),
+                request.offersPainting(),
+                request.offersCadModeling(),
+                request.supportsExpressOrders(),
+                request.minLayerHeightMm(),
+                request.technicalNotes(),
+                request.capabilities() != null
+        );
+
         Address address = (request.city() != null || request.state() != null)
                 ? updateCompanyCityState(
                 company,
@@ -391,6 +429,95 @@ public class MakerStudioServiceImpl implements MakerStudioService {
 
         Company saved = companyRepository.save(company);
         return toStudioProfileResponse(saved, address);
+    }
+
+    private void applyTechnicalProfileFields(
+            Company company,
+            String primaryPrinter,
+            String primaryPrinterCatalogGuid,
+            Boolean supportsMulticolor,
+            Integer maxMulticolorSlots,
+            List<MaterialType> materials,
+            Boolean offersPostProcessing,
+            Boolean offersPainting,
+            Boolean offersCadModeling,
+            Boolean supportsExpressOrders,
+            BigDecimal minLayerHeightMm,
+            String technicalNotes,
+            boolean capabilitiesUpdated
+    ) {
+        if (primaryPrinter != null) {
+            company.setPrimaryPrinter(CatalogDtoMapper.trimToNull(primaryPrinter, 120));
+        }
+        if (primaryPrinterCatalogGuid != null) {
+            if (primaryPrinterCatalogGuid.isBlank()) {
+                company.setPrimaryPrinterCatalogId(null);
+            } else {
+                PrinterCatalog catalog = printerCatalogRepository
+                        .findByGuidAndStatus(primaryPrinterCatalogGuid.trim(), StatusCd.ACTIVE)
+                        .orElseThrow(() -> new NotFoundException(MessageCd.PRINTER_CATALOG_NOT_FOUND));
+                company.setPrimaryPrinterCatalogId(catalog.getId());
+                if (primaryPrinter == null || primaryPrinter.isBlank()) {
+                    company.setPrimaryPrinter(catalog.getFullDisplayName());
+                }
+            }
+        }
+        if (materials != null) {
+            company.setMaterialsJson(jsonCodec.toEnumArrayJson(materials));
+        }
+        if (supportsExpressOrders != null) {
+            company.setSupportsExpressOrders(supportsExpressOrders);
+        }
+        if (minLayerHeightMm != null) {
+            company.setMinLayerHeightMm(minLayerHeightMm);
+        }
+        if (technicalNotes != null) {
+            company.setTechnicalNotes(CatalogDtoMapper.trimToNull(technicalNotes, 500));
+        }
+
+        Set<MakerCapability> caps = new LinkedHashSet<>(
+                jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class)
+        );
+
+        boolean effectiveMulticolor = supportsMulticolor != null
+                ? supportsMulticolor
+                : (capabilitiesUpdated ? caps.contains(MakerCapability.MULTICOLOR_AMS) : Boolean.TRUE.equals(company.getSupportsMulticolor()));
+        boolean effectivePostProcessing = offersPostProcessing != null
+                ? offersPostProcessing
+                : (capabilitiesUpdated ? caps.contains(MakerCapability.POST_PROCESSING) : Boolean.TRUE.equals(company.getOffersPostProcessing()));
+        boolean effectivePainting = offersPainting != null
+                ? offersPainting
+                : (capabilitiesUpdated ? caps.contains(MakerCapability.PAINTING) : Boolean.TRUE.equals(company.getOffersPainting()));
+        boolean effectiveCad = offersCadModeling != null
+                ? offersCadModeling
+                : (capabilitiesUpdated ? caps.contains(MakerCapability.MODELING) : Boolean.TRUE.equals(company.getOffersCadModeling()));
+
+        company.setSupportsMulticolor(effectiveMulticolor);
+        company.setOffersPostProcessing(effectivePostProcessing);
+        company.setOffersPainting(effectivePainting);
+        company.setOffersCadModeling(effectiveCad);
+
+        if (maxMulticolorSlots != null) {
+            company.setMaxMulticolorSlots(effectiveMulticolor ? Math.max(maxMulticolorSlots, 2) : 1);
+        } else if (!effectiveMulticolor) {
+            company.setMaxMulticolorSlots(1);
+        } else if (company.getMaxMulticolorSlots() == null || company.getMaxMulticolorSlots() < 2) {
+            company.setMaxMulticolorSlots(4);
+        }
+
+        syncCapabilityFlag(caps, MakerCapability.MULTICOLOR_AMS, effectiveMulticolor);
+        syncCapabilityFlag(caps, MakerCapability.POST_PROCESSING, effectivePostProcessing);
+        syncCapabilityFlag(caps, MakerCapability.PAINTING, effectivePainting);
+        syncCapabilityFlag(caps, MakerCapability.MODELING, effectiveCad);
+        company.setCapabilitiesJson(jsonCodec.toEnumArrayJson(new ArrayList<>(caps)));
+    }
+
+    private static void syncCapabilityFlag(Set<MakerCapability> caps, MakerCapability capability, boolean enabled) {
+        if (enabled) {
+            caps.add(capability);
+        } else {
+            caps.remove(capability);
+        }
     }
 
     private Company requireMakerCompany() {
@@ -476,6 +603,18 @@ public class MakerStudioServiceImpl implements MakerStudioService {
     }
 
     private MakerStudioProfileResponse toStudioProfileResponse(Company company, Address address) {
+        String primaryCatalogGuid = company.getPrimaryPrinterCatalogId() != null
+                ? printerCatalogRepository.findById(company.getPrimaryPrinterCatalogId())
+                        .map(PrinterCatalog::getGuid)
+                        .orElse(null)
+                : null;
+        List<MakerCapability> caps = jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class);
+        boolean multicolor = Boolean.TRUE.equals(company.getSupportsMulticolor())
+                || caps.contains(MakerCapability.MULTICOLOR_AMS);
+        int maxSlots = multicolor
+                ? Math.max(company.getMaxMulticolorSlots() != null ? company.getMaxMulticolorSlots() : 4, 2)
+                : 1;
+
         return new MakerStudioProfileResponse(
                 company.getGuid(),
                 company.getSlug(),
@@ -489,7 +628,7 @@ public class MakerStudioServiceImpl implements MakerStudioService {
                 address != null ? address.getState() : null,
                 company.getAvatarUrl(),
                 company.getCoverUrl(),
-                jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class),
+                caps,
                 company.getResponseTimeHours(),
                 company.getMinLeadTimeDays(),
                 company.getMaxLeadTimeDays(),
@@ -497,9 +636,20 @@ public class MakerStudioServiceImpl implements MakerStudioService {
                 jsonCodec.readEnumList(company.getShippingOptionsJson(), ShippingOption.class),
                 Boolean.TRUE.equals(company.getVacationMode()),
                 company.getVacationMessage(),
-                Boolean.TRUE.equals(company.getAcceptingCustomQuotes()),
+                !Boolean.FALSE.equals(company.getAcceptingCustomQuotes()),
                 Boolean.TRUE.equals(company.getPublicPortfolioEnabled()),
-                CatalogDtoMapper.readSocialLinks(company, jsonCodec)
+                CatalogDtoMapper.readSocialLinks(company, jsonCodec),
+                company.getPrimaryPrinter(),
+                primaryCatalogGuid,
+                multicolor,
+                maxSlots,
+                jsonCodec.readEnumList(company.getMaterialsJson(), MaterialType.class),
+                Boolean.TRUE.equals(company.getOffersPostProcessing()) || caps.contains(MakerCapability.POST_PROCESSING),
+                Boolean.TRUE.equals(company.getOffersPainting()) || caps.contains(MakerCapability.PAINTING),
+                Boolean.TRUE.equals(company.getOffersCadModeling()) || caps.contains(MakerCapability.MODELING),
+                Boolean.TRUE.equals(company.getSupportsExpressOrders()),
+                company.getMinLayerHeightMm(),
+                company.getTechnicalNotes()
         );
     }
 }

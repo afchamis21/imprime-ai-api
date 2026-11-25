@@ -11,6 +11,7 @@ import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.StockAdjustmentReason;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.repo.db.FilamentCatalogRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.FilamentStockMovementRepository;
 import org.imprime.ai.api.service.impl.MakerFilamentServiceImpl;
@@ -40,6 +41,8 @@ class MakerFilamentServiceImplTest {
     private FilamentRepository filamentRepository;
     @Mock
     private FilamentStockMovementRepository movementRepository;
+    @Mock
+    private FilamentCatalogRepository filamentCatalogRepository;
 
     @InjectMocks
     private MakerFilamentServiceImpl service;

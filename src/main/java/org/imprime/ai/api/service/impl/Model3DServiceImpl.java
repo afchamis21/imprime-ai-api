@@ -34,16 +34,19 @@ import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
+import org.imprime.ai.api.util.ScadParameterParser;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -223,15 +226,32 @@ public class Model3DServiceImpl implements Model3DService {
         if (!Boolean.TRUE.equals(model.getCustomizable())) {
             throw new NotFoundException(MessageCd.MODEL_NOT_CUSTOMIZABLE);
         }
-        ModelCustomization customization = modelCustomizationRepository
-                .findByModel3dIdAndStatus(model.getId(), StatusCd.ACTIVE)
-                .orElseThrow(() -> new NotFoundException(MessageCd.MODEL_NOT_CUSTOMIZABLE));
 
-        List<ScadParameterDefinition> parameters = jsonCodec.readList(
-                customization.getParametersSchemaJson(),
-                ScadParameterDefinition.class
-        );
-        return new ModelCustomizationResponse(model.getGuid(), customization.getScadCode(), parameters);
+        Optional<ModelCustomization> customizationOpt = modelCustomizationRepository
+                .findByModel3dIdAndStatus(model.getId(), StatusCd.ACTIVE);
+
+        if (customizationOpt.isPresent()) {
+            ModelCustomization customization = customizationOpt.get();
+            List<ScadParameterDefinition> parameters = jsonCodec.readList(
+                    customization.getParametersSchemaJson(),
+                    ScadParameterDefinition.class
+            );
+            if (parameters.isEmpty() && customization.getScadCode() != null && !customization.getScadCode().isBlank()) {
+                parameters = ScadParameterParser.parse(customization.getScadCode());
+            }
+            return new ModelCustomizationResponse(model.getGuid(), customization.getScadCode(), parameters);
+        }
+
+        if (model.getFormat() == FileFormat3D.SCAD && model.getFileAssetId() != null) {
+            FileAsset asset = fileAssetRepository.findById(model.getFileAssetId())
+                    .orElseThrow(() -> new NotFoundException(MessageCd.MODEL_NOT_CUSTOMIZABLE));
+            byte[] bytes = objectStorageService.downloadBytes(asset);
+            String scadCode = new String(bytes, StandardCharsets.UTF_8);
+            List<ScadParameterDefinition> parsedParams = ScadParameterParser.parse(scadCode);
+            return new ModelCustomizationResponse(model.getGuid(), scadCode, parsedParams);
+        }
+
+        throw new NotFoundException(MessageCd.MODEL_NOT_CUSTOMIZABLE);
     }
 
     private Model3D resolveActiveModel(String slugOrGuid) {

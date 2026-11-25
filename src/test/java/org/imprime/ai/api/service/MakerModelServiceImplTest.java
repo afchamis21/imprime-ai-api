@@ -4,9 +4,11 @@ import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.maker.CreateMakerModelRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.maker.MakerModelResponse;
+import org.imprime.ai.api.http.response.model3d.ScadParameterDefinition;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Model3D;
+import org.imprime.ai.api.model.ModelCustomization;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.FavoriteTargetType;
 import org.imprime.ai.api.model.enums.FileFormat3D;
@@ -14,10 +16,13 @@ import org.imprime.ai.api.model.enums.LicenseType;
 import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.ModelModerationStatus;
+import org.imprime.ai.api.model.enums.ScadParameterType;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
+import org.imprime.ai.api.repo.db.ModelCustomizationRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.impl.FavoriteServiceImpl;
 import org.imprime.ai.api.service.impl.MakerModelServiceImpl;
@@ -26,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -54,6 +60,8 @@ class MakerModelServiceImplTest {
     private UserRepository userRepository;
     @Mock
     private Model3DRepository model3DRepository;
+    @Mock
+    private ModelCustomizationRepository modelCustomizationRepository;
     @Mock
     private FileAssetService fileAssetService;
     @Mock
@@ -144,6 +152,169 @@ class MakerModelServiceImplTest {
         assertEquals("https://cdn.imprime.ai/preview-1.png", response.coverImageUrl());
         assertEquals(14L, response.fileSizeBytes());
         verify(fileAssetService).upload(file, FileAsset.AssetType.MODEL);
+        verify(modelCustomizationRepository, never()).save(any());
+    }
+
+    @Test
+    void submitParametricModelWithScadCodeOnlyUploadsScadBytesAndSavesCustomization() {
+        String scadSource = """
+                // Largura (mm)
+                width = 60; // [20:5:120]
+                rounded = true;
+                cube([width, 30, 10]);
+                """;
+        FileAsset uploadedAsset = new FileAsset();
+        uploadedAsset.setId(88L);
+        uploadedAsset.setGuid("asset-guid-88");
+        uploadedAsset.setName("caixa-organizadora.scad");
+
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        when(model3DRepository.existsBySlug("caixa-organizadora")).thenReturn(false);
+        when(fileAssetService.uploadBytes(
+                any(byte[].class),
+                eq("caixa-organizadora.scad"),
+                eq("text/plain; charset=utf-8"),
+                eq(FileAsset.AssetType.MODEL)
+        )).thenReturn(uploadedAsset);
+        when(model3DRepository.save(any(Model3D.class))).thenAnswer(inv -> {
+            Model3D saved = inv.getArgument(0);
+            saved.setId(202L);
+            saved.setGuid("model-guid-202");
+            return saved;
+        });
+
+        CreateMakerModelRequest request = new CreateMakerModelRequest(
+                "Caixa Organizadora",
+                "home",
+                BigDecimal.ZERO,
+                "Modelo paramétrico",
+                null,
+                LicenseType.PERSONAL,
+                MaterialType.PLA,
+                40,
+                null,
+                null,
+                null,
+                true,
+                null,
+                List.of(),
+                List.of("Paramétrico"),
+                scadSource,
+                null
+        );
+
+        MakerModelResponse response = service.submitModel(null, request);
+
+        assertEquals("model-guid-202", response.guid());
+        assertEquals(FileFormat3D.SCAD, response.format());
+        assertTrue(response.customizable());
+        assertEquals((long) scadSource.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8).length, response.fileSizeBytes());
+
+        ArgumentCaptor<ModelCustomization> customCaptor = ArgumentCaptor.forClass(ModelCustomization.class);
+        verify(modelCustomizationRepository).save(customCaptor.capture());
+        ModelCustomization savedCustom = customCaptor.getValue();
+        assertEquals(202L, savedCustom.getModel3dId());
+        assertEquals(scadSource.trim(), savedCustom.getScadCode());
+        assertTrue(savedCustom.getParametersSchemaJson().contains("\"name\":\"width\""));
+        assertTrue(savedCustom.getParametersSchemaJson().contains("\"name\":\"rounded\""));
+    }
+
+    @Test
+    void submitParametricModelWithExplicitParametersUsesSanitizedParameters() {
+        String scadSource = "width = 40;\ncube(width);";
+        FileAsset uploadedAsset = new FileAsset();
+        uploadedAsset.setId(89L);
+        uploadedAsset.setName("peca-custom.scad");
+
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        when(model3DRepository.existsBySlug("peca-custom")).thenReturn(false);
+        when(fileAssetService.uploadBytes(any(), eq("peca-custom.scad"), any(), eq(FileAsset.AssetType.MODEL)))
+                .thenReturn(uploadedAsset);
+        when(model3DRepository.save(any(Model3D.class))).thenAnswer(inv -> {
+            Model3D saved = inv.getArgument(0);
+            saved.setId(203L);
+            saved.setGuid("model-guid-203");
+            return saved;
+        });
+
+        List<ScadParameterDefinition> explicitParams = List.of(
+                new ScadParameterDefinition("width", "Largura Principal (mm)", ScadParameterType.NUMBER, 40, new BigDecimal("10"), new BigDecimal("200"), new BigDecimal("5"), "mm", null)
+        );
+
+        CreateMakerModelRequest request = new CreateMakerModelRequest(
+                "Peça Custom",
+                "engineering",
+                BigDecimal.TEN,
+                null,
+                FileFormat3D.STL,
+                LicenseType.PERSONAL,
+                MaterialType.PETG,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                scadSource,
+                explicitParams
+        );
+
+        MakerModelResponse response = service.submitModel(null, request);
+
+        assertEquals(FileFormat3D.SCAD, response.format());
+        assertTrue(response.customizable());
+        ArgumentCaptor<ModelCustomization> customCaptor = ArgumentCaptor.forClass(ModelCustomization.class);
+        verify(modelCustomizationRepository).save(customCaptor.capture());
+        assertTrue(customCaptor.getValue().getParametersSchemaJson().contains("\"label\":\"Largura Principal (mm)\""));
+    }
+
+    @Test
+    void submitValidatesMissingScadOrMissingStaticFile() {
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        when(model3DRepository.existsBySlug("sem-scad")).thenReturn(false);
+        when(model3DRepository.existsBySlug("sem-arquivo")).thenReturn(false);
+
+        CreateMakerModelRequest parametricMissingScad = new CreateMakerModelRequest(
+                "Sem SCAD",
+                "engineering",
+                BigDecimal.ZERO,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                "   ",
+                null
+        );
+        assertThrows(BadRequestException.class, () -> service.submitModel(null, parametricMissingScad));
+
+        CreateMakerModelRequest staticMissingFile = new CreateMakerModelRequest(
+                "Sem Arquivo",
+                "engineering",
+                BigDecimal.ZERO,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null
+        );
+        assertThrows(BadRequestException.class, () -> service.submitModel(null, staticMissingFile));
     }
 
     @Test

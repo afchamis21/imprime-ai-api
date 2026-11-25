@@ -9,8 +9,10 @@ import org.imprime.ai.api.http.request.admin.AdminOptionalNoteRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.admin.AdminModelDetailResponse;
 import org.imprime.ai.api.http.response.admin.AdminModelSummaryResponse;
+import org.imprime.ai.api.http.response.model3d.ScadParameterDefinition;
 import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Model3D;
+import org.imprime.ai.api.model.ModelCustomization;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.AuditAction;
 import org.imprime.ai.api.model.enums.FileFormat3D;
@@ -20,6 +22,7 @@ import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
+import org.imprime.ai.api.repo.db.ModelCustomizationRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.AdminAuditService;
 import org.imprime.ai.api.service.AdminModelModerationService;
@@ -28,16 +31,19 @@ import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
+import org.imprime.ai.api.util.ScadParameterParser;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -47,6 +53,7 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
     private final Model3DRepository model3DRepository;
     private final UserRepository userRepository;
     private final FileAssetRepository fileAssetRepository;
+    private final ModelCustomizationRepository modelCustomizationRepository;
     private final ObjectStorageService objectStorageService;
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
@@ -99,7 +106,23 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
     @Override
     public OrderManagementService.OrderFileContent downloadModelFile(String modelGuid) {
         Model3D model = requireModel(modelGuid);
+        String baseName = model.getSlug() != null && !model.getSlug().isBlank()
+                ? model.getSlug()
+                : model.getGuid();
+
         if (model.getFileAssetId() == null) {
+            Optional<ModelCustomization> customizationOpt = model.getId() != null
+                    ? modelCustomizationRepository.findByModel3dIdAndStatus(model.getId(), StatusCd.ACTIVE)
+                    : Optional.empty();
+            if (customizationOpt.isPresent()
+                    && customizationOpt.get().getScadCode() != null
+                    && !customizationOpt.get().getScadCode().isBlank()) {
+                return new OrderManagementService.OrderFileContent(
+                        baseName + ".scad",
+                        "text/plain; charset=utf-8",
+                        customizationOpt.get().getScadCode().getBytes(StandardCharsets.UTF_8)
+                );
+            }
             throw new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND);
         }
 
@@ -107,9 +130,6 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
                 .orElseThrow(() -> new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND));
 
         byte[] bytes = objectStorageService.downloadBytes(asset);
-        String baseName = model.getSlug() != null && !model.getSlug().isBlank()
-                ? model.getSlug()
-                : model.getGuid();
         String fileName = asset.getName() != null && !asset.getName().isBlank()
                 ? asset.getName()
                 : baseName + "." + resolveExtension(model.getFormat());
@@ -331,6 +351,25 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
             imageUrls = List.of(model.getCoverImageUrl());
         }
 
+        String scadCode = null;
+        List<ScadParameterDefinition> scadParameters = List.of();
+        if (FileFormat3D.SCAD.equals(model.getFormat()) || Boolean.TRUE.equals(model.getCustomizable())) {
+            Optional<ModelCustomization> customizationOpt = model.getId() != null
+                    ? modelCustomizationRepository.findByModel3dIdAndStatus(model.getId(), StatusCd.ACTIVE)
+                    : Optional.empty();
+            if (customizationOpt.isPresent()) {
+                ModelCustomization customization = customizationOpt.get();
+                scadCode = customization.getScadCode();
+                List<ScadParameterDefinition> parsedSchema = jsonCodec.readList(
+                        customization.getParametersSchemaJson(),
+                        ScadParameterDefinition.class
+                );
+                scadParameters = !parsedSchema.isEmpty()
+                        ? parsedSchema
+                        : (scadCode != null && !scadCode.isBlank() ? ScadParameterParser.parse(scadCode) : List.of());
+            }
+        }
+
         return new AdminModelDetailResponse(
                 model.getGuid(),
                 model.getSlug(),
@@ -366,7 +405,9 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
                 model.getModeratedAt(),
                 model.getStatus() != null ? model.getStatus() : StatusCd.ACTIVE,
                 model.getCreateDt(),
-                model.getUpdateDt()
+                model.getUpdateDt(),
+                scadCode,
+                scadParameters
         );
     }
 

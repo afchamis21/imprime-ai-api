@@ -192,7 +192,7 @@ public class MakerStorefrontController {
 
     @Operation(
             summary = "Solicitar envio de modelo 3D",
-            description = "Recebe o arquivo 3D (.stl, .3mf, .obj, .glb, .scad) e os metadados via multipart/form-data, publica na fila PENDING_REVIEW para moderação e retorna o modelo criado."
+            description = "Recebe o arquivo 3D (.stl, .3mf, .obj, .glb, .scad) ou código OpenSCAD paramétrico em metadata.scadCode via multipart/form-data, publica na fila PENDING_REVIEW para moderação e retorna o modelo criado."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Solicitação de envio registrada com sucesso"),
@@ -202,8 +202,8 @@ public class MakerStorefrontController {
     })
     @PostMapping(value = "/models", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<BaseResponse<MakerModelResponse>> submitModel(
-            @Parameter(description = "Arquivo 3D (.stl, .3mf, .obj, .glb, .scad)", required = true)
-            @RequestPart("file") MultipartFile file,
+            @Parameter(description = "Arquivo 3D (.stl, .3mf, .obj, .glb, .scad). Opcional quando customizable = true e metadata.scadCode é enviado.")
+            @RequestPart(value = "file", required = false) MultipartFile file,
             @Parameter(description = "Metadados técnicos e comerciais do modelo 3D", required = true)
             @RequestPart("metadata") @Valid CreateMakerModelRequest metadata) {
         return BaseResponse.created(makerModelService.submitModel(file, metadata));

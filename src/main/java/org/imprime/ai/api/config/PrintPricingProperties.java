@@ -29,6 +29,11 @@ public class PrintPricingProperties {
         defaults.put(MaterialType.RESIN, new BigDecimal("1.60"));
         defaults.put(MaterialType.NYLON, new BigDecimal("1.50"));
         defaults.put(MaterialType.CARBON_FIBER, new BigDecimal("1.80"));
+        defaults.put(MaterialType.PC, new BigDecimal("1.65"));
+        defaults.put(MaterialType.PETG_CF, new BigDecimal("1.55"));
+        defaults.put(MaterialType.PA_CF, new BigDecimal("1.90"));
+        defaults.put(MaterialType.PVA, new BigDecimal("1.70"));
+        defaults.put(MaterialType.HIPS, new BigDecimal("1.25"));
         defaults.put(MaterialType.OTHER, new BigDecimal("1.10"));
         return defaults;
     }

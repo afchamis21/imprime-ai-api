@@ -40,13 +40,24 @@ public class FileValidator {
         };
     }
 
+    public @Nullable BadRequestException validateBytes(byte[] content, String rawFilename, FileAsset.AssetType type) {
+        if (content == null || content.length == 0) {
+            log.warn("Byte content is empty!");
+            return new BadRequestException(MessageCd.FILE_EMPTY);
+        }
+        return validateFilenameAndExtension(sanitizeFilename(rawFilename), type);
+    }
+
     private @Nullable BadRequestException defaultValidation(MultipartFile file, FileAsset.AssetType type) {
         if (file == null || file.isEmpty()) {
             log.warn("File is empty!");
             return new BadRequestException(MessageCd.FILE_EMPTY);
         }
 
-        String filename = sanitizeFilename(file);
+        return validateFilenameAndExtension(sanitizeFilename(file), type);
+    }
+
+    private @Nullable BadRequestException validateFilenameAndExtension(@Nullable String filename, FileAsset.AssetType type) {
         if (filename == null || filename.isBlank()) {
             log.warn("Filename is empty!");
             return new BadRequestException(MessageCd.FILE_MISSING_NAME);
@@ -63,7 +74,10 @@ public class FileValidator {
     }
 
     public @Nullable String sanitizeFilename(MultipartFile file) {
-        String filename = file.getOriginalFilename();
+        return sanitizeFilename(file.getOriginalFilename());
+    }
+
+    public @Nullable String sanitizeFilename(@Nullable String filename) {
         if (filename == null || filename.isBlank()) {
             return null;
         }
@@ -74,6 +88,5 @@ public class FileValidator {
         }
 
         return sanitized;
-
     }
 }

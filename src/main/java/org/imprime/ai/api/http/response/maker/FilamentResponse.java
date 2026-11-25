@@ -36,6 +36,31 @@ public record FilamentResponse(
         @Schema(description = "Localização física no estúdio", example = "AMS Slot A1")
         String spoolLocation,
         @Schema(description = "Observações operacionais")
-        String notes
+        String notes,
+        @Schema(description = "GUID opcional do perfil no catálogo global de filamentos")
+        String filamentCatalogGuid
 ) {
+    public FilamentResponse(
+            String guid,
+            String name,
+            String brand,
+            MaterialType material,
+            String colorName,
+            String colorHex,
+            BigDecimal stockGrams,
+            BigDecimal initialWeightGrams,
+            BigDecimal costPerKg,
+            BigDecimal diameterMm,
+            BigDecimal lowStockThresholdGrams,
+            boolean lowStock,
+            Integer humidityPercent,
+            String spoolLocation,
+            String notes
+    ) {
+        this(
+                guid, name, brand, material, colorName, colorHex, stockGrams, initialWeightGrams,
+                costPerKg, diameterMm, lowStockThresholdGrams, lowStock, humidityPercent,
+                spoolLocation, notes, null
+        );
+    }
 }

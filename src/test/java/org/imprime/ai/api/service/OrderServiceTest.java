@@ -25,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -104,8 +105,8 @@ class OrderServiceTest {
 
         String metadataJson = """
                 [
-                  {"plateNumber": 1, "plateName": "Mesa Principal", "material": "PLA", "colorHex": "#8b5cf6", "infillPercent": 20, "supports": true, "scaleX": 1.0, "scaleY": 1.0, "scaleZ": 1.0, "isMultiColor": false},
-                  {"plateNumber": 2, "plateName": "Mesa Tampa", "material": "PETG", "colorHex": "#10b981", "infillPercent": 45, "supports": false, "scaleX": 1.25, "scaleY": 1.25, "scaleZ": 1.25, "isMultiColor": true, "paintingInstructions": "Tampa verde"}
+                  {"plateNumber": 1, "plateName": "Mesa Principal", "material": "PLA", "colorHex": "#8b5cf6", "colors": ["#8b5cf6"], "infillPercent": 20, "supports": true, "scaleX": 1.0, "scaleY": 1.0, "scaleZ": 1.0, "isMultiColor": false, "dimensionXMm": 120.5, "dimensionYMm": 80.0, "dimensionZMm": 45.0, "colorCount": 1, "layerHeightMm": 0.20, "urgency": "STANDARD", "quantity": 2, "wallCount": 3, "infillPattern": "gyroid", "adhesionType": "brim", "supportType": "tree", "finish": "sanded", "tolerance": "tight", "notes": "Sem rebarbas", "estimatedWeightGrams": 48.50, "estimatedPrintTimeMinutes": 135, "estimatedPriceBrl": 42.90},
+                  {"plateNumber": 2, "plateName": "Mesa Tampa", "material": "PETG", "colorHex": "#10b981", "colors": ["#10b981", "#ffffff"], "infillPercent": 45, "supports": false, "scaleX": 1.25, "scaleY": 1.25, "scaleZ": 1.25, "isMultiColor": true, "colorCount": 4, "dimensionXMm": 200.0, "dimensionYMm": 150.0, "dimensionZMm": 90.0, "paintingInstructions": "Tampa verde"}
                 ]
                 """;
 
@@ -119,7 +120,7 @@ class OrderServiceTest {
             return o;
         });
         when(orderFileAssetRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
-        when(companyService.findCompaniesForAddress(address, 100)).thenReturn(List.of());
+        when(companyService.findCompaniesForOrder(eq(address), anyList(), eq(100))).thenReturn(List.of());
 
         StartOrderResponse response = orderService.start(
                 List.of(file1, file2),
@@ -128,6 +129,7 @@ class OrderServiceTest {
         );
 
         assertEquals("order-guid-900", response.orderGuid());
+        verify(companyService).findCompaniesForOrder(eq(address), anyList(), eq(100));
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(orderCaptor.capture());
@@ -143,13 +145,32 @@ class OrderServiceTest {
         assertEquals("Mesa Principal", savedPlates.get(0).getPlateName());
         assertEquals("PLA", savedPlates.get(0).getMaterial());
         assertEquals(20, savedPlates.get(0).getInfillPercent());
+        assertEquals(new BigDecimal("120.5"), savedPlates.get(0).getDimensionXMm());
+        assertEquals(1, savedPlates.get(0).getColorCount());
+        assertEquals("STANDARD", savedPlates.get(0).getUrgency());
+        assertEquals(2, savedPlates.get(0).getQuantity());
+        assertEquals(3, savedPlates.get(0).getWallCount());
+        assertEquals("gyroid", savedPlates.get(0).getInfillPattern());
+        assertEquals("brim", savedPlates.get(0).getAdhesionType());
+        assertEquals("tree", savedPlates.get(0).getSupportType());
+        assertEquals("sanded", savedPlates.get(0).getFinish());
+        assertEquals("tight", savedPlates.get(0).getTolerance());
+        assertEquals("Sem rebarbas", savedPlates.get(0).getPlateNotes());
+        assertEquals("[\"#8b5cf6\"]", savedPlates.get(0).getColorsJson());
+        assertEquals(new BigDecimal("48.50"), savedPlates.get(0).getEstimatedWeightGrams());
+        assertEquals(135, savedPlates.get(0).getEstimatedPrintTimeMinutes());
+        assertEquals(new BigDecimal("42.90"), savedPlates.get(0).getEstimatedPriceBrl());
 
         assertEquals(502L, savedPlates.get(1).getFileAssetId());
         assertEquals("Mesa Tampa", savedPlates.get(1).getPlateName());
         assertEquals("PETG", savedPlates.get(1).getMaterial());
         assertEquals(1.25, savedPlates.get(1).getScaleX());
         assertTrue(savedPlates.get(1).getIsMultiColor());
+        assertEquals(4, savedPlates.get(1).getColorCount());
+        assertEquals(new BigDecimal("200.0"), savedPlates.get(1).getDimensionXMm());
         assertEquals("Tampa verde", savedPlates.get(1).getPaintingInstructions());
+        assertEquals(1, savedPlates.get(1).getQuantity());
+        assertEquals("[\"#10b981\",\"#ffffff\"]", savedPlates.get(1).getColorsJson());
 
         verify(orderStatusService).move(any(Order.class), eq(OrderStatusCd.CREATED));
         verify(orderStatusService).move(any(Order.class), eq(OrderStatusCd.QUOTING));
@@ -194,6 +215,18 @@ class OrderServiceTest {
         src1.setScaleX(1.0);
         src1.setScaleY(1.0);
         src1.setScaleZ(1.0);
+        src1.setQuantity(3);
+        src1.setWallCount(4);
+        src1.setInfillPattern("grid");
+        src1.setAdhesionType("brim");
+        src1.setSupportType("tree");
+        src1.setFinish("sanded");
+        src1.setTolerance("tight");
+        src1.setPlateNotes("Acabamento fino");
+        src1.setColorsJson("[\"#8b5cf6\"]");
+        src1.setEstimatedWeightGrams(new BigDecimal("64.20"));
+        src1.setEstimatedPrintTimeMinutes(180);
+        src1.setEstimatedPriceBrl(new BigDecimal("58.00"));
 
         OrderFileAsset src2 = new OrderFileAsset();
         src2.setOrderId(10L);
@@ -224,6 +257,12 @@ class OrderServiceTest {
         assertEquals(2, copied.size());
         assertEquals(99L, copied.get(0).getOrderId());
         assertEquals(501L, copied.get(0).getFileAssetId());
+        assertEquals(3, copied.get(0).getQuantity());
+        assertEquals(4, copied.get(0).getWallCount());
+        assertEquals("sanded", copied.get(0).getFinish());
+        assertEquals("Acabamento fino", copied.get(0).getPlateNotes());
+        assertEquals(new BigDecimal("64.20"), copied.get(0).getEstimatedWeightGrams());
+        assertEquals(180, copied.get(0).getEstimatedPrintTimeMinutes());
         assertEquals(99L, copied.get(1).getOrderId());
         assertEquals(502L, copied.get(1).getFileAssetId());
         assertEquals("ABS", copied.get(1).getMaterial());

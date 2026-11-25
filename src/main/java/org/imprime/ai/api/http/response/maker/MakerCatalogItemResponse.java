@@ -62,6 +62,61 @@ public record MakerCatalogItemResponse(
         @Schema(description = "Longitude aproximada do endereço principal do estúdio", example = "-46.63331")
         Double longitude,
         @Schema(description = "URLs de prévia das peças do portfólio público do Maker (até 6)")
-        List<String> portfolioImages
+        List<String> portfolioImages,
+        @Schema(description = "Indica se suporta impressão multicolor/AMS", example = "true")
+        boolean supportsMulticolor,
+        @Schema(description = "Número máximo de cores/slots simultâneos", example = "4")
+        int maxMulticolorSlots,
+        @Schema(description = "Indica se aceita orçamentos personalizados", example = "true")
+        boolean acceptingCustomQuotes,
+        @Schema(description = "GUID da impressora principal vinculada ao catálogo")
+        String primaryPrinterCatalogGuid,
+        @Schema(description = "Maior volume útil disponível na frota do Maker")
+        BuildVolumeDto maxBuildVolume,
+        @Schema(description = "Oferece pós-processamento")
+        boolean offersPostProcessing,
+        @Schema(description = "Oferece pintura")
+        boolean offersPainting,
+        @Schema(description = "Oferece modelagem CAD")
+        boolean offersCadModeling,
+        @Schema(description = "Aceita pedidos expressos")
+        boolean supportsExpressOrders
 ) {
+    public MakerCatalogItemResponse(
+            String guid,
+            String slug,
+            String name,
+            String specialty,
+            String specialtyCategory,
+            String summary,
+            String primaryPrinter,
+            String city,
+            String state,
+            BigDecimal distanceKm,
+            BigDecimal basePrice,
+            BigDecimal rating,
+            int reviewsCount,
+            int completedOrdersCount,
+            int minLeadTimeDays,
+            List<MaterialType> materials,
+            List<String> tags,
+            String badge,
+            String coverImageUrl,
+            String avatarUrl,
+            boolean online,
+            boolean favorited,
+            boolean verified,
+            Instant createdAt,
+            Double latitude,
+            Double longitude,
+            List<String> portfolioImages
+    ) {
+        this(
+                guid, slug, name, specialty, specialtyCategory, summary, primaryPrinter,
+                city, state, distanceKm, basePrice, rating, reviewsCount, completedOrdersCount,
+                minLeadTimeDays, materials, tags, badge, coverImageUrl, avatarUrl,
+                online, favorited, verified, createdAt, latitude, longitude, portfolioImages,
+                false, 1, true, null, null, false, false, false, false
+        );
+    }
 }

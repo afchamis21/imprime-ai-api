@@ -24,6 +24,9 @@ public class Filament extends Auditable {
     @Column(name = "ASSET_ID")
     private Long assetId;
 
+    @Column(name = "FILAMENT_CATALOG_ID")
+    private Long filamentCatalogId;
+
     @Column(name = "NAME", nullable = false, length = 120)
     private String name;
 

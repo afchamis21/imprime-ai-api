@@ -137,4 +137,15 @@ public final class CatalogDtoMapper {
         }
         return null;
     }
+
+    public static String trimToNull(String value, int maxLen) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() > maxLen ? trimmed.substring(0, maxLen) : trimmed;
+    }
 }

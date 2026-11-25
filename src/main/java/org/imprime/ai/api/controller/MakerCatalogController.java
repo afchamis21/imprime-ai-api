@@ -83,9 +83,14 @@ public class MakerCatalogController {
             @RequestParam(required = false) Double latitude,
             @Parameter(description = "Longitude de referência para cálculo de distância")
             @RequestParam(required = false) Double longitude,
+            @Parameter(description = "Filtrar Makers que imprimem colorido / multicolor")
+            @RequestParam(required = false) Boolean supportsMulticolor,
+            @Parameter(description = "Filtrar Makers que aceitam orçamentos personalizados")
+            @RequestParam(required = false) Boolean acceptingCustomQuotes,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         MakerCatalogFilter filter = new MakerCatalogFilter(
-                q, specialty, maxDistanceKm, minRating, maxDeadlineDays, maxPrice, onlyOnline, materials, latitude, longitude
+                q, specialty, maxDistanceKm, minRating, maxDeadlineDays, maxPrice,
+                onlyOnline, materials, latitude, longitude, supportsMulticolor, acceptingCustomQuotes
         );
         return BaseResponse.ok(makerCatalogService.listMakers(filter, pageable));
     }

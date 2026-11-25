@@ -2,9 +2,11 @@ package org.imprime.ai.api.http.request.maker;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrinterStatus;
 
 import java.math.BigDecimal;
@@ -65,6 +67,46 @@ public record UpdatePrinterRequest(
         Boolean clearLifespanHours,
 
         @Schema(description = "Quando true, limpa explicitamente a taxa horária de depreciação salva")
-        Boolean clearHourlyDepreciationRate
+        Boolean clearHourlyDepreciationRate,
+
+        @Schema(description = "GUID da impressora no catálogo fixo (`printer_catalog`)")
+        String printerCatalogGuid,
+
+        @Schema(description = "Indica se esta impressora imprime colorido / multicolor")
+        Boolean supportsMulticolor,
+
+        @Schema(description = "Número de cores/slots simultâneos desta impressora")
+        @Min(value = 1, message = "O número de slots deve ser pelo menos 1")
+        Integer multicolorSlots,
+
+        @Schema(description = "Sobrescrita opcional indicando se a unidade é fechada")
+        Boolean isEnclosedOverride,
+
+        @Schema(description = "Sobrescrita opcional dos materiais suportados por esta unidade")
+        List<MaterialType> supportedMaterialsOverride
 ) {
+    public UpdatePrinterRequest(
+            String name,
+            String model,
+            PrinterStatus status,
+            BuildVolumeRequest buildVolume,
+            BigDecimal nozzleDiameterMm,
+            Integer powerWatts,
+            String ipAddress,
+            List<AmsSlotRequest> amsSlots,
+            PrinterConfigRequest config,
+            BigDecimal purchasePrice,
+            Integer lifespanHours,
+            BigDecimal hourlyDepreciationRate,
+            Boolean clearPurchasePrice,
+            Boolean clearLifespanHours,
+            Boolean clearHourlyDepreciationRate
+    ) {
+        this(
+                name, model, status, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
+                amsSlots, config, purchasePrice, lifespanHours, hourlyDepreciationRate,
+                clearPurchasePrice, clearLifespanHours, clearHourlyDepreciationRate,
+                null, null, null, null, null
+        );
+    }
 }

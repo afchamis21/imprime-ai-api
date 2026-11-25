@@ -21,12 +21,14 @@ import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.repo.db.OrderFileAssetRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.service.impl.OrderManagementServiceImpl;
+import org.imprime.ai.api.util.JsonCodec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -57,6 +59,10 @@ class OrderManagementServiceImplTest {
     private FileAssetRepository fileAssetRepository;
     @Mock
     private ObjectStorageService objectStorageService;
+    @Mock
+    private MakerOrderSupport makerOrderSupport;
+    @Spy
+    private JsonCodec jsonCodec = new JsonCodec();
 
     @InjectMocks
     private OrderManagementServiceImpl service;
@@ -238,6 +244,18 @@ class OrderManagementServiceImplTest {
         plate1.setColorHex("#8b5cf6");
         plate1.setInfillPercent(20);
         plate1.setSupports(true);
+        plate1.setQuantity(2);
+        plate1.setWallCount(3);
+        plate1.setInfillPattern("gyroid");
+        plate1.setAdhesionType("brim");
+        plate1.setSupportType("tree");
+        plate1.setFinish("sanded");
+        plate1.setTolerance("tight");
+        plate1.setPlateNotes("Sem marcas na face frontal");
+        plate1.setColorsJson("[\"#8b5cf6\",\"#f59e0b\"]");
+        plate1.setEstimatedWeightGrams(new BigDecimal("48.50"));
+        plate1.setEstimatedPrintTimeMinutes(135);
+        plate1.setEstimatedPriceBrl(new BigDecimal("42.90"));
 
         OrderFileAsset plate2 = new OrderFileAsset();
         plate2.setOrderId(10L);
@@ -266,6 +284,15 @@ class OrderManagementServiceImplTest {
         assertEquals("file-guid-1", files.get(0).fileGuid());
         assertEquals("Mesa 1", files.get(0).plateName());
         assertEquals("PLA", files.get(0).material());
+        assertEquals(2, files.get(0).quantity());
+        assertEquals(3, files.get(0).wallCount());
+        assertEquals("gyroid", files.get(0).infillPattern());
+        assertEquals("sanded", files.get(0).finish());
+        assertEquals("Sem marcas na face frontal", files.get(0).notes());
+        assertEquals(List.of("#8b5cf6", "#f59e0b"), files.get(0).colors());
+        assertEquals(new BigDecimal("48.50"), files.get(0).estimatedWeightGrams());
+        assertEquals(135, files.get(0).estimatedPrintTimeMinutes());
+        assertEquals(new BigDecimal("42.90"), files.get(0).estimatedPriceBrl());
         assertEquals("file-guid-2", files.get(1).fileGuid());
         assertEquals("Mesa 2", files.get(1).plateName());
         assertEquals(1.5, files.get(1).scaleX());

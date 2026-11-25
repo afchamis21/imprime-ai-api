@@ -6,13 +6,16 @@ import org.imprime.ai.api.http.request.maker.MakerCatalogFilter;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.FavoriteStatusResponse;
 import org.imprime.ai.api.http.response.common.MakerBriefResponse;
+import org.imprime.ai.api.http.response.maker.BuildVolumeDto;
 import org.imprime.ai.api.http.response.maker.MakerCatalogItemResponse;
 import org.imprime.ai.api.http.response.maker.MakerProfileResponse;
 import org.imprime.ai.api.http.response.maker.PortfolioItemResponse;
 import org.imprime.ai.api.http.response.product.ProductCatalogItemResponse;
 import org.imprime.ai.api.model.Address;
+import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.MakerPortfolioItem;
+import org.imprime.ai.api.model.PrinterCatalog;
 import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.FavoriteTargetType;
@@ -25,10 +28,13 @@ import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.AddressRepository;
+import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.MakerPortfolioItemRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.service.MakerCatalogService;
+import org.imprime.ai.api.service.MakerEligibilityService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
@@ -42,6 +48,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -49,7 +56,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -84,6 +93,9 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
     private final OrderViewAssembler orderViewAssembler;
     private final JsonCodec jsonCodec;
     private final MakerPresenceCache makerPresenceCache;
+    private final AssetRepository assetRepository;
+    private final PrinterCatalogRepository printerCatalogRepository;
+    private final MakerEligibilityService makerEligibilityService;
 
     @Override
     public PageResponse<MakerCatalogItemResponse> listMakers(MakerCatalogFilter filter, Pageable pageable) {
@@ -101,13 +113,29 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
         Set<Long> favoritedIds = favoriteService.findFavoritedTargetIds(FavoriteTargetType.MAKER);
         Map<Long, List<String>> portfolioImagesByCompany = buildPortfolioPreviewsByCompany(companies);
 
+        Map<Long, List<Asset>> assetsByCompany = new HashMap<>();
+        Set<Long> catalogIds = new LinkedHashSet<>();
+        companies.stream().map(Company::getPrimaryPrinterCatalogId).filter(Objects::nonNull).forEach(catalogIds::add);
+        for (Asset asset : assetRepository.findAllByCompanyIdInAndStatus(companyIds, StatusCd.ACTIVE)) {
+            assetsByCompany.computeIfAbsent(asset.getCompanyId(), k -> new ArrayList<>()).add(asset);
+            if (asset.getPrinterCatalogId() != null) {
+                catalogIds.add(asset.getPrinterCatalogId());
+            }
+        }
+        Map<Long, PrinterCatalog> catalogById = catalogIds.isEmpty()
+                ? Map.of()
+                : printerCatalogRepository.findAllByIdIn(catalogIds).stream()
+                .collect(Collectors.toMap(PrinterCatalog::getId, pc -> pc, (a, b) -> a));
+
         List<MakerCatalogItemResponse> items = companies.stream()
                 .map(company -> toCatalogItem(
                         company,
                         addressesByCompany.get(company.getId()),
                         filter,
                         favoritedIds,
-                        portfolioImagesByCompany.get(company.getId())
+                        portfolioImagesByCompany.get(company.getId()),
+                        assetsByCompany.getOrDefault(company.getId(), List.of()),
+                        catalogById
                 ))
                 .filter(item -> matchesFilter(item, filter))
                 .sorted(buildComparator(pageable))
@@ -128,6 +156,30 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 .orElse(false);
         boolean favorited = favoriteService.isFavorited(FavoriteTargetType.MAKER, company.getId());
 
+        List<Asset> assets = company.getId() != null
+                ? assetRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE)
+                : List.of();
+        Set<Long> catalogIds = new LinkedHashSet<>();
+        if (company.getPrimaryPrinterCatalogId() != null) {
+            catalogIds.add(company.getPrimaryPrinterCatalogId());
+        }
+        assets.stream().map(Asset::getPrinterCatalogId).filter(Objects::nonNull).forEach(catalogIds::add);
+        Map<Long, PrinterCatalog> catalogById = catalogIds.isEmpty()
+                ? Map.of()
+                : printerCatalogRepository.findAllByIdIn(catalogIds).stream()
+                .collect(Collectors.toMap(PrinterCatalog::getId, pc -> pc, (a, b) -> a));
+
+        List<MakerCapability> caps = jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class);
+        boolean multicolor = Boolean.TRUE.equals(company.getSupportsMulticolor())
+                || caps.contains(MakerCapability.MULTICOLOR_AMS)
+                || assets.stream().anyMatch(a -> Boolean.TRUE.equals(a.getSupportsMulticolor()));
+        int maxSlots = multicolor
+                ? Math.max(company.getMaxMulticolorSlots() != null ? company.getMaxMulticolorSlots() : 4, 2)
+                : 1;
+        PrinterCatalog primaryCatalog = company.getPrimaryPrinterCatalogId() != null
+                ? catalogById.get(company.getPrimaryPrinterCatalogId())
+                : null;
+
         return new MakerProfileResponse(
                 company.getGuid(),
                 company.getSlug(),
@@ -143,7 +195,7 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 company.getCreateDt(),
                 company.getAvatarUrl(),
                 company.getCoverUrl(),
-                jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class),
+                caps,
                 company.getResponseTimeHours(),
                 company.getMinLeadTimeDays(),
                 company.getMaxLeadTimeDays(),
@@ -155,7 +207,19 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 favorited,
                 isOwner,
                 CatalogDtoMapper.readSocialLinks(company, jsonCodec),
-                makerPresenceCache.isCompanyOnline(company)
+                makerPresenceCache.isCompanyOnline(company),
+                company.getPrimaryPrinter(),
+                primaryCatalog != null ? primaryCatalog.getGuid() : null,
+                multicolor,
+                maxSlots,
+                jsonCodec.readEnumList(company.getMaterialsJson(), MaterialType.class),
+                makerEligibilityService.computeMaxBuildVolume(assets, catalogById),
+                Boolean.TRUE.equals(company.getOffersPostProcessing()) || caps.contains(MakerCapability.POST_PROCESSING),
+                Boolean.TRUE.equals(company.getOffersPainting()) || caps.contains(MakerCapability.PAINTING),
+                Boolean.TRUE.equals(company.getOffersCadModeling()) || caps.contains(MakerCapability.MODELING),
+                Boolean.TRUE.equals(company.getSupportsExpressOrders()),
+                company.getMinLayerHeightMm(),
+                company.getTechnicalNotes()
         );
     }
 
@@ -311,10 +375,22 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
             Address address,
             MakerCatalogFilter filter,
             Set<Long> favoritedIds,
-            List<String> portfolioImages) {
+            List<String> portfolioImages,
+            List<Asset> assets,
+            Map<Long, PrinterCatalog> catalogById) {
         BigDecimal distanceKm = calculateDistanceKm(filter, address);
         List<MaterialType> materials = jsonCodec.readEnumList(company.getMaterialsJson(), MaterialType.class);
         List<String> tags = jsonCodec.readStringList(company.getTagsJson());
+        List<MakerCapability> caps = jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class);
+        boolean multicolor = Boolean.TRUE.equals(company.getSupportsMulticolor())
+                || caps.contains(MakerCapability.MULTICOLOR_AMS)
+                || assets.stream().anyMatch(a -> Boolean.TRUE.equals(a.getSupportsMulticolor()));
+        int maxSlots = multicolor
+                ? Math.max(company.getMaxMulticolorSlots() != null ? company.getMaxMulticolorSlots() : 4, 2)
+                : 1;
+        PrinterCatalog primaryCatalog = company.getPrimaryPrinterCatalogId() != null
+                ? catalogById.get(company.getPrimaryPrinterCatalogId())
+                : null;
 
         return new MakerCatalogItemResponse(
                 company.getGuid(),
@@ -343,7 +419,16 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 company.getCreateDt(),
                 address != null ? address.getLatitude() : null,
                 address != null ? address.getLongitude() : null,
-                portfolioImages != null ? portfolioImages : List.of()
+                portfolioImages != null ? portfolioImages : List.of(),
+                multicolor,
+                maxSlots,
+                !Boolean.FALSE.equals(company.getAcceptingCustomQuotes()),
+                primaryCatalog != null ? primaryCatalog.getGuid() : null,
+                makerEligibilityService.computeMaxBuildVolume(assets, catalogById),
+                Boolean.TRUE.equals(company.getOffersPostProcessing()) || caps.contains(MakerCapability.POST_PROCESSING),
+                Boolean.TRUE.equals(company.getOffersPainting()) || caps.contains(MakerCapability.PAINTING),
+                Boolean.TRUE.equals(company.getOffersCadModeling()) || caps.contains(MakerCapability.MODELING),
+                Boolean.TRUE.equals(company.getSupportsExpressOrders())
         );
     }
 
@@ -391,6 +476,12 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
             }
         }
         if (Boolean.TRUE.equals(filter.onlyOnline()) && !item.online()) {
+            return false;
+        }
+        if (filter.supportsMulticolor() != null && item.supportsMulticolor() != filter.supportsMulticolor()) {
+            return false;
+        }
+        if (filter.acceptingCustomQuotes() != null && item.acceptingCustomQuotes() != filter.acceptingCustomQuotes()) {
             return false;
         }
         if (filter.materials() != null && !filter.materials().isEmpty()) {

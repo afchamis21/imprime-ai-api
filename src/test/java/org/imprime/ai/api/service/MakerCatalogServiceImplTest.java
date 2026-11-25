@@ -15,9 +15,12 @@ import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.AddressRepository;
+import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.MakerPortfolioItemRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
+import org.imprime.ai.api.service.MakerEligibilityService;
 import org.imprime.ai.api.service.impl.FavoriteServiceImpl;
 import org.imprime.ai.api.service.impl.MakerCatalogServiceImpl;
 import org.imprime.ai.api.util.JsonCodec;
@@ -52,6 +55,10 @@ class MakerCatalogServiceImplTest {
     @Mock
     private ProductRepository productRepository;
     @Mock
+    private AssetRepository assetRepository;
+    @Mock
+    private PrinterCatalogRepository printerCatalogRepository;
+    @Mock
     private FavoriteServiceImpl favoriteService;
     @Mock
     private OrderViewAssembler orderViewAssembler;
@@ -59,6 +66,8 @@ class MakerCatalogServiceImplTest {
     private JsonCodec jsonCodec = new JsonCodec();
     @Spy
     private MakerPresenceCache makerPresenceCache = new MakerPresenceCache(Duration.ofMinutes(4), 1_000L);
+    @Spy
+    private MakerEligibilityService makerEligibilityService = new MakerEligibilityService(new JsonCodec());
 
     @InjectMocks
     private MakerCatalogServiceImpl service;

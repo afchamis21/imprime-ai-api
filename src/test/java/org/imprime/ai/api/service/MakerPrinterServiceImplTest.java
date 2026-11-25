@@ -18,9 +18,11 @@ import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.repo.db.AssetRepository;
+import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
 import org.imprime.ai.api.repo.db.PrinterAmsSlotRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.service.impl.MakerPrinterServiceImpl;
 import org.imprime.ai.api.util.HashUtil;
 import org.imprime.ai.api.util.JsonCodec;
@@ -53,6 +55,10 @@ class MakerPrinterServiceImplTest {
     private FilamentRepository filamentRepository;
     @Mock
     private PrintQueueItemRepository printQueueItemRepository;
+    @Mock
+    private PrinterCatalogRepository printerCatalogRepository;
+    @Mock
+    private CompanyRepository companyRepository;
     @Spy
     private JsonCodec jsonCodec = new JsonCodec();
 

@@ -3,6 +3,7 @@ package org.imprime.ai.api.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.chat.OfferDecisionRequest;
+import org.imprime.ai.api.http.request.chat.UpdateChatSellerNotesRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.chat.ChatDetailResponse;
 import org.imprime.ai.api.http.response.chat.ChatSummaryResponse;
@@ -20,6 +21,7 @@ import org.imprime.ai.api.model.enums.MessageType;
 import org.imprime.ai.api.model.enums.NegotiationStatus;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -118,6 +120,9 @@ public class ChatRestServiceImpl implements ChatRestService {
                 .toList());
         Collections.reverse(recentChronological);
 
+        User caller = ServiceContext.getUser().orElse(null);
+        boolean isCallerMaker = caller != null && isCallerMakerForChat(caller, chat);
+
         return new ChatDetailResponse(
                 chat.getChatId(),
                 chat.getOrderGuid(),
@@ -131,7 +136,8 @@ public class ChatRestServiceImpl implements ChatRestService {
                 maker,
                 recentChronological,
                 chat.getCreateDt(),
-                chat.getLastMessageAt()
+                chat.getLastMessageAt(),
+                isCallerMaker ? chat.getSellerNotes() : null
         );
     }
 
@@ -152,6 +158,35 @@ public class ChatRestServiceImpl implements ChatRestService {
     public ChatDetailResponse decideOffer(UUID chatId, String messageGuid, OfferDecisionRequest request) {
         chatService.decideOfferByMessageGuid(chatId, messageGuid, Boolean.TRUE.equals(request.accept()), request.reason());
         return getChatDetail(chatId);
+    }
+
+    @Override
+    public ChatDetailResponse updateSellerNotes(UUID chatId, UpdateChatSellerNotesRequest request) {
+        User caller = ServiceContext.getUserOrThrow();
+        Chat chat = chatService.findAuthorizedChat(chatId);
+        if (!isCallerMakerForChat(caller, chat)) {
+            throw new ForbiddenException();
+        }
+
+        String raw = request != null ? request.sellerNotes() : null;
+        String normalized = null;
+        if (raw != null && !raw.isBlank()) {
+            String trimmed = raw.trim();
+            normalized = trimmed.length() > 2000 ? trimmed.substring(0, 2000) : trimmed;
+        }
+        chat.setSellerNotes(normalized);
+        chatRepository.save(chat);
+        return getChatDetail(chatId);
+    }
+
+    private boolean isCallerMakerForChat(User caller, Chat chat) {
+        if (caller == null || chat == null || caller.getCompanyId() == null || chat.getCompanyGuid() == null) {
+            return false;
+        }
+        return companyRepository.findById(caller.getCompanyId())
+                .map(Company::getGuid)
+                .map(guid -> guid.equals(chat.getCompanyGuid()))
+                .orElse(false);
     }
 
     private ChatSummaryResponse toSummaryResponse(Chat chat) {

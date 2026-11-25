@@ -1,6 +1,8 @@
 package org.imprime.ai.api.http.response.maker;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.imprime.ai.api.http.response.catalog.PrinterCatalogBriefDto;
+import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrinterStatus;
 
 import java.math.BigDecimal;
@@ -37,6 +39,45 @@ public record PrinterResponse(
         @Schema(description = "Vida útil estimada da impressora em horas (opcional)", example = "3000")
         Integer lifespanHours,
         @Schema(description = "Taxa horária específica de depreciação/manutenção em BRL/h (opcional)", example = "1.90")
-        BigDecimal hourlyDepreciationRate
+        BigDecimal hourlyDepreciationRate,
+        @Schema(description = "GUID da impressora no catálogo fixo")
+        String printerCatalogGuid,
+        @Schema(description = "Dados resumidos do modelo de catálogo vinculado")
+        PrinterCatalogBriefDto catalogPrinter,
+        @Schema(description = "Indica se esta impressora suporta impressão multicolor")
+        boolean supportsMulticolor,
+        @Schema(description = "Número máximo de cores/slots simultâneos")
+        int multicolorSlots,
+        @Schema(description = "Sobrescrita opcional de câmara fechada")
+        Boolean isEnclosedOverride,
+        @Schema(description = "Sobrescrita opcional de materiais suportados")
+        List<MaterialType> supportedMaterialsOverride,
+        @Schema(description = "Lista efetiva de materiais suportados por esta impressora")
+        List<MaterialType> effectiveSupportedMaterials,
+        @Schema(description = "Indica se a unidade efetivamente opera em câmara fechada")
+        boolean effectiveEnclosed
 ) {
+    public PrinterResponse(
+            String guid,
+            String name,
+            String model,
+            PrinterStatus status,
+            BuildVolumeDto buildVolume,
+            BigDecimal nozzleDiameterMm,
+            Integer powerWatts,
+            String ipAddress,
+            String serialNumber,
+            List<AmsSlotDto> amsSlots,
+            PrinterTelemetryDto telemetry,
+            PrinterConfigDto config,
+            BigDecimal purchasePrice,
+            Integer lifespanHours,
+            BigDecimal hourlyDepreciationRate
+    ) {
+        this(
+                guid, name, model, status, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
+                serialNumber, amsSlots, telemetry, config, purchasePrice, lifespanHours, hourlyDepreciationRate,
+                null, null, false, 1, null, List.of(), List.of(), false
+        );
+    }
 }

@@ -15,6 +15,11 @@ public enum MaterialType implements CodeAttribute {
     RESIN("RESIN"),
     NYLON("NYLON"),
     CARBON_FIBER("CARBON_FIBER"),
+    PC("PC"),
+    PETG_CF("PETG_CF"),
+    PA_CF("PA_CF"),
+    PVA("PVA"),
+    HIPS("HIPS"),
     OTHER("OTHER");
 
     private final String code;

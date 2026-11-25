@@ -63,6 +63,29 @@ public record UpdateFilamentRequest(
 
         @Schema(description = "Observações operacionais")
         @Size(max = 500, message = "As observações devem ter no máximo 500 caracteres")
-        String notes
+        String notes,
+
+        @Schema(description = "GUID opcional do perfil no catálogo global de filamentos")
+        String filamentCatalogGuid
 ) {
+    public UpdateFilamentRequest(
+            String name,
+            String brand,
+            MaterialType material,
+            String colorName,
+            String colorHex,
+            BigDecimal stockGrams,
+            BigDecimal initialWeightGrams,
+            BigDecimal costPerKg,
+            BigDecimal diameterMm,
+            BigDecimal lowStockThresholdGrams,
+            Integer humidityPercent,
+            String spoolLocation,
+            String notes
+    ) {
+        this(
+                name, brand, material, colorName, colorHex, stockGrams, initialWeightGrams,
+                costPerKg, diameterMm, lowStockThresholdGrams, humidityPercent, spoolLocation, notes, null
+        );
+    }
 }

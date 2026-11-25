@@ -17,6 +17,25 @@ public record MakerCatalogFilter(
         Boolean onlyOnline,
         List<MaterialType> materials,
         Double latitude,
-        Double longitude
+        Double longitude,
+        Boolean supportsMulticolor,
+        Boolean acceptingCustomQuotes
 ) {
+    public MakerCatalogFilter(
+            String query,
+            String specialty,
+            Double maxDistanceKm,
+            BigDecimal minRating,
+            Integer maxDeadlineDays,
+            BigDecimal maxPrice,
+            Boolean onlyOnline,
+            List<MaterialType> materials,
+            Double latitude,
+            Double longitude
+    ) {
+        this(
+                query, specialty, maxDistanceKm, minRating, maxDeadlineDays, maxPrice,
+                onlyOnline, materials, latitude, longitude, null, null
+        );
+    }
 }

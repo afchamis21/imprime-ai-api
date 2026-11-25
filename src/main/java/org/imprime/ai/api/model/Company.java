@@ -47,6 +47,33 @@ public class Company extends Auditable {
     @Column(name = "PRIMARY_PRINTER", length = 120)
     private String primaryPrinter;
 
+    @Column(name = "PRIMARY_PRINTER_CATALOG_ID")
+    private Long primaryPrinterCatalogId;
+
+    @Column(name = "SUPPORTS_MULTICOLOR", nullable = false)
+    private Boolean supportsMulticolor = Boolean.FALSE;
+
+    @Column(name = "MAX_MULTICOLOR_SLOTS", nullable = false)
+    private Integer maxMulticolorSlots = 1;
+
+    @Column(name = "OFFERS_POST_PROCESSING", nullable = false)
+    private Boolean offersPostProcessing = Boolean.FALSE;
+
+    @Column(name = "OFFERS_PAINTING", nullable = false)
+    private Boolean offersPainting = Boolean.FALSE;
+
+    @Column(name = "OFFERS_CAD_MODELING", nullable = false)
+    private Boolean offersCadModeling = Boolean.FALSE;
+
+    @Column(name = "SUPPORTS_EXPRESS_ORDERS", nullable = false)
+    private Boolean supportsExpressOrders = Boolean.FALSE;
+
+    @Column(name = "MIN_LAYER_HEIGHT_MM", precision = 5, scale = 3)
+    private BigDecimal minLayerHeightMm;
+
+    @Column(name = "TECHNICAL_NOTES", length = 500)
+    private String technicalNotes;
+
     @Column(name = "BASE_PRICE", precision = 10, scale = 2)
     private BigDecimal basePrice;
 

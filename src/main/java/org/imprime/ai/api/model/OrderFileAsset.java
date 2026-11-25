@@ -8,7 +8,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
+
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -53,9 +57,64 @@ public class OrderFileAsset extends Auditable {
     @Column(name = "SCALE_Z", nullable = false)
     private Double scaleZ = 1.0;
 
+    @Column(name = "DIMENSION_X_MM", precision = 10, scale = 2)
+    private BigDecimal dimensionXMm;
+
+    @Column(name = "DIMENSION_Y_MM", precision = 10, scale = 2)
+    private BigDecimal dimensionYMm;
+
+    @Column(name = "DIMENSION_Z_MM", precision = 10, scale = 2)
+    private BigDecimal dimensionZMm;
+
+    @Column(name = "COLOR_COUNT", nullable = false)
+    private Integer colorCount = 1;
+
+    @Column(name = "LAYER_HEIGHT_MM", precision = 5, scale = 3)
+    private BigDecimal layerHeightMm;
+
+    @Column(name = "URGENCY", length = 20)
+    private String urgency;
+
     @Column(name = "IS_MULTI_COLOR", nullable = false)
     private Boolean isMultiColor = Boolean.FALSE;
 
     @Column(name = "PAINTING_INSTRUCTIONS", columnDefinition = "text")
     private String paintingInstructions;
+
+    @Column(name = "QUANTITY", nullable = false)
+    private Integer quantity = 1;
+
+    @Column(name = "WALL_COUNT")
+    private Integer wallCount;
+
+    @Column(name = "INFILL_PATTERN", length = 40)
+    private String infillPattern;
+
+    @Column(name = "ADHESION_TYPE", length = 40)
+    private String adhesionType;
+
+    @Column(name = "SUPPORT_TYPE", length = 40)
+    private String supportType;
+
+    @Column(name = "FINISH", length = 40)
+    private String finish;
+
+    @Column(name = "TOLERANCE", length = 40)
+    private String tolerance;
+
+    @Column(name = "PLATE_NOTES", columnDefinition = "text")
+    private String plateNotes;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "COLORS_JSON", columnDefinition = "jsonb")
+    private String colorsJson;
+
+    @Column(name = "ESTIMATED_WEIGHT_GRAMS", precision = 10, scale = 2)
+    private BigDecimal estimatedWeightGrams;
+
+    @Column(name = "ESTIMATED_PRINT_TIME_MINUTES")
+    private Integer estimatedPrintTimeMinutes;
+
+    @Column(name = "ESTIMATED_PRICE_BRL", precision = 10, scale = 2)
+    private BigDecimal estimatedPriceBrl;
 }

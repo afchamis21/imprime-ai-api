@@ -154,6 +154,45 @@ class Model3DServiceImplTest {
         assertEquals(1, response.parameters().size());
         assertEquals(ScadParameterType.NUMBER, response.parameters().getFirst().type());
         assertEquals("width", response.parameters().getFirst().name());
+
+        ModelCustomization emptySchema = new ModelCustomization();
+        emptySchema.setModel3dId(2L);
+        emptySchema.setScadCode("// Largura (mm)\nwidth = 75; // [20:5:150]\nrounded = true;\ncube([width, 20, 10]);");
+        emptySchema.setParametersSchemaJson("[]");
+        emptySchema.setStatus(StatusCd.ACTIVE);
+        when(modelCustomizationRepository.findByModel3dIdAndStatus(2L, StatusCd.ACTIVE)).thenReturn(Optional.of(emptySchema));
+
+        ModelCustomizationResponse parsedFallback = service.getCustomization("caixa-parametrica");
+        assertEquals(2, parsedFallback.parameters().size());
+        assertEquals("width", parsedFallback.parameters().get(0).name());
+        assertEquals("mm", parsedFallback.parameters().get(0).unit());
+        assertEquals("rounded", parsedFallback.parameters().get(1).name());
+        assertEquals(ScadParameterType.BOOLEAN, parsedFallback.parameters().get(1).type());
+
+        Model3D scadFileModel = new Model3D();
+        scadFileModel.setId(3L);
+        scadFileModel.setGuid("scad-file-3");
+        scadFileModel.setSlug("suporte-scad");
+        scadFileModel.setFormat(FileFormat3D.SCAD);
+        scadFileModel.setFileAssetId(99L);
+        scadFileModel.setCustomizable(true);
+        scadFileModel.setStatus(StatusCd.ACTIVE);
+
+        FileAsset scadAsset = new FileAsset();
+        scadAsset.setId(99L);
+        scadAsset.setName("suporte.scad");
+        scadAsset.setAssetUrl("models/author-1/suporte.scad");
+
+        when(model3DRepository.findByGuidAndStatus("suporte-scad", StatusCd.ACTIVE)).thenReturn(Optional.empty());
+        when(model3DRepository.findBySlugAndStatus("suporte-scad", StatusCd.ACTIVE)).thenReturn(Optional.of(scadFileModel));
+        when(modelCustomizationRepository.findByModel3dIdAndStatus(3L, StatusCd.ACTIVE)).thenReturn(Optional.empty());
+        when(fileAssetRepository.findById(99L)).thenReturn(Optional.of(scadAsset));
+        when(objectStorageService.downloadBytes(scadAsset)).thenReturn("thickness = 3.5;\ncube(thickness);".getBytes());
+
+        ModelCustomizationResponse fileFallback = service.getCustomization("suporte-scad");
+        assertEquals("scad-file-3", fileFallback.modelGuid());
+        assertEquals(1, fileFallback.parameters().size());
+        assertEquals("thickness", fileFallback.parameters().getFirst().name());
     }
 
     @Test

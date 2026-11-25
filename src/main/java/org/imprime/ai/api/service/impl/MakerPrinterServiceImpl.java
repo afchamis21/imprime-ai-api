@@ -8,6 +8,7 @@ import org.imprime.ai.api.http.request.maker.PrinterCommandRequest;
 import org.imprime.ai.api.http.request.maker.PrinterConfigRequest;
 import org.imprime.ai.api.http.request.maker.UpdatePrinterRequest;
 import org.imprime.ai.api.http.response.PageResponse;
+import org.imprime.ai.api.http.response.catalog.PrinterCatalogBriefDto;
 import org.imprime.ai.api.http.response.maker.AmsSlotDto;
 import org.imprime.ai.api.http.response.maker.BuildVolumeDto;
 import org.imprime.ai.api.http.response.maker.PrinterConfigDto;
@@ -19,6 +20,9 @@ import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Filament;
 import org.imprime.ai.api.model.PrintQueueItem;
 import org.imprime.ai.api.model.PrinterAmsSlot;
+import org.imprime.ai.api.model.PrinterCatalog;
+import org.imprime.ai.api.model.enums.MakerCapability;
+import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.PrinterStatus;
@@ -28,11 +32,15 @@ import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.AssetRepository;
+import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
 import org.imprime.ai.api.repo.db.PrinterAmsSlotRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.service.MakerCompanyResolver;
 import org.imprime.ai.api.service.MakerPrinterService;
+import org.imprime.ai.api.service.PrinterCatalogService;
+import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.HashUtil;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
@@ -44,11 +52,13 @@ import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.Year;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -70,6 +80,8 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
     private final PrinterAmsSlotRepository amsSlotRepository;
     private final FilamentRepository filamentRepository;
     private final PrintQueueItemRepository printQueueItemRepository;
+    private final PrinterCatalogRepository printerCatalogRepository;
+    private final CompanyRepository companyRepository;
     private final JsonCodec jsonCodec;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -106,10 +118,20 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
             activeJobByAssetId.putIfAbsent(job.getAssetId(), job);
         }
 
+        Set<Long> catalogIds = printers.stream()
+                .map(Asset::getPrinterCatalogId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, PrinterCatalog> catalogById = catalogIds.isEmpty()
+                ? Map.of()
+                : printerCatalogRepository.findAllByIdIn(catalogIds).stream()
+                .collect(Collectors.toMap(PrinterCatalog::getId, pc -> pc, (a, b) -> a));
+
         List<PrinterResponse> items = printers.stream()
                 .sorted(Comparator.comparing(Asset::getName, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(asset -> toResponse(
                         asset,
+                        asset.getPrinterCatalogId() != null ? catalogById.get(asset.getPrinterCatalogId()) : null,
                         slotsByAssetId.getOrDefault(asset.getId(), List.of()),
                         filamentGuidsById,
                         activeJobByAssetId.get(asset.getId())
@@ -131,22 +153,70 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
     public PrinterResponse createPrinter(CreatePrinterRequest request) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
 
+        PrinterCatalog catalog = null;
+        if (request.printerCatalogGuid() != null && !request.printerCatalogGuid().isBlank()) {
+            catalog = printerCatalogRepository.findByGuidAndStatus(request.printerCatalogGuid().trim(), StatusCd.ACTIVE)
+                    .orElseThrow(() -> new NotFoundException(MessageCd.PRINTER_CATALOG_NOT_FOUND));
+        }
+
+        String resolvedModel = CatalogDtoMapper.firstNonBlank(
+                request.model(),
+                catalog != null ? catalog.getFullDisplayName() : null
+        );
+        if (resolvedModel == null || resolvedModel.isBlank()) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
+
         Asset asset = new Asset();
         asset.setCompanyId(company.getId());
+        asset.setPrinterCatalogId(catalog != null ? catalog.getId() : null);
         asset.setName(request.name().trim());
-        asset.setModel(request.model().trim());
-        asset.setMake(extractMake(request.model()));
-        asset.setManufactureYear((short) Year.now().getValue());
-        asset.setTrayWidth(BigDecimal.valueOf(request.buildVolume() != null ? request.buildVolume().xMm() : DEFAULT_VOLUME_MM));
-        asset.setTrayDepth(BigDecimal.valueOf(request.buildVolume() != null ? request.buildVolume().yMm() : DEFAULT_VOLUME_MM));
-        asset.setTrayHeight(BigDecimal.valueOf(request.buildVolume() != null ? request.buildVolume().zMm() : DEFAULT_VOLUME_MM));
-        asset.setNozzleDiameterMm(request.nozzleDiameterMm() != null ? request.nozzleDiameterMm() : DEFAULT_NOZZLE_MM);
-        asset.setPowerWatts(request.powerWatts() != null ? request.powerWatts() : DEFAULT_POWER_WATTS);
-        asset.setPurchasePrice(scale2OrNull(request.purchasePrice()));
+        asset.setModel(resolvedModel.trim());
+        asset.setMake(catalog != null ? catalog.getBrand() : extractMake(resolvedModel));
+        asset.setManufactureYear(catalog != null && catalog.getReleaseYear() != null
+                ? catalog.getReleaseYear().shortValue()
+                : (short) Year.now().getValue());
+        asset.setTrayWidth(request.buildVolume() != null
+                ? BigDecimal.valueOf(request.buildVolume().xMm())
+                : (catalog != null && catalog.getBuildVolumeXMm() != null ? catalog.getBuildVolumeXMm() : BigDecimal.valueOf(DEFAULT_VOLUME_MM)));
+        asset.setTrayDepth(request.buildVolume() != null
+                ? BigDecimal.valueOf(request.buildVolume().yMm())
+                : (catalog != null && catalog.getBuildVolumeYMm() != null ? catalog.getBuildVolumeYMm() : BigDecimal.valueOf(DEFAULT_VOLUME_MM)));
+        asset.setTrayHeight(request.buildVolume() != null
+                ? BigDecimal.valueOf(request.buildVolume().zMm())
+                : (catalog != null && catalog.getBuildVolumeZMm() != null ? catalog.getBuildVolumeZMm() : BigDecimal.valueOf(DEFAULT_VOLUME_MM)));
+        asset.setNozzleDiameterMm(request.nozzleDiameterMm() != null
+                ? request.nozzleDiameterMm()
+                : (catalog != null && catalog.getDefaultNozzleMm() != null ? catalog.getDefaultNozzleMm() : DEFAULT_NOZZLE_MM));
+        asset.setPowerWatts(request.powerWatts() != null
+                ? request.powerWatts()
+                : (catalog != null && catalog.getAvgPowerWatts() != null ? catalog.getAvgPowerWatts() : DEFAULT_POWER_WATTS));
+        asset.setPurchasePrice(request.purchasePrice() != null
+                ? scale2OrNull(request.purchasePrice())
+                : (catalog != null ? scale2OrNull(catalog.getEstimatedPriceBrl()) : null));
         asset.setLifespanHours(request.lifespanHours());
         asset.setHourlyDepreciationRate(scale2OrNull(request.hourlyDepreciationRate()));
         asset.setIpAddress(request.ipAddress());
         asset.setPrinterStatus(PrinterStatus.ONLINE);
+
+        boolean multicolor = request.supportsMulticolor() != null
+                ? request.supportsMulticolor()
+                : (catalog != null && Boolean.TRUE.equals(catalog.getSupportsMulticolor()));
+        int slots = multicolor
+                ? Math.max(
+                        request.multicolorSlots() != null
+                                ? request.multicolorSlots()
+                                : (catalog != null && catalog.getMaxColorSlots() != null ? catalog.getMaxColorSlots() : 4),
+                        2
+                )
+                : 1;
+        asset.setSupportsMulticolor(multicolor);
+        asset.setMulticolorSlots(slots);
+        asset.setIsEnclosedOverride(request.isEnclosedOverride());
+        if (request.supportedMaterialsOverride() != null) {
+            asset.setSupportedMaterialsOverrideJson(jsonCodec.toEnumArrayJson(request.supportedMaterialsOverride()));
+        }
+
         asset.setConfigJson(jsonCodec.toJson(new StoredPrinterConfig(
                 false, false, new BigDecimal("0.20"), 20, 36, List.of(), null
         )));
@@ -156,6 +226,7 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         )));
 
         Asset saved = assetRepository.save(asset);
+        syncCompanyFromPrinter(company, catalog, multicolor, slots);
         return assembleSinglePrinterResponse(saved);
     }
 
@@ -164,6 +235,27 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
     public PrinterResponse updatePrinter(String printerGuid, UpdatePrinterRequest request) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
         Asset asset = requireOwnedPrinter(printerGuid, company);
+
+        PrinterCatalog linkedCatalog = null;
+        if (request.printerCatalogGuid() != null) {
+            if (request.printerCatalogGuid().isBlank()) {
+                asset.setPrinterCatalogId(null);
+            } else {
+                linkedCatalog = printerCatalogRepository
+                        .findByGuidAndStatus(request.printerCatalogGuid().trim(), StatusCd.ACTIVE)
+                        .orElseThrow(() -> new NotFoundException(MessageCd.PRINTER_CATALOG_NOT_FOUND));
+                asset.setPrinterCatalogId(linkedCatalog.getId());
+                if (request.model() == null) {
+                    asset.setModel(linkedCatalog.getModelName());
+                    asset.setMake(linkedCatalog.getBrand());
+                }
+                if (request.buildVolume() == null) {
+                    asset.setTrayWidth(linkedCatalog.getBuildVolumeXMm());
+                    asset.setTrayDepth(linkedCatalog.getBuildVolumeYMm());
+                    asset.setTrayHeight(linkedCatalog.getBuildVolumeZMm());
+                }
+            }
+        }
 
         if (request.name() != null && !request.name().isBlank()) {
             asset.setName(request.name().trim());
@@ -204,6 +296,24 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         if (request.ipAddress() != null) {
             asset.setIpAddress(request.ipAddress());
         }
+        if (request.supportsMulticolor() != null) {
+            asset.setSupportsMulticolor(request.supportsMulticolor());
+        }
+        if (request.multicolorSlots() != null) {
+            asset.setMulticolorSlots(request.multicolorSlots());
+        }
+        if (Boolean.FALSE.equals(asset.getSupportsMulticolor())) {
+            asset.setMulticolorSlots(1);
+        } else if (Boolean.TRUE.equals(asset.getSupportsMulticolor())
+                && (asset.getMulticolorSlots() == null || asset.getMulticolorSlots() < 2)) {
+            asset.setMulticolorSlots(4);
+        }
+        if (request.isEnclosedOverride() != null) {
+            asset.setIsEnclosedOverride(request.isEnclosedOverride());
+        }
+        if (request.supportedMaterialsOverride() != null) {
+            asset.setSupportedMaterialsOverrideJson(jsonCodec.toEnumArrayJson(request.supportedMaterialsOverride()));
+        }
         if (request.config() != null) {
             StoredPrinterConfig merged = mergeConfig(readConfig(asset), request.config(), company);
             asset.setConfigJson(jsonCodec.toJson(merged));
@@ -213,8 +323,53 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         if (request.amsSlots() != null) {
             synchronizeAmsSlots(saved, request.amsSlots(), company);
         }
+        if (Boolean.TRUE.equals(saved.getSupportsMulticolor())) {
+            syncCompanyFromPrinter(
+                    company,
+                    linkedCatalog,
+                    true,
+                    saved.getMulticolorSlots() != null ? saved.getMulticolorSlots() : 4
+            );
+        }
 
         return assembleSinglePrinterResponse(saved);
+    }
+
+    private void syncCompanyFromPrinter(
+            Company company,
+            PrinterCatalog catalog,
+            boolean printerMulticolor,
+            int printerSlots
+    ) {
+        boolean dirty = false;
+        if (catalog != null && company.getPrimaryPrinterCatalogId() == null) {
+            company.setPrimaryPrinterCatalogId(catalog.getId());
+            if (company.getPrimaryPrinter() == null || company.getPrimaryPrinter().isBlank()) {
+                company.setPrimaryPrinter(catalog.getFullDisplayName());
+            }
+            dirty = true;
+        }
+        if (printerMulticolor) {
+            if (!Boolean.TRUE.equals(company.getSupportsMulticolor())) {
+                company.setSupportsMulticolor(true);
+                dirty = true;
+            }
+            int currentMax = company.getMaxMulticolorSlots() != null ? company.getMaxMulticolorSlots() : 1;
+            if (printerSlots > currentMax) {
+                company.setMaxMulticolorSlots(printerSlots);
+                dirty = true;
+            }
+            Set<MakerCapability> caps = new LinkedHashSet<>(
+                    jsonCodec.readEnumList(company.getCapabilitiesJson(), MakerCapability.class)
+            );
+            if (caps.add(MakerCapability.MULTICOLOR_AMS)) {
+                company.setCapabilitiesJson(jsonCodec.toEnumArrayJson(new ArrayList<>(caps)));
+                dirty = true;
+            }
+        }
+        if (dirty) {
+            companyRepository.save(company);
+        }
     }
 
     @Override
@@ -444,11 +599,16 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
                 asset.getId(), RUNNING_JOB_STATUSES, StatusCd.ACTIVE
         ).stream().findFirst().orElse(null);
 
-        return toResponse(asset, slots, filamentGuids, activeJob);
+        PrinterCatalog catalog = asset.getPrinterCatalogId() != null
+                ? printerCatalogRepository.findById(asset.getPrinterCatalogId()).orElse(null)
+                : null;
+
+        return toResponse(asset, catalog, slots, filamentGuids, activeJob);
     }
 
     private PrinterResponse toResponse(
             Asset asset,
+            PrinterCatalog catalog,
             List<PrinterAmsSlot> slots,
             Map<Long, String> filamentGuidsById,
             PrintQueueItem activeJob) {
@@ -498,6 +658,21 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
                 storedConfig.notes()
         );
 
+        PrinterCatalogBriefDto catalogBrief = PrinterCatalogService.toBriefDto(catalog);
+        List<MaterialType> overrideMaterials = jsonCodec.readEnumList(
+                asset.getSupportedMaterialsOverrideJson(), MaterialType.class
+        );
+        List<MaterialType> effectiveMaterials = !overrideMaterials.isEmpty()
+                ? overrideMaterials
+                : (catalog != null && catalog.getSupportedMaterials() != null
+                        ? catalog.getSupportedMaterials().stream().sorted(Comparator.comparing(Enum::name)).toList()
+                        : List.of());
+        boolean effectiveEnclosed = asset.getIsEnclosedOverride() != null
+                ? asset.getIsEnclosedOverride()
+                : (catalog != null && Boolean.TRUE.equals(catalog.getIsEnclosed()));
+        boolean effectiveMulticolor = Boolean.TRUE.equals(asset.getSupportsMulticolor());
+        int effectiveSlots = asset.getMulticolorSlots() != null ? asset.getMulticolorSlots() : (effectiveMulticolor ? 4 : 1);
+
         return new PrinterResponse(
                 asset.getGuid(),
                 asset.getName(),
@@ -513,7 +688,15 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
                 configDto,
                 asset.getPurchasePrice(),
                 asset.getLifespanHours(),
-                asset.getHourlyDepreciationRate()
+                asset.getHourlyDepreciationRate(),
+                catalog != null ? catalog.getGuid() : null,
+                catalogBrief,
+                effectiveMulticolor,
+                effectiveSlots,
+                asset.getIsEnclosedOverride(),
+                overrideMaterials,
+                effectiveMaterials,
+                effectiveEnclosed
         );
     }
 

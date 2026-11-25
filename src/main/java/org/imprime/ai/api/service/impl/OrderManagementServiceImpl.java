@@ -28,6 +28,7 @@ import org.imprime.ai.api.service.MakerOrderSupport;
 import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.OrderViewAssembler;
+import org.imprime.ai.api.util.JsonCodec;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -52,6 +53,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     private final FileAssetRepository fileAssetRepository;
     private final ObjectStorageService objectStorageService;
     private final MakerOrderSupport makerOrderSupport;
+    private final JsonCodec jsonCodec;
 
     @Override
     public OrderDetailResponse getOrderDetail(String orderGuid) {
@@ -82,6 +84,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
                 if (asset == null) {
                     continue;
                 }
+                List<String> colors = resolvePlateColors(plate);
                 responses.add(new OrderFileResponse(
                         asset.getGuid(),
                         asset.getName(),
@@ -97,7 +100,25 @@ public class OrderManagementServiceImpl implements OrderManagementService {
                         plate.getScaleY() != null ? plate.getScaleY() : 1.0,
                         plate.getScaleZ() != null ? plate.getScaleZ() : 1.0,
                         Boolean.TRUE.equals(plate.getIsMultiColor()),
-                        plate.getPaintingInstructions()
+                        plate.getPaintingInstructions(),
+                        plate.getDimensionXMm(),
+                        plate.getDimensionYMm(),
+                        plate.getDimensionZMm(),
+                        plate.getColorCount(),
+                        plate.getLayerHeightMm(),
+                        plate.getUrgency(),
+                        plate.getQuantity() != null && plate.getQuantity() > 0 ? plate.getQuantity() : 1,
+                        plate.getWallCount(),
+                        plate.getInfillPattern(),
+                        plate.getAdhesionType(),
+                        plate.getSupportType(),
+                        plate.getFinish(),
+                        plate.getTolerance(),
+                        plate.getPlateNotes(),
+                        colors,
+                        plate.getEstimatedWeightGrams(),
+                        plate.getEstimatedPrintTimeMinutes(),
+                        plate.getEstimatedPriceBrl()
                 ));
                 fallbackIndex++;
             }
@@ -125,6 +146,19 @@ public class OrderManagementServiceImpl implements OrderManagementService {
                         null
                 )))
                 .orElseGet(List::of);
+    }
+
+    private List<String> resolvePlateColors(OrderFileAsset plate) {
+        if (jsonCodec != null && plate.getColorsJson() != null && !plate.getColorsJson().isBlank()) {
+            List<String> parsed = jsonCodec.readStringList(plate.getColorsJson());
+            if (!parsed.isEmpty()) {
+                return parsed;
+            }
+        }
+        if (plate.getColorHex() != null && !plate.getColorHex().isBlank()) {
+            return List.of(plate.getColorHex());
+        }
+        return List.of();
     }
 
     @Override

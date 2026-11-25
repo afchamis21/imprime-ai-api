@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.request.chat.OfferDecisionRequest;
+import org.imprime.ai.api.http.request.chat.UpdateChatSellerNotesRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.chat.ChatDetailResponse;
@@ -128,5 +129,24 @@ public class ChatRestController {
             @PathVariable String messageGuid,
             @Valid @RequestBody OfferDecisionRequest request) {
         return BaseResponse.ok(chatRestService.decideOffer(chatId, messageGuid, request));
+    }
+
+    @Operation(
+            summary = "Salvar anotações privadas do vendedor no chat",
+            description = "Permite que o Maker responsável pelo chat registre observações técnicas e descrição própria para referência e pré-preenchimento do orçamento."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Anotações salvas com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Payload inválido", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token JWT ausente, inválido ou expirado", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Apenas o Maker desta negociação pode editar as anotações", content = @Content(schema = @Schema(implementation = BaseResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Chat não encontrado", content = @Content(schema = @Schema(implementation = BaseResponse.class)))
+    })
+    @PatchMapping("/{chatId}/seller-notes")
+    public ResponseEntity<BaseResponse<ChatDetailResponse>> updateSellerNotes(
+            @Parameter(description = "UUID do chat", required = true)
+            @PathVariable UUID chatId,
+            @Valid @RequestBody UpdateChatSellerNotesRequest request) {
+        return BaseResponse.ok(chatRestService.updateSellerNotes(chatId, request));
     }
 }

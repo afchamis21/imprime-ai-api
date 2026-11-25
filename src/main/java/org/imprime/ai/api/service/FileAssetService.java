@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.UUID;
 
 @Slf4j
@@ -31,12 +33,58 @@ public class FileAssetService {
         }
 
         String fileName = fileValidator.sanitizeFilename(file);
+        try {
+            return storeAndPersistAsset(
+                    assetType,
+                    fileName,
+                    file.getInputStream(),
+                    file.getResource().contentLength(),
+                    file.getContentType()
+            );
+        } catch (InternalErrorException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error reading uploaded multipart stream [{}]!", fileName, e);
+            throw new InternalErrorException();
+        }
+    }
+
+    public FileAsset uploadBytes(
+            byte[] content,
+            String filename,
+            String contentType,
+            FileAsset.AssetType assetType) {
+        BadRequestException validationError = fileValidator.validateBytes(content, filename, assetType);
+        if (validationError != null) {
+            throw validationError;
+        }
+
+        String sanitizedFilename = fileValidator.sanitizeFilename(filename);
+        String resolvedContentType = contentType != null && !contentType.isBlank()
+                ? contentType
+                : "application/octet-stream";
+
+        return storeAndPersistAsset(
+                assetType,
+                sanitizedFilename,
+                new ByteArrayInputStream(content),
+                content.length,
+                resolvedContentType
+        );
+    }
+
+    private FileAsset storeAndPersistAsset(
+            FileAsset.AssetType assetType,
+            String fileName,
+            InputStream stream,
+            long contentLength,
+            String contentType) {
         String extension = StringUtils.getFilenameExtension(fileName);
         User caller = ServiceContext.getUserOrThrow();
         ObjectStorageKey key = getObjectStorageKey(assetType, caller, extension);
 
         try {
-            objectStorageService.upload(key, file.getInputStream(), file.getResource().contentLength(), file.getContentType());
+            objectStorageService.upload(key, stream, contentLength, contentType);
         } catch (Exception e) {
             log.error("Error while uploading file [{}]!", key, e);
             throw new InternalErrorException();

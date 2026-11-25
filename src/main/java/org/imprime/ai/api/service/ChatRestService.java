@@ -1,6 +1,7 @@
 package org.imprime.ai.api.service;
 
 import org.imprime.ai.api.http.request.chat.OfferDecisionRequest;
+import org.imprime.ai.api.http.request.chat.UpdateChatSellerNotesRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.chat.ChatDetailResponse;
 import org.imprime.ai.api.http.response.chat.ChatSummaryResponse;
@@ -21,4 +22,6 @@ public interface ChatRestService {
     void markChatAsRead(UUID chatId);
 
     ChatDetailResponse decideOffer(UUID chatId, String messageGuid, OfferDecisionRequest request);
+
+    ChatDetailResponse updateSellerNotes(UUID chatId, UpdateChatSellerNotesRequest request);
 }

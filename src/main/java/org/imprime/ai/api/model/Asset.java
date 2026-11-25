@@ -23,6 +23,22 @@ public class Asset extends Auditable {
     @Column(name = "COMPANY_ID", nullable = false)
     private Long companyId;
 
+    @Column(name = "PRINTER_CATALOG_ID")
+    private Long printerCatalogId;
+
+    @Column(name = "SUPPORTS_MULTICOLOR", nullable = false)
+    private Boolean supportsMulticolor = Boolean.FALSE;
+
+    @Column(name = "MULTICOLOR_SLOTS", nullable = false)
+    private Integer multicolorSlots = 1;
+
+    @Column(name = "IS_ENCLOSED_OVERRIDE")
+    private Boolean isEnclosedOverride;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "SUPPORTED_MATERIALS_OVERRIDE", columnDefinition = "jsonb")
+    private String supportedMaterialsOverrideJson;
+
     @Column(name = "NAME", nullable = false, length = 100)
     private String name;
 

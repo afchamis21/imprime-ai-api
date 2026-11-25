@@ -37,6 +37,7 @@ import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.MakerProjectRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
+import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.service.impl.MakerFinanceServiceImpl;
 import org.imprime.ai.api.service.impl.MakerPrintQueueServiceImpl;
 import org.imprime.ai.api.service.impl.MakerStudioServiceImpl;
@@ -92,6 +93,8 @@ class MakerStudioServiceImplTest {
     private MakerOrderSupport makerOrderSupport;
     @Mock
     private MakerPrintQueueServiceImpl makerPrintQueueService;
+    @Mock
+    private PrinterCatalogRepository printerCatalogRepository;
 
     @InjectMocks
     private MakerStudioServiceImpl service;

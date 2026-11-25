@@ -16,6 +16,27 @@ public record AdminMakerPrinterItem(
         BigDecimal trayDepth,
         BigDecimal trayHeight,
         BigDecimal nozzleDiameterMm,
-        PrinterStatus printerStatus
+        PrinterStatus printerStatus,
+        String printerCatalogGuid,
+        String catalogDisplayName,
+        boolean supportsMulticolor,
+        int multicolorSlots
 ) {
+    public AdminMakerPrinterItem(
+            String guid,
+            String name,
+            String make,
+            String model,
+            Short manufactureYear,
+            BigDecimal trayWidth,
+            BigDecimal trayDepth,
+            BigDecimal trayHeight,
+            BigDecimal nozzleDiameterMm,
+            PrinterStatus printerStatus
+    ) {
+        this(
+                guid, name, make, model, manufactureYear, trayWidth, trayDepth, trayHeight,
+                nozzleDiameterMm, printerStatus, null, null, false, 1
+        );
+    }
 }

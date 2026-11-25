@@ -9,6 +9,7 @@ import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.maker.FilamentResponse;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Filament;
+import org.imprime.ai.api.model.FilamentCatalog;
 import org.imprime.ai.api.model.FilamentStockMovement;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.MessageCd;
@@ -17,6 +18,7 @@ import org.imprime.ai.api.model.enums.StockAdjustmentReason;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.repo.db.FilamentCatalogRepository;
 import org.imprime.ai.api.repo.db.FilamentRepository;
 import org.imprime.ai.api.repo.db.FilamentStockMovementRepository;
 import org.imprime.ai.api.service.MakerCompanyResolver;
@@ -30,7 +32,10 @@ import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +47,7 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
     private final MakerCompanyResolver makerCompanyResolver;
     private final FilamentRepository filamentRepository;
     private final FilamentStockMovementRepository movementRepository;
+    private final FilamentCatalogRepository filamentCatalogRepository;
 
     @Override
     public PageResponse<FilamentResponse> listFilaments(
@@ -52,6 +58,15 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
         List<Filament> filaments = filamentRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE);
 
+        Set<Long> catalogIds = filaments.stream()
+                .map(Filament::getFilamentCatalogId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> catalogGuidsById = catalogIds.isEmpty()
+                ? Map.of()
+                : filamentCatalogRepository.findAllByIdIn(catalogIds).stream()
+                .collect(Collectors.toMap(FilamentCatalog::getId, FilamentCatalog::getGuid, (a, b) -> a));
+
         String normalizedQuery = query != null && !query.isBlank() ? query.trim().toLowerCase(Locale.ROOT) : null;
 
         List<FilamentResponse> filtered = filaments.stream()
@@ -61,7 +76,10 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
                         || containsIgnoreCase(f.getBrand(), normalizedQuery)
                         || containsIgnoreCase(f.getColorName(), normalizedQuery)
                         || containsIgnoreCase(f.getSpoolLocation(), normalizedQuery))
-                .map(this::toResponse)
+                .map(f -> toResponse(
+                        f,
+                        f.getFilamentCatalogId() != null ? catalogGuidsById.get(f.getFilamentCatalogId()) : null
+                ))
                 .filter(dto -> !Boolean.TRUE.equals(lowStockOnly) || dto.lowStock())
                 .sorted(buildComparator(pageable))
                 .toList();
@@ -74,8 +92,11 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
     public FilamentResponse createFilament(CreateFilamentRequest request) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
 
+        FilamentCatalog catalog = resolveCatalogOrNull(request.filamentCatalogGuid());
+
         Filament filament = new Filament();
         filament.setCompanyId(company.getId());
+        filament.setFilamentCatalogId(catalog != null ? catalog.getId() : null);
         filament.setName(request.name().trim());
         filament.setBrand(request.brand().trim());
         filament.setMaterial(request.material());
@@ -159,6 +180,14 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
         if (request.notes() != null) {
             filament.setNotes(request.notes());
             filament.setDescription(request.notes());
+        }
+        if (request.filamentCatalogGuid() != null) {
+            if (request.filamentCatalogGuid().isBlank()) {
+                filament.setFilamentCatalogId(null);
+            } else {
+                FilamentCatalog catalog = resolveCatalogOrNull(request.filamentCatalogGuid());
+                filament.setFilamentCatalogId(catalog != null ? catalog.getId() : null);
+            }
         }
 
         Filament saved = filamentRepository.save(filament);
@@ -272,7 +301,25 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
         movementRepository.save(movement);
     }
 
+    private FilamentCatalog resolveCatalogOrNull(String filamentCatalogGuid) {
+        if (filamentCatalogGuid == null || filamentCatalogGuid.isBlank()) {
+            return null;
+        }
+        return filamentCatalogRepository
+                .findByGuidAndStatus(filamentCatalogGuid.trim(), StatusCd.ACTIVE)
+                .orElseThrow(() -> new NotFoundException(MessageCd.FILAMENT_CATALOG_NOT_FOUND));
+    }
+
     private FilamentResponse toResponse(Filament filament) {
+        String catalogGuid = filament.getFilamentCatalogId() != null
+                ? filamentCatalogRepository.findById(filament.getFilamentCatalogId())
+                        .map(FilamentCatalog::getGuid)
+                        .orElse(null)
+                : null;
+        return toResponse(filament, catalogGuid);
+    }
+
+    private FilamentResponse toResponse(Filament filament, String catalogGuid) {
         BigDecimal stock = filament.getStock() != null ? filament.getStock() : BigDecimal.ZERO;
         BigDecimal threshold = filament.getLowStockThresholdGrams() != null
                 ? filament.getLowStockThresholdGrams()
@@ -294,7 +341,8 @@ public class MakerFilamentServiceImpl implements MakerFilamentService {
                 lowStock,
                 filament.getHumidityPercent(),
                 filament.getSpoolLocation(),
-                filament.getNotes()
+                filament.getNotes(),
+                catalogGuid
         );
     }
 
