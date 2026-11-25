@@ -188,7 +188,14 @@ public enum MessageCd implements CodeAttribute {
     PRINTER_CATALOG_ALREADY_EXISTS("PRT_CAT_002"),
     FILAMENT_CATALOG_NOT_FOUND("FIL_CAT_001"),
     FILAMENT_CATALOG_ALREADY_EXISTS("FIL_CAT_002"),
-    INVALID_TEMPERATURE_RANGE("CAT_001");
+    INVALID_TEMPERATURE_RANGE("CAT_001"),
+    //endregion
+
+    //region Content Reports
+    REPORT_NOT_FOUND("RPT_001"),
+    REPORT_ALREADY_OPEN("RPT_002"),
+    CANNOT_REPORT_OWN_TARGET("RPT_003"),
+    REPORT_INVALID_REQUEST("RPT_004");
     //endregion
     private final String code;
 

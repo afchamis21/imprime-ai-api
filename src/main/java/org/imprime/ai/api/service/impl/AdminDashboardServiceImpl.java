@@ -20,9 +20,11 @@ import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.ModelModerationStatus;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.RefundStatus;
+import org.imprime.ai.api.model.enums.ReportStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.SupportTicketStatus;
 import org.imprime.ai.api.repo.db.CompanyRepository;
+import org.imprime.ai.api.repo.db.ContentReportRepository;
 import org.imprime.ai.api.repo.db.MakerFinanceTransactionRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.OrderItemRepository;
@@ -88,6 +90,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final CompanyRepository companyRepository;
     private final Model3DRepository model3DRepository;
     private final SupportTicketRepository supportTicketRepository;
+    private final ContentReportRepository contentReportRepository;
     private final RefundRequestRepository refundRequestRepository;
     private final MakerFinanceTransactionRepository financeTransactionRepository;
     private final AdminOrderSlaHelper slaHelper;
@@ -203,6 +206,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long openDisputes = activeTickets.stream()
                 .filter(t -> Boolean.TRUE.equals(t.getIsDispute()) && OPEN_TICKET_STATUSES.contains(t.getTicketStatus()))
                 .count();
+        long openReports = contentReportRepository.countByReportStatusInAndStatus(
+                List.of(ReportStatus.OPEN, ReportStatus.UNDER_REVIEW),
+                StatusCd.ACTIVE
+        );
 
         long pendingModels = model3DRepository.findAllByStatus(StatusCd.ACTIVE).stream()
                 .filter(m -> ModelModerationStatus.PENDING_REVIEW.equals(m.getModerationStatus()))
@@ -231,6 +238,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ordersCompletedPeriod,
                 openTickets,
                 openDisputes,
+                openReports,
                 pendingModels,
                 pendingMakers,
                 pendingRefunds,

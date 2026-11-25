@@ -26,6 +26,8 @@ public record AdminDashboardSummaryResponse(
         long openTickets,
         @Schema(description = "Total de disputas abertas ou em análise")
         long openDisputes,
+        @Schema(description = "Total de denúncias abertas ou em análise")
+        long openReports,
         @Schema(description = "Quantidade de modelos 3D aguardando moderação")
         long pendingModels,
         @Schema(description = "Quantidade de Makers aguardando aprovação")

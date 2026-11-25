@@ -17,9 +17,11 @@ import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.ModelModerationStatus;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.RefundStatus;
+import org.imprime.ai.api.model.enums.ReportStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.SupportTicketStatus;
 import org.imprime.ai.api.repo.db.CompanyRepository;
+import org.imprime.ai.api.repo.db.ContentReportRepository;
 import org.imprime.ai.api.repo.db.MakerFinanceTransactionRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.OrderItemRepository;
@@ -65,6 +67,8 @@ class AdminDashboardServiceImplTest {
     @Mock
     private SupportTicketRepository supportTicketRepository;
     @Mock
+    private ContentReportRepository contentReportRepository;
+    @Mock
     private RefundRequestRepository refundRequestRepository;
     @Mock
     private MakerFinanceTransactionRepository financeTransactionRepository;
@@ -83,6 +87,7 @@ class AdminDashboardServiceImplTest {
                 companyRepository,
                 model3DRepository,
                 supportTicketRepository,
+                contentReportRepository,
                 refundRequestRepository,
                 financeTransactionRepository,
                 new AdminOrderSlaHelper(),
@@ -161,6 +166,9 @@ class AdminDashboardServiceImplTest {
                 .thenReturn(List.of(ticketOpen, disputeReview));
         when(model3DRepository.findAllByStatus(StatusCd.ACTIVE)).thenReturn(List.of(pendingModel, approvedModel));
         when(refundRequestRepository.countByRefundStatusAndStatus(RefundStatus.PENDING, StatusCd.ACTIVE)).thenReturn(3L);
+        when(contentReportRepository.countByReportStatusInAndStatus(
+                List.of(ReportStatus.OPEN, ReportStatus.UNDER_REVIEW), StatusCd.ACTIVE
+        )).thenReturn(4L);
         when(userRepository.findAllByStatus(StatusCd.ACTIVE)).thenReturn(List.of(new User(), new User(), new User()));
 
         AdminDashboardSummaryResponse summary = service.getSummary("30d");
@@ -171,6 +179,7 @@ class AdminDashboardServiceImplTest {
         assertEquals(1L, summary.ordersCompletedPeriod());
         assertEquals(2L, summary.openTickets());
         assertEquals(1L, summary.openDisputes());
+        assertEquals(4L, summary.openReports());
         assertEquals(1L, summary.pendingModels());
         assertEquals(1L, summary.pendingMakers());
         assertEquals(3L, summary.pendingRefunds());
