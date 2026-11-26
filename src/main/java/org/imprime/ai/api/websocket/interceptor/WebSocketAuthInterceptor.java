@@ -44,8 +44,13 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             if (accessor.getUser() instanceof AuthenticatedUserPrincipal principal) {
                 makerPresenceCache.markUserActivity(principal.user());
             }
-        } else if (StompCommand.SEND.equals(accessor.getCommand())) {
-            if (accessor.getUser() instanceof AuthenticatedUserPrincipal principal) {
+        } else if (StompCommand.SEND.equals(accessor.getCommand())
+                || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+            if (!(accessor.getUser() instanceof AuthenticatedUserPrincipal principal)
+                    || !userService.isActiveByGuid(principal.user().getGuid())) {
+                throw new UnauthorizedException();
+            }
+            if (StompCommand.SEND.equals(accessor.getCommand())) {
                 makerPresenceCache.markUserActivity(principal.user());
             }
         }

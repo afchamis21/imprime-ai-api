@@ -185,7 +185,7 @@ class PaymentServiceTest {
         verify(productRepository).save(product);
         verify(orderStatusService).move(any(Order.class), eq(OrderStatusCd.CREATED));
         verify(orderStatusService).move(any(Order.class), eq(OrderStatusCd.CONFIRMED));
-        verify(orderStatusService).move(any(Order.class), eq(OrderStatusCd.IN_PRODUCTION));
+        verify(orderStatusService, never()).move(any(Order.class), eq(OrderStatusCd.IN_PRODUCTION));
     }
 
     @Test

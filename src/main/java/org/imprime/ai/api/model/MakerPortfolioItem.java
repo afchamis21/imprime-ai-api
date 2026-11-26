@@ -20,6 +20,9 @@ public class MakerPortfolioItem extends Auditable {
     @Column(name = "PORTFOLIO_ITEM_ID", nullable = false)
     private Long id;
 
+    @Column(name = "DISPLAY_POSITION", nullable = false)
+    private int displayPosition;
+
     @Column(name = "COMPANY_ID", nullable = false)
     private Long companyId;
 

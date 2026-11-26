@@ -5,7 +5,9 @@ import org.imprime.ai.api.model.enums.ReviewTargetType;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,6 +28,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     boolean existsByAuthorUserIdAndTargetTypeAndOrderIdAndStatus(Long authorUserId, ReviewTargetType targetType, Long orderId, StatusCd status);
 
     List<Review> findAllByAuthorUserIdAndTargetTypeAndTargetIdAndStatus(Long authorUserId, ReviewTargetType targetType, Long targetId, StatusCd status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Review> findOneByGuidAndStatus(String guid, StatusCd status);
 
     Optional<Review> findByGuidAndStatus(String guid, StatusCd status);
 }

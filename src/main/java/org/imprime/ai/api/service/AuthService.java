@@ -4,6 +4,8 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.config.AuthConfig;
 import org.imprime.ai.api.http.request.auth.LoginRequest;
@@ -36,6 +38,7 @@ public class AuthService {
     private final AuthTokenService authTokenService;
     private final BCryptPasswordEncoder passwordEncoder;
     private final MakerPresenceCache makerPresenceCache;
+    private final LegalDocumentService legalDocuments;
 
     /**
      * This is meant to simulate a password hash comparison even when an email match isn't found, making it very much
@@ -174,7 +177,14 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterUserRequest request) {
         try {
+            if (request == null || !Boolean.TRUE.equals(request.termsAccepted())
+                    || !Boolean.TRUE.equals(request.privacyAcknowledged())) {
+                throw new BadRequestException(MessageCd.LEGAL_ACCEPTANCE_REQUIRED);
+            }
+            long terms = legalDocuments.requireAcceptableVersion("terms", request.termsVersion());
+            long privacy = legalDocuments.requireAcceptableVersion("privacy", request.privacyVersion());
             User user = userService.registerUser(request);
+            legalDocuments.recordRegistrationAcceptance(user.getId(), terms, privacy);
             makerPresenceCache.markUserActivity(user);
             return generateTokens(user);
         } catch (RuntimeException e) {

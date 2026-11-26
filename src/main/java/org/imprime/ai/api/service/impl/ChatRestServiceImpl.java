@@ -276,6 +276,9 @@ public class ChatRestServiceImpl implements ChatRestService {
             OrderStatusCd orderStatus,
             boolean hasOffer,
             boolean hasMessages) {
+        if (orderStatus == OrderStatusCd.CANCELLED || orderStatus == OrderStatusCd.REFUNDED) {
+            return NegotiationStatus.CANCELLED;
+        }
         if (!StatusCd.ACTIVE.equals(chat.getStatus())) {
             return NegotiationStatus.CLOSED;
         }

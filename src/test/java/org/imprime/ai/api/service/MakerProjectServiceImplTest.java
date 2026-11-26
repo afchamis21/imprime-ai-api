@@ -1,11 +1,14 @@
 package org.imprime.ai.api.service;
 
+import org.imprime.ai.api.http.request.maker.ProjectFilamentUsageRequest;
 import org.imprime.ai.api.http.request.maker.QueueNextPlateRequest;
 import org.imprime.ai.api.http.request.maker.UpdateMakerProjectRequest;
 import org.imprime.ai.api.http.response.maker.PrintQueueItemResponse;
 import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.Filament;
 import org.imprime.ai.api.model.MakerProject;
+import org.imprime.ai.api.model.MakerProjectBomItem;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.PrinterStatus;
@@ -92,12 +95,141 @@ class MakerProjectServiceImplTest {
 
     @Test
     void updateProjectRejectsCompletedExceedingTotals() {
-        when(projectRepository.findByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
+        when(projectRepository.findForUpdateByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
 
         assertThrows(BadRequestException.class, () -> service.updateProject(
                 "prj-40",
-                new UpdateMakerProjectRequest(null, null, null, null, 5, null, null)
+                new UpdateMakerProjectRequest(null, null, null, null, 5, null, null,
+                        null, null, null, null, null, null, null, null, null, null, null)
         ));
+    }
+
+    @Test
+    void updateProjectEditsTotalsAndCostsAndTracksBothPrintCounters() {
+        when(projectRepository.findForUpdateByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+        when(archiveFileRepository.findAllByMakerProjectIdAndStatusOrderByCreateDtAsc(40L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+        when(bomItemRepository.findAllByMakerProjectIdAndStatusOrderByIdAsc(40L, StatusCd.ACTIVE))
+                .thenReturn(List.of());
+
+        var edited = service.updateProject("prj-40", new UpdateMakerProjectRequest(
+                "Novo nome", "Descrição atualizada", null, null, 4, 8, "",
+                "Cliente", 4, 9, null, null, new BigDecimal("250.00"), new BigDecimal("72.50"),
+                MaterialType.PETG, "#aabbcc", null, null
+        ));
+        assertEquals("Novo nome", edited.name());
+        assertEquals(4, edited.completedPlates());
+        assertEquals(9, edited.totalParts());
+        assertEquals(new BigDecimal("72.50"), edited.estimatedCost());
+        assertEquals(ProjectStatus.IN_PROGRESS, edited.status());
+
+        var completed = service.updateProject("prj-40", new UpdateMakerProjectRequest(
+                null, null, null, null, null, 9, null,
+                null, null, null, null, null, null, null, null, null, null, null
+        ));
+        assertEquals(ProjectStatus.COMPLETED, completed.status());
+
+        var reopened = service.updateProject("prj-40", new UpdateMakerProjectRequest(
+                null, null, null, null, 3, null, null,
+                null, null, null, null, null, null, null, null, null, null, null
+        ));
+        assertEquals(ProjectStatus.IN_PROGRESS, reopened.status());
+    }
+
+    @Test
+    void recordsDifferentFilamentsAndKeepsTheirOriginalPricePerKg() {
+        Filament pla = new Filament();
+        pla.setCompanyId(company.getId());
+        pla.setName("PLA roxo");
+        pla.setCostPerKg(new BigDecimal("80.00"));
+        Filament petg = new Filament();
+        petg.setCompanyId(company.getId());
+        petg.setName("PETG azul");
+        petg.setCostPerKg(new BigDecimal("110.00"));
+
+        when(projectRepository.findForUpdateByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+        when(filamentRepository.findByGuidAndStatus("pla", StatusCd.ACTIVE)).thenReturn(Optional.of(pla));
+        when(filamentRepository.findByGuidAndStatus("petg", StatusCd.ACTIVE)).thenReturn(Optional.of(petg));
+
+        var initial = service.updateProject("prj-40", filamentUpdate(List.of(
+                new ProjectFilamentUsageRequest("pla", new BigDecimal("200.00"), null),
+                new ProjectFilamentUsageRequest("petg", new BigDecimal("50.00"), null)
+        )));
+        assertEquals(new BigDecimal("21.50"), initial.filamentCost());
+        assertEquals(2, initial.filamentUsage().size());
+
+        pla.setCostPerKg(new BigDecimal("99.00"));
+        var revised = service.updateProject("prj-40", filamentUpdate(List.of(
+                new ProjectFilamentUsageRequest("pla", new BigDecimal("250.00"), null)
+        )));
+        assertEquals(new BigDecimal("20.00"), revised.filamentCost());
+        verify(filamentRepository, times(1)).findByGuidAndStatus("pla", StatusCd.ACTIVE);
+    }
+
+    @Test
+    void calculatesPartialPlateAndRecalculatesProjectCostFromFilamentAndBom() {
+        Filament pla = new Filament();
+        pla.setCompanyId(company.getId());
+        pla.setName("PLA roxo");
+        pla.setCostPerKg(new BigDecimal("80.00"));
+        MakerProjectBomItem bolt = new MakerProjectBomItem();
+        bolt.setName("Parafuso");
+        bolt.setQuantity(new BigDecimal("10"));
+        bolt.setUnitCost(new BigDecimal("0.25"));
+
+        when(projectRepository.findForUpdateByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+        when(filamentRepository.findByGuidAndStatus("pla", StatusCd.ACTIVE)).thenReturn(Optional.of(pla));
+        when(bomItemRepository.findAllByMakerProjectIdAndStatusOrderByIdAsc(40L, StatusCd.ACTIVE))
+                .thenReturn(List.of(bolt));
+
+        var initial = service.updateProject("prj-40", new UpdateMakerProjectRequest(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
+                List.of(new ProjectFilamentUsageRequest("pla", null, new BigDecimal("50.00"))), 3));
+        assertEquals(4, initial.totalPlates());
+        assertEquals(3, initial.partsPerPlate());
+        assertEquals(new BigDecimal("200.00"), initial.filamentUsage().getFirst().grams());
+        assertEquals(new BigDecimal("16.00"), initial.filamentCost());
+        assertEquals(new BigDecimal("18.50"), initial.estimatedCost());
+        assertEquals(new BigDecimal("400.00"), initial.estimatedWeightGrams());
+
+        var revised = service.updateProject("prj-40", new UpdateMakerProjectRequest(
+                null, null, null, null, null, null, null,
+                null, null, 6, null, null, null, null, null, null, null, null));
+        assertEquals(2, revised.totalPlates());
+        assertEquals(new BigDecimal("100.00"), revised.filamentUsage().getFirst().grams());
+        assertEquals(new BigDecimal("10.50"), revised.estimatedCost());
+        assertEquals(new BigDecimal("4.00"), revised.estimatedHours());
+    }
+
+    @Test
+    void calculatesPrintedPartsFromPlatesAndHonorsManualCorrections() {
+        project.setPartsPerPlate(4);
+        when(projectRepository.findForUpdateByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
+        when(projectRepository.save(project)).thenReturn(project);
+
+        var automatic = service.updateProject("prj-40", progressUpdate(2, null));
+        assertEquals(8, automatic.completedParts());
+        var corrected = service.updateProject("prj-40", progressUpdate(3, 9));
+        assertEquals(9, corrected.completedParts());
+        assertEquals(ProjectStatus.IN_PROGRESS, corrected.status());
+
+        var completed = service.updateProject("prj-40", progressUpdate(3, null));
+        assertEquals(10, completed.completedParts());
+        assertEquals(ProjectStatus.COMPLETED, completed.status());
+    }
+
+    private UpdateMakerProjectRequest progressUpdate(int plates, Integer parts) {
+        return new UpdateMakerProjectRequest(null, null, null, null, plates, parts, null,
+                null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    private UpdateMakerProjectRequest filamentUpdate(List<ProjectFilamentUsageRequest> usage) {
+        return new UpdateMakerProjectRequest(null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, usage, null);
     }
 
     @Test
@@ -108,7 +240,7 @@ class MakerProjectServiceImplTest {
         printer.setCompanyId(10L);
         printer.setPrinterStatus(PrinterStatus.ONLINE);
 
-        when(projectRepository.findByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
+        when(projectRepository.findForUpdateByGuidAndStatus("prj-40", StatusCd.ACTIVE)).thenReturn(Optional.of(project));
         when(assetRepository.findAllByCompanyIdAndStatus(10L, StatusCd.ACTIVE)).thenReturn(List.of(printer));
         when(archiveFileRepository.findAllByMakerProjectIdAndStatusOrderByCreateDtAsc(40L, StatusCd.ACTIVE))
                 .thenReturn(List.of());

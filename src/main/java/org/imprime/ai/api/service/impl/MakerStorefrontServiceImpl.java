@@ -24,11 +24,11 @@ import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.service.MakerStorefrontService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
+import org.imprime.ai.api.util.MakerDisplayOrder;
 import org.imprime.ai.api.util.PageableSortMapper;
 import org.imprime.ai.api.util.SlugUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -44,7 +44,6 @@ public class MakerStorefrontServiceImpl implements MakerStorefrontService {
             "title", "title",
             "printTimeMinutes", "printTimeMinutes"
     );
-    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createDt");
 
     private static final Map<String, String> PRODUCT_SORT_MAPPING = Map.of(
             "createdAt", "createDt",
@@ -54,6 +53,28 @@ public class MakerStorefrontServiceImpl implements MakerStorefrontService {
             "salesCount", "salesCount"
     );
 
+    @Override
+    @Transactional
+    public void reorderPortfolio(List<String> itemGuids) {
+        Company company = requireMakerCompany();
+        companyRepository.findForUpdateById(company.getId())
+                .orElseThrow(() -> new NotFoundException(MessageCd.MAKER_NOT_FOUND));
+        List<MakerPortfolioItem> items = portfolioItemRepository.findAllByCompanyIdAndStatus(
+                company.getId(), StatusCd.ACTIVE, Pageable.unpaged(MakerDisplayOrder.SORT)).getContent();
+        MakerDisplayOrder.apply(items, itemGuids, MakerPortfolioItem::getGuid, MakerPortfolioItem::setDisplayPosition);
+    }
+
+    @Override
+    @Transactional
+    public void reorderProducts(List<String> itemGuids) {
+        Company company = requireMakerCompany();
+        companyRepository.findForUpdateById(company.getId())
+                .orElseThrow(() -> new NotFoundException(MessageCd.MAKER_NOT_FOUND));
+        List<Product> items = productRepository.findAllByCompanyIdAndStatus(
+                company.getId(), StatusCd.ACTIVE, Pageable.unpaged(MakerDisplayOrder.SORT)).getContent();
+        MakerDisplayOrder.apply(items, itemGuids, Product::getGuid, Product::setDisplayPosition);
+    }
+
     private final MakerPortfolioItemRepository portfolioItemRepository;
     private final ProductRepository productRepository;
     private final CompanyRepository companyRepository;
@@ -62,7 +83,7 @@ public class MakerStorefrontServiceImpl implements MakerStorefrontService {
     @Override
     public PageResponse<PortfolioItemResponse> listOwnPortfolio(Pageable pageable) {
         Company company = requireMakerCompany();
-        Pageable mapped = PageableSortMapper.remap(pageable, PORTFOLIO_SORT_MAPPING, DEFAULT_SORT);
+        Pageable mapped = PageableSortMapper.remap(pageable, PORTFOLIO_SORT_MAPPING, MakerDisplayOrder.SORT);
         Page<MakerPortfolioItem> page = portfolioItemRepository.findAllByCompanyIdAndStatus(
                 company.getId(), StatusCd.ACTIVE, mapped
         );
@@ -156,7 +177,7 @@ public class MakerStorefrontServiceImpl implements MakerStorefrontService {
     @Override
     public PageResponse<MakerProductResponse> listOwnProducts(Pageable pageable) {
         Company company = requireMakerCompany();
-        Pageable mapped = PageableSortMapper.remap(pageable, PRODUCT_SORT_MAPPING, DEFAULT_SORT);
+        Pageable mapped = PageableSortMapper.remap(pageable, PRODUCT_SORT_MAPPING, MakerDisplayOrder.SORT);
         Page<Product> page = productRepository.findAllByCompanyIdAndStatus(
                 company.getId(), StatusCd.ACTIVE, mapped
         );

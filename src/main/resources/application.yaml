@@ -55,6 +55,7 @@ imprime:
 oci:
   object-storage:
     namespace: ${OCI_OBJECT_STORAGE_NAMESPACE:gr2kz0u4gzog}
+    order-models-bucket: ${OCI_ORDER_MODELS_BUCKET:models}
     config-file: ${OCI_CONFIG_FILE:./secret/oci.cfg}
     profile: ${OCI_CONFIG_PROFILE:DEFAULT}
     region-id: ${OCI_REGION_ID:sa-saopaulo-1}
@@ -71,6 +72,7 @@ stripe:
   publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
   secret-key: ${STRIPE_SECRET_KEY:}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  allow-simulated-order-checkout: ${STRIPE_ALLOW_SIMULATED_ORDER_CHECKOUT:false}
   currency: ${STRIPE_CURRENCY:brl}
   success-url: ${STRIPE_SUCCESS_URL:https://imprimeai.shop/cart?payment=success&session_id={CHECKOUT_SESSION_ID}}
   cancel-url: ${STRIPE_CANCEL_URL:https://imprimeai.shop/cart?payment=cancel}

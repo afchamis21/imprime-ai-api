@@ -50,6 +50,8 @@ class ChatServiceOfferDecisionTest {
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private UserService userService;
+    @Mock
+    private MakerOrderComplianceService makerCompliance;
 
     @InjectMocks
     private ChatService chatService;

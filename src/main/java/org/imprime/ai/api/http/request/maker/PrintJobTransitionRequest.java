@@ -16,6 +16,9 @@ public record PrintJobTransitionRequest(
 
         @Schema(description = "Motivo da falha (quando action = FAIL)")
         @Size(max = 500, message = "O motivo da falha deve ter no máximo 500 caracteres")
-        String failureReason
+        String failureReason, Boolean complianceApproved, String policyVersion
 ) {
+    public PrintJobTransitionRequest(PrintJobAction action, String printerGuid, String failureReason) {
+        this(action, printerGuid, failureReason, null, null);
+    }
 }

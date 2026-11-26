@@ -2,6 +2,8 @@ package org.imprime.ai.api.service;
 
 import com.oracle.bmc.objectstorage.ObjectStorage;
 import com.oracle.bmc.objectstorage.model.CreatePreauthenticatedRequestDetails;
+import com.oracle.bmc.objectstorage.model.Bucket;
+import com.oracle.bmc.objectstorage.requests.GetBucketRequest;
 import com.oracle.bmc.objectstorage.requests.CreatePreauthenticatedRequestRequest;
 import com.oracle.bmc.objectstorage.requests.DeleteObjectRequest;
 import com.oracle.bmc.objectstorage.requests.GetObjectRequest;
@@ -184,6 +186,49 @@ public class ObjectStorageService {
         }
     }
 
+    public String requirePrivateOrderBucket() {
+        OciConfigProperties.ObjectStorageConfig config = properties.getObjectStorage();
+        if (objectStorage == null || config == null || isBlank(config.getNamespace())
+                || isBlank(config.getOrderModelsBucket())) throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        String bucketName = config.getOrderModelsBucket();
+        try {
+            Bucket bucket = objectStorage.getBucket(GetBucketRequest.builder()
+                    .namespaceName(config.getNamespace()).bucketName(bucketName).build()).getBucket();
+            if (bucket.getPublicAccessType() == Bucket.PublicAccessType.NoPublicAccess) return bucketName;
+            log.error("Order model storage bucket allows public access");
+        } catch (RuntimeException ex) {
+            log.error("Failed to verify private order model storage", ex);
+        }
+        throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+    }
+
+    public byte[] downloadPrivateOrderFile(FileAsset asset) {
+        if (asset == null || isBlank(asset.getAssetUrl())) throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        String path = asset.getAssetUrl().trim();
+        if (!isHttpUrl(path)) return downloadBytes(asset);
+
+        OciConfigProperties.ObjectStorageConfig config = properties.getObjectStorage();
+        if (config == null || isBlank(config.getNamespace()) || isBlank(config.getRegionId())) {
+            throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        }
+        try {
+            URI uri = URI.create(path);
+            String expectedHost = "objectstorage." + config.getRegionId() + ".oraclecloud.com";
+            String prefix = "/n/" + config.getNamespace() + "/b/";
+            if ("https".equalsIgnoreCase(uri.getScheme()) && expectedHost.equalsIgnoreCase(uri.getHost())
+                    && uri.getUserInfo() == null && uri.getPort() == -1 && uri.getPath().startsWith(prefix)) {
+                String[] location = uri.getPath().substring(prefix.length()).split("/o/", 2);
+                if (location.length == 2 && !location[1].isBlank()
+                        && ("models".equals(location[0]) || location[0].equals(config.getOrderModelsBucket()))) {
+                    return downloadObject(asset, config, location[0], location[1]);
+                }
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+        }
+        throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+    }
+
     public byte[] downloadBytes(FileAsset asset) {
         if (asset == null || isBlank(asset.getAssetUrl())) {
             throw new IllegalArgumentException("FileAsset must have a valid assetUrl");
@@ -206,12 +251,16 @@ public class ObjectStorageService {
         }
 
         ObjectStorageKey storageKey = ObjectStorageKey.of(asset);
-        String fullObjectName = buildFullObjectName(storageKey.getKey());
+        return downloadObject(asset, storageConfig, storageKey.getBucket(), buildFullObjectName(storageKey.getKey()));
+    }
 
+    private byte[] downloadObject(FileAsset asset, OciConfigProperties.ObjectStorageConfig storageConfig,
+                                  String bucket, String objectName) {
+        if (objectStorage == null || storageConfig == null) throw new BadGatewayException(MessageCd.BAD_GATEWAY);
         GetObjectRequest request = GetObjectRequest.builder()
                 .namespaceName(storageConfig.getNamespace())
-                .bucketName(storageKey.getBucket())
-                .objectName(fullObjectName)
+                .bucketName(bucket)
+                .objectName(objectName)
                 .build();
 
         try {

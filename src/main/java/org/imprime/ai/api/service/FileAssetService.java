@@ -27,6 +27,14 @@ public class FileAssetService {
     private final FileAssetRepository fileAssetRepository;
 
     public FileAsset upload(MultipartFile file, FileAsset.AssetType assetType) {
+        return upload(file, assetType, null);
+    }
+
+    public FileAsset uploadOrderModel(MultipartFile file) {
+        return upload(file, FileAsset.AssetType.MODEL, objectStorageService.requirePrivateOrderBucket());
+    }
+
+    private FileAsset upload(MultipartFile file, FileAsset.AssetType assetType, String bucket) {
         BadRequestException validationError = fileValidator.validateFile(file, assetType);
         if (validationError != null) {
             throw validationError;
@@ -39,7 +47,8 @@ public class FileAssetService {
                     fileName,
                     file.getInputStream(),
                     file.getResource().contentLength(),
-                    file.getContentType()
+                    file.getContentType(),
+                    bucket
             );
         } catch (InternalErrorException e) {
             throw e;
@@ -69,7 +78,8 @@ public class FileAssetService {
                 sanitizedFilename,
                 new ByteArrayInputStream(content),
                 content.length,
-                resolvedContentType
+                resolvedContentType,
+                null
         );
     }
 
@@ -78,10 +88,11 @@ public class FileAssetService {
             String fileName,
             InputStream stream,
             long contentLength,
-            String contentType) {
+            String contentType, String bucket) {
         String extension = StringUtils.getFilenameExtension(fileName);
         User caller = ServiceContext.getUserOrThrow();
-        ObjectStorageKey key = getObjectStorageKey(assetType, caller, extension);
+        ObjectStorageKey key = bucket == null ? getObjectStorageKey(assetType, caller, extension)
+                : ObjectStorageKey.modelInBucket(bucket, caller.getGuid(), UUID.randomUUID().toString(), extension);
 
         try {
             objectStorageService.upload(key, stream, contentLength, contentType);
@@ -115,8 +126,12 @@ public class FileAssetService {
         };
     }
 
-    public void deleteForever(FileAsset fileAsset) {
+    public void deleteUploadedObject(FileAsset fileAsset) {
         objectStorageService.deleteAsync(ObjectStorageKey.of(fileAsset));
+    }
+
+    public void deleteForever(FileAsset fileAsset) {
+        deleteUploadedObject(fileAsset);
         fileAssetRepository.deleteById(fileAsset.getId());
     }
 }

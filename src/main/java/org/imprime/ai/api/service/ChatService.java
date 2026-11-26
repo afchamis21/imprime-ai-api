@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,6 +46,7 @@ public class ChatService {
 
     private final ApplicationEventPublisher eventPublisher;
     private final UserService userService;
+    private final MakerOrderComplianceService makerCompliance;
 
     @Transactional
     public void start(StartChatRequest request) {
@@ -58,6 +60,7 @@ public class ChatService {
             throw new ForbiddenException();
         }
 
+        orderService.requireDeclarationsForExistingFiles(order, caller);
         OrderStatus latest = orderStatusService.findLatest(order);
         if (!OrderStatusCd.QUOTING.equals(latest.getStatusCd())) {
             log.info("Order [{}] is already in status [{}]; cloning a new QUOTING order for buyer [{}]",
@@ -89,6 +92,9 @@ public class ChatService {
     public void sendMessage(UUID chatId, SendMessageRequest request) {
         Chat chat = findChat(chatId);
 
+        if (!StatusCd.ACTIVE.equals(chat.getStatus())) {
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+        }
         sendMessage(chat, request);
     }
 
@@ -102,6 +108,16 @@ public class ChatService {
         User caller = ServiceContext.getUserOrThrow();
 
         if (MessageType.OFFER.equals(request.type())) {
+            Order order = makerCompliance.lockOrder(chat.getOrderGuid());
+            if (orderStatusService.findLatest(order).getStatusCd() != OrderStatusCd.QUOTING) {
+                throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+            }
+            Company maker = companyService.findByCompanyGuid(chat.getCompanyGuid()).orElseThrow();
+            if (!StatusCd.ACTIVE.equals(maker.getStatus())) throw new ForbiddenException();
+            makerCompliance.requireNoRefusal(order.getId(), maker.getId());
+            if (!Objects.equals(chat.getClientGuid(), caller.getGuid())) {
+                makerCompliance.requireQuoteReview(order.getId(), maker.getId(), caller.getId());
+            }
             try {
                 Double.valueOf(request.content());
             } catch (NumberFormatException e) {
@@ -121,25 +137,6 @@ public class ChatService {
             message = saved;
         }
         chatRepository.updateLastMessageSentAt(chat.getChatId());
-
-        if (MessageType.SYSTEM.equals(request.type())
-                && request.content() != null
-                && request.content().toLowerCase().contains("pagamento")
-                && request.content().toLowerCase().contains("produ")
-                && chat.getOrderGuid() != null) {
-            try {
-                orderService.findByGuid(chat.getOrderGuid()).ifPresent(order -> {
-                    OrderStatus latest = orderStatusService.findLatest(order);
-                    if (latest != null && OrderStatusCd.CONFIRMED.equals(latest.getStatusCd())) {
-                        orderStatusService.move(order, OrderStatusCd.IN_PRODUCTION);
-                        log.info("Order [{}] moved to IN_PRODUCTION after payment confirmation in Chat [{}]",
-                                order.getGuid(), chat.getChatId());
-                    }
-                });
-            } catch (Exception e) {
-                log.warn("Could not transition order [{}] to IN_PRODUCTION from chat payment event", chat.getOrderGuid(), e);
-            }
-        }
 
         if (recipients == null) {
             recipients = getChatMembers(chat);
@@ -246,7 +243,13 @@ public class ChatService {
         BigDecimal offer = new BigDecimal(quoteMessage.content().trim());
 
         Company company = companyService.findByCompanyGuid(chat.getCompanyGuid()).orElseThrow();
+        if (StatusCd.SUSPENDED.equals(company.getStatus()) || StatusCd.INACTIVE.equals(company.getStatus())
+                || StatusCd.DELETED.equals(company.getStatus())) throw new ForbiddenException();
 
+        if (Objects.equals(caller.getCompanyId(), company.getId()) && !Objects.equals(caller.getGuid(), chat.getClientGuid())) {
+            Order order = makerCompliance.lockOrder(chat.getOrderGuid());
+            makerCompliance.requireQuoteReview(order.getId(), company.getId(), caller.getId());
+        }
         OrderStatus orderStatus = orderService.acceptOffer(chat.getOrderGuid(), offer, company);
         log.info("Order [{}] Confirmed! New Status [{}]", orderStatus.getOrderId(), orderStatus.getStatusCd());
 

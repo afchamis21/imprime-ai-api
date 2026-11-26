@@ -27,9 +27,13 @@ public final class ObjectStorageKey {
             String fileIdentifier,
             String extension) {
 
+        return modelInBucket("models", userGuid, fileIdentifier, extension);
+    }
+
+    public static ObjectStorageKey modelInBucket(String bucket, String userGuid, String fileIdentifier, String extension) {
         return new ObjectStorageKey(
                 Path.of(userGuid, fileIdentifier + "." + extension).toString(),
-                "models",
+                bucket,
                 FileAsset.AssetType.MODEL
         );
     }

@@ -5,13 +5,18 @@ import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.common.CreateMakerReviewRequest;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.common.CreateReviewReplyRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.ReviewResponse;
+import org.imprime.ai.api.http.response.common.ReviewLikeResponse;
+import org.imprime.ai.api.http.response.common.ReviewReplyResponse;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.Model3D;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.Review;
+import org.imprime.ai.api.model.ReviewReply;
+import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
@@ -26,23 +31,29 @@ import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.ReviewRepository;
+import org.imprime.ai.api.repo.db.ReviewReplyRepository;
+import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.ReviewService;
+import org.imprime.ai.api.service.ObjectStorageService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.PageableSortMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +71,10 @@ public class ReviewServiceImpl implements ReviewService {
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
     private final OrderStatusService orderStatusService;
+    private final ReviewReplyRepository reviewReplyRepository;
+    private final FileAssetRepository fileAssetRepository;
+    private final ObjectStorageService objectStorageService;
+    private final JdbcClient jdbc;
 
     @Override
     public PageResponse<ReviewResponse> listReviews(
@@ -73,8 +88,15 @@ public class ReviewServiceImpl implements ReviewService {
                 targetType, targetId, StatusCd.ACTIVE, mapped
         );
 
-        Set<Long> authorIds = page.getContent().stream()
-                .map(Review::getAuthorUserId)
+        boolean catalogReviews = targetType != ReviewTargetType.MAKER && page.hasContent();
+        List<Long> reviewIds = page.getContent().stream().map(Review::getId).toList();
+        List<ReviewReply> replies = catalogReviews
+                ? reviewReplyRepository.findAllByReviewIdInAndStatusOrderByCreateDtAscIdAsc(reviewIds, StatusCd.ACTIVE)
+                : List.of();
+        Map<Long, ReviewLikeResponse> likes = catalogReviews ? readLikes(reviewIds) : Map.of();
+        Set<Long> authorIds = Stream.concat(
+                        page.getContent().stream().map(Review::getAuthorUserId),
+                        replies.stream().map(ReviewReply::getAuthorUserId))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
@@ -93,7 +115,14 @@ public class ReviewServiceImpl implements ReviewService {
                 : companyRepository.findAllByIdIn(companyIds).stream()
                 .collect(Collectors.toMap(Company::getId, c -> c, (a, b) -> a));
 
-        Page<ReviewResponse> mappedPage = page.map(review -> toReviewResponse(review, authorsById, companiesById));
+        Map<Long, List<ReviewReplyResponse>> repliesByReview = replies.stream().collect(Collectors.groupingBy(
+                ReviewReply::getReviewId, Collectors.mapping(
+                        reply -> toReplyResponse(reply, authorsById.get(reply.getAuthorUserId()), companiesById),
+                        Collectors.toList())));
+        Page<ReviewResponse> mappedPage = page.map(review -> toReviewResponse(review,
+                authorsById.get(review.getAuthorUserId()), companiesById,
+                likes.getOrDefault(review.getId(), new ReviewLikeResponse(0, false)),
+                repliesByReview.getOrDefault(review.getId(), List.of())));
         return PageResponse.from(mappedPage);
     }
 
@@ -114,7 +143,8 @@ public class ReviewServiceImpl implements ReviewService {
             throw new ConflictException(MessageCd.REVIEW_ALREADY_EXISTS);
         }
 
-        return saveAndRespond(caller, targetType, targetId, null, request.rating(), request.comment());
+        return saveAndRespond(caller, targetType, targetId, null, request.rating(), request.comment(),
+                resolvePhotos(caller, request.photoGuids()));
     }
 
     @Override
@@ -144,7 +174,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         return saveAndRespond(caller, ReviewTargetType.MAKER, order.getVendorId(), order.getId(),
-                request.rating(), request.comment());
+                request.rating(), request.comment(), List.of());
     }
 
     @Override
@@ -192,7 +222,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ConflictException(MessageCd.REVIEW_ALREADY_EXISTS));
 
         return saveAndRespond(caller, ReviewTargetType.MAKER, companyId, chosenOrder.getId(),
-                request.rating(), request.comment());
+                request.rating(), request.comment(), List.of());
     }
 
     private ReviewResponse saveAndRespond(
@@ -201,29 +231,21 @@ public class ReviewServiceImpl implements ReviewService {
             Long targetId,
             Long orderId,
             Integer rating,
-            String comment) {
+            String comment,
+            List<String> imageUrls) {
         Review review = new Review();
         review.setAuthorUserId(caller.getId());
         review.setTargetType(targetType);
         review.setTargetId(targetId);
         review.setOrderId(orderId);
         review.setRating(rating);
-        review.setComment(comment.trim());
+        review.setComment(validateContent(comment, imageUrls));
+        review.setImageUrls(imageUrls);
 
         Review saved = reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);
 
-        String avatarUrl = resolveAuthorAvatar(caller, null);
-
-        return new ReviewResponse(
-                saved.getGuid(),
-                caller.getGuid(),
-                caller.getFullName(),
-                avatarUrl,
-                saved.getRating(),
-                saved.getComment(),
-                saved.getCreateDt()
-        );
+        return toReviewResponse(saved, caller, null, new ReviewLikeResponse(0, false), List.of());
     }
 
     @Override
@@ -248,22 +270,16 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         review.setRating(request.rating());
-        review.setComment(request.comment().trim());
+        if (targetType != ReviewTargetType.MAKER && request.photoGuids() != null) {
+            review.setImageUrls(resolvePhotos(caller, request.photoGuids()));
+        }
+
+        review.setComment(validateContent(request.comment(), review.getImageUrls()));
 
         Review saved = reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);
 
-        String avatarUrl = resolveAuthorAvatar(caller, null);
-
-        return new ReviewResponse(
-                saved.getGuid(),
-                caller.getGuid(),
-                caller.getFullName(),
-                avatarUrl,
-                saved.getRating(),
-                saved.getComment(),
-                saved.getCreateDt()
-        );
+        return toReviewResponse(saved, caller, null, new ReviewLikeResponse(0, false), List.of());
     }
 
     @Override
@@ -286,6 +302,71 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(StatusCd.INACTIVE);
         reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);
+    }
+
+    @Override
+    @Transactional
+    public ReviewReplyResponse reply(
+            ReviewTargetType targetType, String targetGuid, String reviewGuid, CreateReviewReplyRequest request) {
+        User caller = ServiceContext.getUserOrThrow();
+        Review review = findCatalogReview(targetType, targetGuid, reviewGuid);
+        ReviewReply reply = new ReviewReply();
+        reply.setReviewId(review.getId());
+        reply.setAuthorUserId(caller.getId());
+        reply.setImageUrls(resolvePhotos(caller, request.photoGuids()));
+        reply.setComment(validateContent(request.comment(), reply.getImageUrls()));
+        return toReplyResponse(reviewReplyRepository.save(reply), caller, null);
+    }
+
+    @Override
+    @Transactional
+    public ReviewLikeResponse setLiked(
+            ReviewTargetType targetType, String targetGuid, String reviewGuid, boolean liked) {
+        User caller = ServiceContext.getUserOrThrow();
+        Review review = findCatalogReview(targetType, targetGuid, reviewGuid);
+        String sql = liked
+                ? "INSERT INTO review_like (review_id, user_id) VALUES (:reviewId, :userId) ON CONFLICT DO NOTHING"
+                : "DELETE FROM review_like WHERE review_id = :reviewId AND user_id = :userId";
+        jdbc.sql(sql).param("reviewId", review.getId()).param("userId", caller.getId()).update();
+        return readLikes(List.of(review.getId())).getOrDefault(review.getId(), new ReviewLikeResponse(0, false));
+    }
+
+    private Map<Long, ReviewLikeResponse> readLikes(List<Long> reviewIds) {
+        Long userId = ServiceContext.getUser().map(User::getId).orElse(0L);
+        return jdbc.sql("""
+                SELECT review_id, COUNT(*) AS like_count, BOOL_OR(user_id = :userId) AS liked
+                FROM review_like WHERE review_id IN (:reviewIds) GROUP BY review_id
+                """)
+                .param("userId", userId).param("reviewIds", reviewIds)
+                .query((row, idx) -> Map.entry(row.getLong("review_id"),
+                        new ReviewLikeResponse(row.getLong("like_count"), row.getBoolean("liked"))))
+                .list().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private Review findCatalogReview(ReviewTargetType targetType, String targetGuid, String reviewGuid) {
+        Long targetId = resolveTargetId(targetType, targetGuid);
+        return reviewRepository.findOneByGuidAndStatus(reviewGuid, StatusCd.ACTIVE)
+                .filter(review -> targetType != ReviewTargetType.MAKER && review.getTargetType() == targetType
+                        && Objects.equals(review.getTargetId(), targetId))
+                .orElseThrow(() -> new NotFoundException(MessageCd.REVIEW_NOT_FOUND));
+    }
+
+    private String validateContent(String comment, List<String> imageUrls) {
+        String text = comment == null ? "" : comment.trim();
+        if (text.isEmpty() && imageUrls.isEmpty()) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
+        return text;
+    }
+
+    private List<String> resolvePhotos(User caller, List<String> photoGuids) {
+        if (photoGuids == null) return List.of();
+        return photoGuids.stream().distinct().map(guid -> fileAssetRepository.findByGuid(guid)
+                .filter(asset -> Objects.equals(asset.getUserId(), caller.getId())
+                        && asset.getStatus() == StatusCd.ACTIVE && asset.getAssetType() == FileAsset.AssetType.IMAGE
+                        && !asset.getName().toLowerCase(Locale.ROOT).endsWith(".svg"))
+                .map(objectStorageService::buildPublicObjectUrl)
+                .orElseThrow(() -> new BadRequestException(MessageCd.VALIDATION_ERROR))).toList();
     }
 
     private Long resolveTargetId(ReviewTargetType targetType, String guidOrSlug) {
@@ -341,9 +422,10 @@ public class ReviewServiceImpl implements ReviewService {
 
     private ReviewResponse toReviewResponse(
             Review review,
-            Map<Long, User> authorsById,
-            Map<Long, Company> companiesById) {
-        User author = authorsById.get(review.getAuthorUserId());
+            User author,
+            Map<Long, Company> companiesById,
+            ReviewLikeResponse like,
+            List<ReviewReplyResponse> replies) {
         String authorGuid = author != null ? author.getGuid() : null;
         String authorName = author != null ? author.getFullName() : "Usuário";
         String avatarUrl = resolveAuthorAvatar(author, companiesById);
@@ -355,8 +437,18 @@ public class ReviewServiceImpl implements ReviewService {
                 avatarUrl,
                 review.getRating(),
                 review.getComment(),
-                review.getCreateDt()
+                review.getCreateDt(),
+                review.getImageUrls(),
+                like.likeCount(),
+                like.liked(),
+                replies
         );
+    }
+
+    private ReviewReplyResponse toReplyResponse(ReviewReply reply, User author, Map<Long, Company> companiesById) {
+        return new ReviewReplyResponse(reply.getGuid(), author != null ? author.getGuid() : null,
+                author != null ? author.getFullName() : "Usuário", resolveAuthorAvatar(author, companiesById),
+                reply.getComment(), reply.getCreateDt(), reply.getImageUrls());
     }
 
     private String resolveAuthorAvatar(User author, Map<Long, Company> companiesById) {

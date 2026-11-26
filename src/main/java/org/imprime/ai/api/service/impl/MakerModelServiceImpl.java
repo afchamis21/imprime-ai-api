@@ -33,6 +33,7 @@ import org.imprime.ai.api.service.MakerCompanyResolver;
 import org.imprime.ai.api.service.MakerModelService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
+import org.imprime.ai.api.util.MakerDisplayOrder;
 import org.imprime.ai.api.util.PageUtils;
 import org.imprime.ai.api.util.ScadParameterParser;
 import org.imprime.ai.api.util.SlugUtil;
@@ -45,6 +46,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -57,6 +59,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MakerModelServiceImpl implements MakerModelService {
     private final MakerCompanyResolver makerCompanyResolver;
+    private static final Comparator<Model3D> DISPLAY_ORDER = Comparator
+            .comparingInt(Model3D::getDisplayPosition)
+            .thenComparing(Model3D::getCreateDt, Comparator.nullsLast(Comparator.reverseOrder()))
+            .thenComparing(Model3D::getId, Comparator.nullsLast(Comparator.reverseOrder()));
+
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final Model3DRepository model3DRepository;
@@ -102,6 +109,18 @@ public class MakerModelServiceImpl implements MakerModelService {
     public MakerModelResponse submitModel(MultipartFile file, CreateMakerModelRequest request) {
         User caller = ServiceContext.getUserOrThrow();
         Company company = makerCompanyResolver.requireActiveMakerCompany();
+
+        List<String> imageUrls = sanitizeStringList(request.imageUrls(), 10);
+        String coverImageUrl = CatalogDtoMapper.firstNonBlank(
+                trimToNull(request.coverImageUrl()),
+                imageUrls.isEmpty() ? null : imageUrls.getFirst()
+        );
+        if (coverImageUrl == null) {
+            throw new BadRequestException("Envie pelo menos uma imagem do modelo 3D.", MessageCd.INVALID_REQUEST_BODY);
+        }
+        if (imageUrls.isEmpty()) {
+            imageUrls = List.of(coverImageUrl);
+        }
 
         boolean hasFile = file != null && !file.isEmpty();
         String trimmedScad = trimToNull(request.scadCode());
@@ -150,14 +169,6 @@ public class MakerModelServiceImpl implements MakerModelService {
             fileSizeBytes = file.getSize();
         }
 
-        List<String> imageUrls = sanitizeStringList(request.imageUrls(), 10);
-        String coverImageUrl = CatalogDtoMapper.firstNonBlank(
-                trimToNull(request.coverImageUrl()),
-                imageUrls.isEmpty() ? null : imageUrls.getFirst()
-        );
-        if (imageUrls.isEmpty() && coverImageUrl != null) {
-            imageUrls = List.of(coverImageUrl);
-        }
         List<String> tags = sanitizeStringList(request.tags(), 15);
 
         Model3D model = new Model3D();
@@ -231,6 +242,20 @@ public class MakerModelServiceImpl implements MakerModelService {
         model3DRepository.save(model);
     }
 
+    @Override
+    @Transactional
+    public void reorderModels(List<String> itemGuids) {
+        User caller = ServiceContext.getUserOrThrow();
+        Company company = makerCompanyResolver.requireActiveMakerCompany();
+        companyRepository.findForUpdateById(company.getId())
+                .orElseThrow(() -> new NotFoundException(MessageCd.MAKER_NOT_FOUND));
+        List<Model3D> models = model3DRepository.findAllByAuthorUserIdInAndStatusOrderByCreateDtDesc(
+                resolveStudioUserIds(company, caller), StatusCd.ACTIVE).stream()
+                .sorted(DISPLAY_ORDER)
+                .toList();
+        MakerDisplayOrder.apply(models, itemGuids, Model3D::getGuid, Model3D::setDisplayPosition);
+    }
+
     private PageResponse<MakerModelResponse> toModelPage(List<Model3D> models, Company company, Pageable pageable) {
         if (models.isEmpty()) {
             return PageUtils.paginate(List.of(), pageable);
@@ -249,6 +274,7 @@ public class MakerModelServiceImpl implements MakerModelService {
         Set<Long> favoritedIds = favoriteService.findFavoritedTargetIds(FavoriteTargetType.MODEL_3D);
 
         List<MakerModelResponse> responses = models.stream()
+                .sorted(DISPLAY_ORDER)
                 .map(model -> toResponse(
                         model,
                         authorsById.get(model.getAuthorUserId()),

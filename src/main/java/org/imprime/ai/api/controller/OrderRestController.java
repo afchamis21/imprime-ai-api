@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
 import org.imprime.ai.api.http.request.order.UpdateOrderStatusRequest;
+import org.imprime.ai.api.http.request.order.StartOrderRequest;
+import org.springframework.web.multipart.MultipartFile;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.common.ReviewResponse;
 import org.imprime.ai.api.http.response.order.OrderDetailResponse;
@@ -19,6 +21,8 @@ import org.imprime.ai.api.http.response.order.OrderFileResponse;
 import org.imprime.ai.api.http.response.order.OrderShipmentResponse;
 import org.imprime.ai.api.model.dto.CompanyChoiceDTO;
 import org.imprime.ai.api.service.OrderManagementService;
+import org.imprime.ai.api.service.MakerOrderComplianceService;
+import jakarta.validation.constraints.NotNull;
 import org.imprime.ai.api.service.OrderService;
 import org.imprime.ai.api.service.OrderShipmentService;
 import org.imprime.ai.api.service.ReviewService;
@@ -31,7 +35,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -40,6 +44,37 @@ import java.util.concurrent.TimeUnit;
 @Tag(name = "Pedidos (REST)", description = "Consulta detalhada de pedidos, transições de status e busca de Makers elegíveis")
 public class OrderRestController {
     private final OrderManagementService orderManagementService;
+    private final MakerOrderComplianceService makerCompliance;
+
+    @PostMapping("/{orderGuid}/maker-quote-review")
+    public ResponseEntity<Void> acknowledgeQuoteReview(@PathVariable String orderGuid,
+                                                       @Valid @RequestBody QuoteReview request) {
+        makerCompliance.acknowledgeQuoteReview(orderGuid, Boolean.TRUE.equals(request.approved()), request.policyVersion());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record QuoteReview(@NotNull Boolean approved, @NotNull String policyVersion) {}
+
+    @PostMapping(value = "/{orderGuid}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Void> attachQuoteFiles(@PathVariable String orderGuid,
+            @RequestPart("file") List<MultipartFile> files,
+            @RequestParam(required = false) Boolean rightsDeclared,
+            @RequestParam(required = false) String declarationVersion,
+            @RequestParam(required = false) String prohibitedItemsVersion,
+            @RequestHeader(name = "Idempotency-Key", required = false) UUID requestId) {
+        orderService.attachQuoteFiles(orderGuid, files,
+                new StartOrderRequest(null, rightsDeclared, declarationVersion, prohibitedItemsVersion), requestId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{orderGuid}/compliance-refusal")
+    public ResponseEntity<Void> refuseForCompliance(@PathVariable String orderGuid,
+                                                     @Valid @RequestBody ComplianceRefusal request) {
+        makerCompliance.refuse(orderGuid, request.reason());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record ComplianceRefusal(@NotNull MakerOrderComplianceService.RefusalReason reason) {}
     private final OrderService orderService;
     private final OrderShipmentService orderShipmentService;
     private final ReviewService reviewService;
@@ -193,7 +228,7 @@ public class OrderRestController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(content.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
+                .cacheControl(CacheControl.noStore())
                 .body(content.bytes());
     }
 }

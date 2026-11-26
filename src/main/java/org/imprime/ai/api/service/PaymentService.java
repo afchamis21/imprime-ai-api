@@ -31,6 +31,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.model.exception.BadGatewayException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.InternalErrorException;
 import org.imprime.ai.api.repo.db.AddressRepository;
@@ -285,8 +286,6 @@ public class PaymentService {
             );
         }
 
-        verifyStripeSessionIfConfigured(sessionId, request.shippingQuoteGuids());
-
         Address deliveryAddress = resolveDeliveryAddress(caller, request);
 
         List<ResolvedCartItem> resolvedItems = new ArrayList<>(request.items().size());
@@ -332,6 +331,11 @@ public class PaymentService {
             shippingAllocation.add(quote == null ? legacyAllocation.get(allocationIndex) : quote.getQuotePrice());
             allocationIndex++;
         }
+
+        BigDecimal expectedTotal = resolvedItems.stream().map(ResolvedCartItem::lineTotal)
+                .reduce(ZERO_MONEY, BigDecimal::add)
+                .add(shippingAllocation.stream().reduce(ZERO_MONEY, BigDecimal::add));
+        verifyStripeSessionIfConfigured(sessionId, request.shippingQuoteGuids(), caller.getGuid(), currency, expectedTotal);
 
         List<OrderSummaryResponse> createdOrders = new ArrayList<>(groupsByVendor.size());
         int groupIndex = 0;
@@ -396,40 +400,27 @@ public class PaymentService {
         }
     }
 
-    private void verifyStripeSessionIfConfigured(String sessionId, List<String> shippingQuoteGuids) {
+    private void verifyStripeSessionIfConfigured(String sessionId, List<String> shippingQuoteGuids, String buyerGuid,
+                                                 String currency, BigDecimal total) {
         String secretKey = stripeConfig.getSecretKey();
-        if (!hasText(secretKey) || isSimulatedOrLocalSession(sessionId)) {
-            return;
-        }
+        if (!hasText(secretKey)) return;
 
-        boolean isLiveKey = secretKey.trim().startsWith("sk_live_");
         try {
-            Stripe.apiKey = secretKey.trim();
-            Session session = Session.retrieve(sessionId);
+            Session session = Session.retrieve(sessionId,
+                    com.stripe.net.RequestOptions.builder().setApiKey(secretKey.trim()).build());
+            Map<String, String> metadata = session.getMetadata() != null ? session.getMetadata() : Map.of();
             String expectedQuotes = shippingQuoteGuids == null ? "" : String.join(",", shippingQuoteGuids);
-            String sessionQuotes = session.getMetadata() == null ? "" : session.getMetadata().getOrDefault("shippingQuoteGuids", "");
-            if (!expectedQuotes.equals(sessionQuotes)) {
+            long expectedAmount = total.movePointRight(2).longValueExact();
+            if (!buyerGuid.equals(metadata.get("userGuid"))
+                    || !expectedQuotes.equals(metadata.getOrDefault("shippingQuoteGuids", ""))
+                    || !currency.equalsIgnoreCase(session.getCurrency())
+                    || !java.util.Objects.equals(expectedAmount, session.getAmountTotal())
+                    || !"complete".equals(session.getStatus()) || !"paid".equals(session.getPaymentStatus())) {
                 throw new BadRequestException(MessageCd.VALIDATION_ERROR);
             }
-            if ("unpaid".equalsIgnoreCase(session.getPaymentStatus())
-                    && !"complete".equalsIgnoreCase(session.getStatus())) {
-                throw new BadRequestException(MessageCd.VALIDATION_ERROR);
-            }
-        } catch (BadRequestException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            if (isLiveKey) {
-                log.warn("Falha ao validar sessão Stripe [{}] em modo live: {}", sessionId, ex.getMessage());
-                throw new BadRequestException(MessageCd.VALIDATION_ERROR);
-            }
-            log.warn("Não foi possível consultar sessão Stripe de teste [{}]: {}. Prosseguindo.", sessionId, ex.getMessage());
+        } catch (com.stripe.exception.StripeException ex) {
+            throw new BadGatewayException(MessageCd.BAD_GATEWAY);
         }
-    }
-
-    private boolean isSimulatedOrLocalSession(String sessionId) {
-        return sessionId.startsWith("cs_test_sim_")
-                || sessionId.startsWith("cs_test_local_")
-                || sessionId.startsWith("cs_cart_");
     }
 
     private Address resolveDeliveryAddress(User caller, CompleteCheckoutRequest request) {
@@ -709,6 +700,7 @@ public class PaymentService {
         order.setOrderTotal(groupTotal);
         order.setNotes(truncate(trimToNull(notes), 2000));
         order.setCheckoutSessionId(sessionId);
+        order.setPaymentConfirmedAt(Instant.now());
 
         Order savedOrder = orderRepository.save(order);
         if (shippingQuote != null) {
@@ -757,7 +749,7 @@ public class PaymentService {
         boolean allDigital = groupItems.stream().allMatch(ResolvedCartItem::digitalModel);
         orderStatusService.move(savedOrder, OrderStatusCd.CREATED);
         orderStatusService.move(savedOrder, OrderStatusCd.CONFIRMED);
-        orderStatusService.move(savedOrder, allDigital ? OrderStatusCd.COMPLETED : OrderStatusCd.IN_PRODUCTION);
+        if (allDigital) orderStatusService.move(savedOrder, OrderStatusCd.COMPLETED);
 
         return savedOrder;
     }

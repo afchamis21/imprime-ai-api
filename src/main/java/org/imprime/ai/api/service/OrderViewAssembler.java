@@ -97,7 +97,8 @@ public class OrderViewAssembler {
                 header.items(),
                 statusHistory,
                 order.getCreateDt(),
-                order.getUpdateDt()
+                order.getUpdateDt(),
+                order.getPaymentConfirmedAt()
         );
     }
 

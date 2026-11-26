@@ -25,7 +25,9 @@ public record AddressDTO(
         @Schema(description = "Latitude do endereço (opcional)", example = "-23.5614")
         @Nullable Double latitude,
         @Schema(description = "Longitude do endereço (opcional)", example = "-46.6559")
-        @Nullable Double longitude
+        @Nullable Double longitude,
+        @Schema(description = "Indica se este é o endereço padrão do usuário")
+        boolean defaultAddress
 ) {
     public static AddressDTO from(Address address) {
         return new AddressDTO(
@@ -38,7 +40,8 @@ public record AddressDTO(
                 address.getAddressLine1(),
                 address.getAddressLine2(),
                 address.getLatitude(),
-                address.getLongitude()
+                address.getLongitude(),
+                Boolean.TRUE.equals(address.getDefaultAddress())
         );
     }
 }

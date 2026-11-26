@@ -380,7 +380,8 @@ public class AdminRefundServiceImpl implements AdminRefundService {
     private boolean isSimulatedSession(String sessionId) {
         return sessionId.startsWith("cs_test_sim_")
                 || sessionId.startsWith("cs_test_local_")
-                || sessionId.startsWith("cs_cart_");
+                || sessionId.startsWith("cs_cart_")
+                || sessionId.startsWith("cs_quote_sim_");
     }
 
     private BigDecimal sumRefundedForOrder(Long orderId, Long excludeRefundId) {

@@ -1,6 +1,7 @@
 package org.imprime.ai.api.http.response.maker;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.imprime.ai.api.model.MakerProject;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.ProjectStatus;
 
@@ -41,7 +42,7 @@ public record MakerProjectResponse(
         BigDecimal estimatedHours,
         @Schema(description = "Valor cobrado do cliente em BRL", example = "200.00")
         BigDecimal quotedPrice,
-        @Schema(description = "Custo estimado total em BRL", example = "68.40")
+        @Schema(description = "Custo estimado dos filamentos e insumos em BRL", example = "68.40")
         BigDecimal estimatedCost,
         @Schema(description = "Material predominante", example = "PLA")
         MaterialType primaryMaterial,
@@ -56,6 +57,12 @@ public record MakerProjectResponse(
         @Schema(description = "Observações internas")
         String notes,
         @Schema(description = "Data de criação em UTC (ISO-8601)")
-        Instant createdAt
+        Instant createdAt,
+        @Schema(description = "Consumo total, consumo por mesa quando configurado, e preço por kg de cada filamento")
+        List<MakerProject.FilamentUsage> filamentUsage,
+        @Schema(description = "Custo estimado dos filamentos em BRL")
+        BigDecimal filamentCost,
+        @Schema(description = "Quantidade de peças por mesa, quando configurada")
+        Integer partsPerPlate
 ) {
 }

@@ -18,8 +18,8 @@ import org.imprime.ai.api.model.PrintQueueItem;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.PrintJobStatus;
-import org.imprime.ai.api.model.enums.PrinterStatus;
 import org.imprime.ai.api.model.enums.ProjectStatus;
+import org.imprime.ai.api.model.enums.PrinterStatus;
 import org.imprime.ai.api.model.enums.QueuePriority;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.StockAdjustmentReason;
@@ -36,6 +36,7 @@ import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.PrintQueueItemRepository;
 import org.imprime.ai.api.service.MakerCompanyResolver;
 import org.imprime.ai.api.service.MakerOrderSupport;
+import org.imprime.ai.api.service.MakerOrderComplianceService;
 import org.imprime.ai.api.service.MakerPrintQueueService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
@@ -78,6 +79,7 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
     private final MakerFilamentServiceImpl makerFilamentService;
     private final JsonCodec jsonCodec;
     private final MakerOrderSupport makerOrderSupport;
+    private final MakerOrderComplianceService makerCompliance;
 
     private static final Set<OrderStatusCd> LEFT_PRODUCTION_STATUSES = EnumSet.of(
             OrderStatusCd.READY_TO_SHIP, OrderStatusCd.IN_TRANSIT, OrderStatusCd.COMPLETED,
@@ -271,7 +273,9 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
                 .collect(Collectors.toMap(Order::getId, order -> order, (a, b) -> a));
 
         List<Order> inProduction = orders.stream()
-                .filter(order -> OrderStatusCd.IN_PRODUCTION.equals(statuses.get(order.getId())))
+                .filter(order -> OrderStatusCd.IN_PRODUCTION.equals(statuses.get(order.getId()))
+                        || (OrderStatusCd.CONFIRMED.equals(statuses.get(order.getId()))
+                        && order.getPaymentConfirmedAt() != null))
                 .toList();
 
         List<PrintQueueItem> activeJobs = printQueueItemRepository
@@ -520,6 +524,10 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
                 if (!PrintJobStatus.QUEUED.equals(current)) {
                     throw new ConflictException(MessageCd.CONFLICT);
                 }
+                if (job.getOrderId() != null) {
+                    makerCompliance.approvePrintStart(job.getOrderId(), job.getId(), company,
+                            request.complianceApproved(), request.policyVersion());
+                }
                 ensurePrinterAvailableForJob(targetPrinter, job.getId());
                 job.setAssetId(targetPrinter.getId());
                 job.setJobStatus(PrintJobStatus.PRINTING);
@@ -746,17 +754,18 @@ public class MakerPrintQueueServiceImpl implements MakerPrintQueueService {
         if (makerProjectId == null) {
             return;
         }
-        projectRepository.findById(makerProjectId)
-                .filter(p -> StatusCd.ACTIVE.equals(p.getStatus()))
+        projectRepository.findForUpdateByIdAndStatus(makerProjectId, StatusCd.ACTIVE)
                 .ifPresent(project -> {
                     int totalPlates = project.getTotalPlates() != null ? project.getTotalPlates() : 1;
-                    int nextPlates = Math.min(totalPlates,
-                            (project.getCompletedPlates() != null ? project.getCompletedPlates() : 0) + 1);
+                    int previousPlates = project.getCompletedPlates() != null ? project.getCompletedPlates() : 0;
+                    int nextPlates = previousPlates < totalPlates ? previousPlates + 1 : totalPlates;
                     project.setCompletedPlates(nextPlates);
-                    if (nextPlates >= totalPlates) {
-                        project.setProjectStatus(ProjectStatus.COMPLETED);
-                    } else if (ProjectStatus.PLANNING.equals(project.getProjectStatus())) {
-                        project.setProjectStatus(ProjectStatus.IN_PROGRESS);
+                    if (nextPlates > previousPlates && project.getPartsPerPlate() != null) {
+                        project.setCompletedParts(MakerProject.partsPrintedForPlates(
+                                nextPlates, project.getPartsPerPlate(), project.getTotalParts()));
+                    }
+                    if (project.getProjectStatus() != ProjectStatus.COMPLETED) {
+                        project.updateStatusFromProgress();
                     }
                     projectRepository.save(project);
                 });

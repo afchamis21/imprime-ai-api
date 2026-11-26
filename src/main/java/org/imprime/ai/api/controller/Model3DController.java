@@ -14,11 +14,14 @@ import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.OptionalAuth;
 import org.imprime.ai.api.http.auth.SkipAuth;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.common.CreateReviewReplyRequest;
 import org.imprime.ai.api.http.request.model3d.Model3DCatalogFilter;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.FavoriteStatusResponse;
 import org.imprime.ai.api.http.response.common.ReviewResponse;
+import org.imprime.ai.api.http.response.common.ReviewLikeResponse;
+import org.imprime.ai.api.http.response.common.ReviewReplyResponse;
 import org.imprime.ai.api.http.response.model3d.Model3DCatalogItemResponse;
 import org.imprime.ai.api.http.response.model3d.Model3DDetailResponse;
 import org.imprime.ai.api.http.response.model3d.ModelCustomizationResponse;
@@ -156,7 +159,7 @@ public class Model3DController {
         return ResponseEntity.noContent().build();
     }
 
-    @SkipAuth
+    @OptionalAuth
     @SecurityRequirements
     @Operation(
             summary = "Listar avaliações de um modelo 3D",
@@ -235,6 +238,28 @@ public class Model3DController {
             @PathVariable String reviewGuid) {
         reviewService.deleteReview(ReviewTargetType.MODEL_3D, modelGuid, reviewGuid);
         return ResponseEntity.noContent().build();
+    }
+
+    @JwtAuthenticated
+    @PostMapping("/{modelGuid}/reviews/{reviewGuid}/replies")
+    public ResponseEntity<BaseResponse<ReviewReplyResponse>> replyToReview(
+            @PathVariable String modelGuid, @PathVariable String reviewGuid,
+            @Valid @RequestBody CreateReviewReplyRequest request) {
+        return BaseResponse.created(reviewService.reply(ReviewTargetType.MODEL_3D, modelGuid, reviewGuid, request));
+    }
+
+    @JwtAuthenticated
+    @PutMapping("/{modelGuid}/reviews/{reviewGuid}/like")
+    public ResponseEntity<BaseResponse<ReviewLikeResponse>> likeReview(
+            @PathVariable String modelGuid, @PathVariable String reviewGuid) {
+        return BaseResponse.ok(reviewService.setLiked(ReviewTargetType.MODEL_3D, modelGuid, reviewGuid, true));
+    }
+
+    @JwtAuthenticated
+    @DeleteMapping("/{modelGuid}/reviews/{reviewGuid}/like")
+    public ResponseEntity<BaseResponse<ReviewLikeResponse>> unlikeReview(
+            @PathVariable String modelGuid, @PathVariable String reviewGuid) {
+        return BaseResponse.ok(reviewService.setLiked(ReviewTargetType.MODEL_3D, modelGuid, reviewGuid, false));
     }
 
     @OptionalAuth

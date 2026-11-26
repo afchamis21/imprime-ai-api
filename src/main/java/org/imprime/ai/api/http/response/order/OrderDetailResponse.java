@@ -48,7 +48,8 @@ public record OrderDetailResponse(
         @Schema(description = "Data de criação em UTC (ISO-8601)")
         Instant createdAt,
         @Schema(description = "Data da última atualização em UTC (ISO-8601)")
-        Instant updatedAt
+        Instant updatedAt,
+        Instant paymentConfirmedAt
 ) {
     public OrderDetailResponse(
             String orderGuid,
@@ -68,6 +69,6 @@ public record OrderDetailResponse(
             Instant updatedAt) {
         this(orderGuid, orderCode, status, subtotal, shippingCost, totalAmount,
                 trackingCode, null, null, null, notes, shippingAddress, maker, buyer,
-                items, statusHistory, createdAt, updatedAt);
+                items, statusHistory, createdAt, updatedAt, null);
     }
 }

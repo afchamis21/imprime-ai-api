@@ -62,7 +62,12 @@ class OrderServiceTest {
                 orderRepository,
                 orderFileAssetRepository,
                 orderStatusService,
-                new JsonCodec()
+                new JsonCodec(),
+                mock(LegalDocumentService.class),
+                mock(org.imprime.ai.api.validator.PrintFileValidator.class),
+                mock(MakerOrderComplianceService.class),
+                mock(org.imprime.ai.api.repo.db.ChatMessageRepository.class),
+                mock(OrderUploadRequestService.class)
         );
 
         buyer = new User();
@@ -111,8 +116,8 @@ class OrderServiceTest {
                 """;
 
         when(addressService.findByGuid("addr-guid-10")).thenReturn(Optional.of(address));
-        when(fileAssetService.upload(file1, FileAsset.AssetType.MODEL)).thenReturn(asset1);
-        when(fileAssetService.upload(file2, FileAsset.AssetType.MODEL)).thenReturn(asset2);
+        when(fileAssetService.uploadOrderModel(file1)).thenReturn(asset1);
+        when(fileAssetService.uploadOrderModel(file2)).thenReturn(asset2);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
             o.setId(900L);
@@ -125,7 +130,7 @@ class OrderServiceTest {
         StartOrderResponse response = orderService.start(
                 List.of(file1, file2),
                 metadataJson,
-                new StartOrderRequest("addr-guid-10")
+                new StartOrderRequest("addr-guid-10", true, "v1", "v1")
         );
 
         assertEquals("order-guid-900", response.orderGuid());
@@ -186,12 +191,12 @@ class OrderServiceTest {
         asset1.setGuid("asset-guid-1");
 
         when(addressService.findByGuid("addr-guid-10")).thenReturn(Optional.of(address));
-        when(fileAssetService.upload(file1, FileAsset.AssetType.MODEL)).thenReturn(asset1);
-        when(fileAssetService.upload(file2, FileAsset.AssetType.MODEL))
+        when(fileAssetService.uploadOrderModel(file1)).thenReturn(asset1);
+        when(fileAssetService.uploadOrderModel(file2))
                 .thenThrow(new BadRequestException(MessageCd.FILE_UNSUPPORTED_EXTENSION));
 
         assertThrows(BadRequestException.class, () ->
-                orderService.start(List.of(file1, file2), null, new StartOrderRequest("addr-guid-10"))
+                orderService.start(List.of(file1, file2), null, new StartOrderRequest("addr-guid-10", true, "v1", "v1"))
         );
 
         verify(fileAssetService).deleteForever(asset1);
@@ -268,4 +273,15 @@ class OrderServiceTest {
         assertEquals("ABS", copied.get(1).getMaterial());
         assertEquals(1.5, copied.get(1).getScaleX());
     }
+    @Test
+    void uploadRequiresDeclarationBeforeWritingAnyObject() {
+        MockMultipartFile file = new MockMultipartFile("file", "model.stl", "model/stl", "stl".getBytes());
+        when(addressService.findByGuid("addr-guid-10")).thenReturn(Optional.of(address));
+
+        assertThrows(BadRequestException.class, () -> orderService.start(
+                file, new StartOrderRequest("addr-guid-10", false, "v1", "v1")));
+
+        verifyNoInteractions(fileAssetService, orderRepository, orderFileAssetRepository);
+    }
+
 }

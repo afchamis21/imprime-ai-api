@@ -26,8 +26,14 @@ public class ContentReport extends Auditable {
     @Column(name = "PROTOCOL", nullable = false, unique = true, length = 40)
     private String protocol;
 
-    @Column(name = "REPORTER_USER_ID", nullable = false)
+    @Column(name = "REPORTER_USER_ID")
     private Long reporterUserId;
+
+    @Column(name = "CLAIMANT_NAME", length = 150)
+    private String claimantName;
+
+    @Column(name = "CLAIMANT_EMAIL", length = 254)
+    private String claimantEmail;
 
     @Convert(converter = ReportTargetType.Converter.class)
     @Column(name = "TARGET_TYPE", nullable = false, length = 20)

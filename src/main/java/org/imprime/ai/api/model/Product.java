@@ -20,6 +20,9 @@ public class Product extends Auditable {
     @Column(name = "PRODUCT_ID", nullable = false)
     private Long id;
 
+    @Column(name = "DISPLAY_POSITION", nullable = false)
+    private int displayPosition;
+
     @Column(name = "COMPANY_ID", nullable = false)
     private Long companyId;
 

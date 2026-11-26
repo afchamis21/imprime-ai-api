@@ -1,10 +1,12 @@
 package org.imprime.ai.api.repo.db;
 
+import jakarta.persistence.LockModeType;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.DocumentType;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -25,6 +27,9 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
     boolean existsByDocumentTypeAndDocument(DocumentType documentType, String document);
 
     Optional<Company> findByOwnerId(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Company> findForUpdateById(Long id);
 
     Optional<Company> findByGuid(String guid);
 

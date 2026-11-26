@@ -197,7 +197,7 @@ class MakerModelServiceImplTest {
                 null,
                 true,
                 null,
-                List.of(),
+                List.of("https://cdn.imprime.ai/caixa.png"),
                 List.of("Paramétrico"),
                 scadSource,
                 null
@@ -254,7 +254,7 @@ class MakerModelServiceImplTest {
                 null,
                 null,
                 true,
-                null,
+                "https://cdn.imprime.ai/peca.png",
                 null,
                 null,
                 scadSource,
@@ -268,6 +268,19 @@ class MakerModelServiceImplTest {
         ArgumentCaptor<ModelCustomization> customCaptor = ArgumentCaptor.forClass(ModelCustomization.class);
         verify(modelCustomizationRepository).save(customCaptor.capture());
         assertTrue(customCaptor.getValue().getParametersSchemaJson().contains("\"label\":\"Largura Principal (mm)\""));
+    }
+
+    @Test
+    void rejectsModelWithoutAnImageBeforeUploadingItsFile() {
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        MockMultipartFile file = new MockMultipartFile("file", "peça.stl", "model/stl", new byte[]{1});
+        CreateMakerModelRequest request = new CreateMakerModelRequest(
+                "Peça sem foto", "engineering", BigDecimal.ZERO, null,
+                FileFormat3D.STL, LicenseType.PERSONAL, MaterialType.PLA, null,
+                null, null, null, false, " ", List.of(" "), null);
+
+        assertThrows(BadRequestException.class, () -> service.submitModel(file, request));
+        verifyNoInteractions(fileAssetService, model3DRepository);
     }
 
     @Test
@@ -289,7 +302,7 @@ class MakerModelServiceImplTest {
                 null,
                 null,
                 true,
-                null,
+                "https://cdn.imprime.ai/modelo.png",
                 null,
                 null,
                 "   ",
@@ -310,7 +323,7 @@ class MakerModelServiceImplTest {
                 null,
                 null,
                 false,
-                null,
+                "https://cdn.imprime.ai/modelo.png",
                 null,
                 null
         );
@@ -318,23 +331,27 @@ class MakerModelServiceImplTest {
     }
 
     @Test
-    void listPublicMakerModelsReturnsOnlyApprovedModels() {
+    void publicMakerModelsFollowSavedOrderAndExcludeUnapprovedModels() {
         Model3D approved = buildModel(1L, "mdl-1", ModelModerationStatus.APPROVED);
         Model3D pending = buildModel(2L, "mdl-2", ModelModerationStatus.PENDING_REVIEW);
         Model3D rejected = buildModel(3L, "mdl-3", ModelModerationStatus.REJECTED);
+        Model3D anotherApproved = buildModel(4L, "mdl-4", ModelModerationStatus.APPROVED);
 
+        when(makerCompanyResolver.requireActiveMakerCompany()).thenReturn(company);
+        when(companyRepository.findForUpdateById(10L)).thenReturn(Optional.of(company));
         when(companyRepository.findBySlugAndStatus("studio-sp", StatusCd.ACTIVE)).thenReturn(Optional.of(company));
         when(companyRepository.findByGuidAndStatus("studio-sp", StatusCd.ACTIVE)).thenReturn(Optional.empty());
         when(userRepository.findAllByCompanyId(10L)).thenReturn(List.of(makerUser));
         when(model3DRepository.findAllByAuthorUserIdInAndStatusOrderByCreateDtDesc(any(), eq(StatusCd.ACTIVE)))
-                .thenReturn(List.of(approved, pending, rejected));
+                .thenReturn(List.of(approved, pending, rejected, anotherApproved));
         when(userRepository.findAllById(any())).thenReturn(List.of(makerUser));
         when(favoriteService.findFavoritedTargetIds(FavoriteTargetType.MODEL_3D)).thenReturn(Set.of(1L));
 
+        service.reorderModels(List.of("mdl-1", "mdl-2", "mdl-4", "mdl-3"));
         PageResponse<MakerModelResponse> page = service.listPublicMakerModels("studio-sp", PageRequest.of(0, 12));
 
-        assertEquals(1, page.totalElements());
-        assertEquals("mdl-1", page.content().getFirst().guid());
+        assertEquals(2, page.totalElements());
+        assertEquals(List.of("mdl-1", "mdl-4"), page.content().stream().map(MakerModelResponse::guid).toList());
         assertTrue(page.content().getFirst().favorited());
     }
 

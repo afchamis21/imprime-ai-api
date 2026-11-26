@@ -15,6 +15,9 @@ import org.imprime.ai.api.model.enums.ReportStatus;
 import org.imprime.ai.api.model.enums.ReportTargetType;
 import org.imprime.ai.api.model.enums.TicketPriority;
 import org.imprime.ai.api.service.AdminReportService;
+import org.imprime.ai.api.service.IpNoticeModerationService;
+import org.imprime.ai.api.service.IpNoticeFollowupService;
+import java.util.List;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -28,6 +31,21 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Admin — Denúncias", description = "Triagem, análise de evidências e resolução de denúncias sobre produtos, modelos 3D e makers")
 public class AdminReportController {
     private final AdminReportService adminReportService;
+    private final IpNoticeModerationService ipModeration;
+    private final IpNoticeFollowupService ipFollowups;
+
+    @GetMapping("/{reportGuid}/ip-followups")
+    public ResponseEntity<BaseResponse<List<IpNoticeFollowupService.Followup>>> listIpFollowups(
+            @PathVariable String reportGuid) {
+        return BaseResponse.ok(ipFollowups.listForAdmin(reportGuid));
+    }
+
+    @PostMapping("/{reportGuid}/ip-actions")
+    public ResponseEntity<Void> applyIpAction(@PathVariable String reportGuid,
+                                             @Valid @RequestBody IpNoticeModerationService.Decision request) {
+        ipModeration.apply(reportGuid, request);
+        return ResponseEntity.noContent().build();
+    }
 
     @Operation(summary = "Listar denúncias da plataforma com filtros por tipo de alvo, status, motivo e prioridade")
     @GetMapping

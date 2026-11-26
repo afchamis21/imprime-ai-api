@@ -61,6 +61,8 @@ class OrderManagementServiceImplTest {
     private ObjectStorageService objectStorageService;
     @Mock
     private MakerOrderSupport makerOrderSupport;
+    @Mock
+    private org.imprime.ai.api.service.MakerOrderComplianceService makerCompliance;
     @Spy
     private JsonCodec jsonCodec = new JsonCodec();
 
@@ -151,7 +153,7 @@ class OrderManagementServiceImplTest {
         OrderStatus confirmed = new OrderStatus();
         confirmed.setStatusCd(OrderStatusCd.CONFIRMED);
 
-        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderRepository.findLockedByGuid("order-guid-10")).thenReturn(Optional.of(order));
         when(orderStatusService.findLatest(order)).thenReturn(confirmed);
         when(orderStatusService.canMoveTo(OrderStatusCd.CONFIRMED, OrderStatusCd.CANCELLED)).thenReturn(true);
 
@@ -170,7 +172,7 @@ class OrderManagementServiceImplTest {
         readyToShip.setStatusCd(OrderStatusCd.READY_TO_SHIP);
         order.setExternalShipmentId("me-shipment-123");
 
-        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderRepository.findLockedByGuid("order-guid-10")).thenReturn(Optional.of(order));
         when(orderStatusService.findLatest(order)).thenReturn(readyToShip);
         when(orderStatusService.canMoveTo(OrderStatusCd.READY_TO_SHIP, OrderStatusCd.IN_TRANSIT)).thenReturn(true);
 
@@ -182,19 +184,18 @@ class OrderManagementServiceImplTest {
     }
 
     @Test
-    void updateOrderStatusAllowsBuyerMovingConfirmedOrderToInProductionAfterPayment() {
+    void updateOrderStatusRejectsBuyerStartingProduction() {
         ServiceContext.getContext().setUser(buyer);
         OrderStatus confirmed = new OrderStatus();
         confirmed.setStatusCd(OrderStatusCd.CONFIRMED);
 
-        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderRepository.findLockedByGuid("order-guid-10")).thenReturn(Optional.of(order));
         when(orderStatusService.findLatest(order)).thenReturn(confirmed);
         when(orderStatusService.canMoveTo(OrderStatusCd.CONFIRMED, OrderStatusCd.IN_PRODUCTION)).thenReturn(true);
 
-        service.updateOrderStatus("order-guid-10", new UpdateOrderStatusRequest(OrderStatusCd.IN_PRODUCTION, null, null));
-
-        verify(orderStatusService).move(order, OrderStatusCd.IN_PRODUCTION);
-        verify(orderViewAssembler).toDetailResponse(order);
+        assertThrows(ForbiddenException.class, () -> service.updateOrderStatus(
+                "order-guid-10", new UpdateOrderStatusRequest(OrderStatusCd.IN_PRODUCTION, null, null)));
+        verify(orderStatusService, never()).move(order, OrderStatusCd.IN_PRODUCTION);
     }
 
     @Test
@@ -204,7 +205,7 @@ class OrderManagementServiceImplTest {
         created.setStatusCd(OrderStatusCd.CREATED);
         order.setVendorId(50L);
 
-        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderRepository.findLockedByGuid("order-guid-10")).thenReturn(Optional.of(order));
         when(orderStatusService.findLatest(order)).thenReturn(created);
         when(orderStatusService.canMoveTo(OrderStatusCd.CREATED, OrderStatusCd.COMPLETED)).thenReturn(false);
 
@@ -323,8 +324,28 @@ class OrderManagementServiceImplTest {
     }
 
     @Test
+    void quotingMakerCanReadMetadataButCannotDownloadOriginal() {
+        ServiceContext.getContext().setUser(makerUser);
+        order.setVendorId(null);
+        OrderStatus quoting = new OrderStatus();
+        quoting.setStatusCd(OrderStatusCd.QUOTING);
+        Company company = new Company();
+        company.setGuid("company-guid");
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(orderStatusService.findLatest(order)).thenReturn(quoting);
+        when(companyRepository.findById(makerUser.getCompanyId())).thenReturn(Optional.of(company));
+        when(chatRepository.existsByOrderGuidAndCompanyGuid("order-guid-10", "company-guid")).thenReturn(true);
+
+        assertThrows(ForbiddenException.class, () -> service.downloadOrderFile("order-guid-10", "file-guid"));
+        verifyNoInteractions(objectStorageService);
+    }
+
+    @Test
     void downloadOrderFileReturnsBytesWhenAssetBelongsToOrder() {
         ServiceContext.getContext().setUser(makerUser);
+        Company activeCompany = new Company();
+        activeCompany.setStatus(StatusCd.ACTIVE);
+        when(companyRepository.findById(makerUser.getCompanyId())).thenReturn(Optional.of(activeCompany));
 
         FileAsset asset = new FileAsset();
         asset.setId(101L);
@@ -341,13 +362,25 @@ class OrderManagementServiceImplTest {
         when(fileAssetRepository.findByGuid("file-guid-1")).thenReturn(Optional.of(asset));
         when(orderFileAssetRepository.findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(10L, StatusCd.ACTIVE))
                 .thenReturn(List.of(plate));
-        when(objectStorageService.downloadBytes(asset)).thenReturn(payload);
+        when(objectStorageService.downloadPrivateOrderFile(asset)).thenReturn(payload);
 
         OrderManagementService.OrderFileContent content = service.downloadOrderFile("order-guid-10", "file-guid-1");
 
         assertEquals("peca.stl", content.fileName());
         assertEquals("model/stl", content.contentType());
         assertArrayEquals(payload, content.bytes());
+    }
+
+    @Test
+    void downloadOrderFileRejectsSuspendedSellerCompany() {
+        ServiceContext.getContext().setUser(makerUser);
+        Company suspended = new Company();
+        suspended.setStatus(StatusCd.SUSPENDED);
+        when(orderRepository.findOrderByGuid("order-guid-10")).thenReturn(Optional.of(order));
+        when(companyRepository.findById(makerUser.getCompanyId())).thenReturn(Optional.of(suspended));
+
+        assertThrows(ForbiddenException.class, () -> service.downloadOrderFile("order-guid-10", "file-guid"));
+        verifyNoInteractions(objectStorageService);
     }
 
     @Test

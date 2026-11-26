@@ -76,6 +76,8 @@ class MakerPrintQueueServiceImplTest {
     private JsonCodec jsonCodec = new JsonCodec();
     @Mock
     private MakerOrderSupport makerOrderSupport;
+    @Mock
+    private org.imprime.ai.api.service.MakerOrderComplianceService makerCompliance;
 
     @InjectMocks
     private MakerPrintQueueServiceImpl service;
@@ -135,12 +137,15 @@ class MakerPrintQueueServiceImplTest {
         project.setCompanyId(10L);
         project.setTotalPlates(2);
         project.setCompletedPlates(1);
+        project.setTotalParts(3);
+        project.setPartsPerPlate(2);
+        project.setCompletedParts(2);
         project.setProjectStatus(ProjectStatus.IN_PROGRESS);
         project.setStatus(StatusCd.ACTIVE);
 
         when(printQueueItemRepository.findAllByAssetIdAndJobStatusInAndStatus(eq(100L), any(), eq(StatusCd.ACTIVE)))
                 .thenReturn(List.of());
-        when(projectRepository.findById(300L)).thenReturn(Optional.of(project));
+        when(projectRepository.findForUpdateByIdAndStatus(300L, StatusCd.ACTIVE)).thenReturn(Optional.of(project));
         when(printQueueItemRepository.save(any(PrintQueueItem.class))).thenAnswer(inv -> inv.getArgument(0));
         when(assetRepository.findAllByIdIn(any())).thenReturn(List.of(printer));
         when(projectRepository.findAllByIdIn(any())).thenReturn(List.of(project));
@@ -154,6 +159,7 @@ class MakerPrintQueueServiceImplTest {
         assertEquals(PrinterStatus.ONLINE, printer.getPrinterStatus());
         assertEquals(6, company.getPrintsDone());
         assertEquals(2, project.getCompletedPlates());
+        assertEquals(3, project.getCompletedParts());
         assertEquals(ProjectStatus.COMPLETED, project.getProjectStatus());
         verify(makerFilamentService).consumeStockForPrint(
                 eq(50L), eq(new BigDecimal("180.00")), eq(StockAdjustmentReason.PRINT_CONSUMPTION), eq(200L), anyString()

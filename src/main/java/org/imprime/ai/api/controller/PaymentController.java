@@ -6,7 +6,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Event;
+import com.stripe.model.checkout.Session;
+import com.stripe.net.Webhook;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.imprime.ai.api.config.StripeConfigProperties;
+import org.imprime.ai.api.service.QuoteCheckoutService;
+import org.springframework.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.SkipAuth;
@@ -30,6 +40,24 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
     private final PaymentService paymentService;
     private final ShippingQuoteService shippingQuoteService;
+    private final QuoteCheckoutService quoteCheckout;
+    private final StripeConfigProperties stripe;
+
+    @JwtAuthenticated
+    @PostMapping("/quote-orders/{orderGuid}/checkout")
+    public ResponseEntity<BaseResponse<CheckoutSessionResponse>> createQuoteCheckout(@PathVariable String orderGuid) {
+        return BaseResponse.ok(quoteCheckout.create(orderGuid));
+    }
+
+    @JwtAuthenticated
+    @PostMapping("/quote-orders/{orderGuid}/confirm")
+    public ResponseEntity<Void> confirmQuoteCheckout(@PathVariable String orderGuid,
+                                                     @Valid @RequestBody ConfirmQuoteCheckout request) {
+        quoteCheckout.confirm(orderGuid, request.sessionId());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record ConfirmQuoteCheckout(@NotBlank @Size(max = 255) String sessionId) {}
 
     @JwtAuthenticated
     @PostMapping("/shipping/quotes")
@@ -84,7 +112,21 @@ public class PaymentController {
             @RequestBody String payload,
             @RequestHeader(value = "Stripe-Signature", required = false) String sigHeader
     ) {
-        log.info("Recebido evento de webhook da Stripe (assinatura presente: {})", sigHeader != null);
+        if (!StringUtils.hasText(stripe.getWebhookSecret())) return ResponseEntity.status(503).build();
+        if (!StringUtils.hasText(sigHeader)) return ResponseEntity.badRequest().build();
+        Event event;
+        try {
+            event = Webhook.constructEvent(payload, sigHeader, stripe.getWebhookSecret());
+        } catch (SignatureVerificationException | RuntimeException ex) {
+            return ResponseEntity.badRequest().build();
+        }
+        if ("checkout.session.completed".equals(event.getType())
+                || "checkout.session.async_payment_succeeded".equals(event.getType())) {
+            if (!(event.getDataObjectDeserializer().getObject().orElse(null) instanceof Session session)) {
+                return ResponseEntity.status(503).build();
+            }
+            quoteCheckout.handleCompletedSession(session);
+        }
         return ResponseEntity.ok("received");
     }
 }

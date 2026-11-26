@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.response.media.MediaUploadResponse;
 import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.enums.MediaCategory;
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.service.FileAssetService;
 import org.imprime.ai.api.service.MediaService;
 import org.imprime.ai.api.service.ObjectStorageService;
@@ -23,6 +25,12 @@ public class MediaServiceImpl implements MediaService {
             "png", "jpg", "jpeg", "webp", "gif", "svg", "avif"
     );
 
+    private static final Set<String> REVIEW_PHOTO_EXTENSIONS = Set.of("png", "jpg", "jpeg", "webp", "gif", "avif");
+
+    private static final Set<String> MODEL_EXTENSIONS = Set.of(
+            "stl", "3mf", "obj", "gcode", "scad", "step", "stp", "iges", "igs", "glb"
+    );
+
     private final FileAssetService fileAssetService;
     private final ObjectStorageService objectStorageService;
 
@@ -31,6 +39,13 @@ public class MediaServiceImpl implements MediaService {
         String ext = file != null && file.getOriginalFilename() != null
                 ? StringUtils.getFilenameExtension(file.getOriginalFilename())
                 : null;
+        if (ext != null && MODEL_EXTENSIONS.contains(ext.toLowerCase(Locale.ROOT))) {
+            throw new BadRequestException(MessageCd.PRINT_DECLARATION_REQUIRED);
+        }
+        if (category == MediaCategory.REVIEW_PHOTO
+                && (ext == null || !REVIEW_PHOTO_EXTENSIONS.contains(ext.toLowerCase(Locale.ROOT)))) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
         boolean isImageExt = ext != null && IMAGE_EXTENSIONS.contains(ext.toLowerCase(Locale.ROOT));
         FileAsset.AssetType assetType = (MediaCategory.CHAT_ATTACHMENT.equals(category) || !isImageExt)
                 ? FileAsset.AssetType.ATTACHMENT

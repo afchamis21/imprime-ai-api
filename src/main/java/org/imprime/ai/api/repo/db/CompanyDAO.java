@@ -92,6 +92,7 @@ public class CompanyDAO {
                         ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography
                     ) AS distance_meters
                 FROM company c
+                JOIN users u ON u.user_id = c.owner_id AND u.status = 'A'
                 JOIN address a
                   ON a.owner_id = c.company_id
                  AND a.owner_type = 'C'

@@ -14,6 +14,7 @@ import org.imprime.ai.api.http.response.product.ProductCatalogItemResponse;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.MakerPortfolioItem;
 import org.imprime.ai.api.model.PrinterCatalog;
 import org.imprime.ai.api.model.Product;
@@ -33,11 +34,13 @@ import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.MakerPortfolioItemRepository;
 import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
+import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.MakerCatalogService;
 import org.imprime.ai.api.service.MakerEligibilityService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
+import org.imprime.ai.api.util.MakerDisplayOrder;
 import org.imprime.ai.api.util.PageUtils;
 import org.imprime.ai.api.util.PageableSortMapper;
 import org.imprime.ai.api.util.SlugUtil;
@@ -72,7 +75,6 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
             "title", "title",
             "printTimeMinutes", "printTimeMinutes"
     );
-    private static final Sort PORTFOLIO_DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createDt");
 
     private static final Map<String, String> PRODUCT_SORT_MAPPING = Map.of(
             "createdAt", "createDt",
@@ -83,9 +85,9 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
             "salesCount", "salesCount",
             "reviewsCount", "reviewsCount"
     );
-    private static final Sort PRODUCT_DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createDt");
 
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
     private final AddressRepository addressRepository;
     private final MakerPortfolioItemRepository portfolioItemRepository;
     private final ProductRepository productRepository;
@@ -99,9 +101,7 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
 
     @Override
     public PageResponse<MakerCatalogItemResponse> listMakers(MakerCatalogFilter filter, Pageable pageable) {
-        List<Company> companies = companyRepository.findAllByStatus(StatusCd.ACTIVE).stream()
-                .filter(this::isPubliclyApproved)
-                .toList();
+        List<Company> companies = findVisibleCompanies();
         if (companies.isEmpty()) {
             return PageUtils.paginate(List.of(), pageable);
         }
@@ -142,6 +142,25 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
                 .toList();
 
         return PageUtils.paginate(items, pageable);
+    }
+
+    private List<Company> findVisibleCompanies() {
+        List<Company> approvedCompanies = companyRepository.findAllByStatus(StatusCd.ACTIVE).stream()
+                .filter(this::isPubliclyApproved)
+                .filter(company -> company.getOwnerId() != null)
+                .toList();
+        if (approvedCompanies.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> ownerIds = approvedCompanies.stream().map(Company::getOwnerId).collect(Collectors.toSet());
+        Set<Long> activeOwnerIds = userRepository.findAllById(ownerIds).stream()
+                .filter(owner -> StatusCd.ACTIVE.equals(owner.getStatus()))
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        return approvedCompanies.stream()
+                .filter(company -> activeOwnerIds.contains(company.getOwnerId()))
+                .toList();
     }
 
     @Override
@@ -227,9 +246,9 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
     public PageResponse<PortfolioItemResponse> listMakerPortfolio(String slugOrGuid, Pageable pageable) {
         Company company = resolveActiveMaker(slugOrGuid);
         if (!Boolean.TRUE.equals(company.getPublicPortfolioEnabled())) {
-            return PageResponse.from(Page.empty(PageableSortMapper.remap(pageable, PORTFOLIO_SORT_MAPPING, PORTFOLIO_DEFAULT_SORT)));
+            return PageResponse.from(Page.empty(PageableSortMapper.remap(pageable, PORTFOLIO_SORT_MAPPING, MakerDisplayOrder.SORT)));
         }
-        Pageable mappedPageable = PageableSortMapper.remap(pageable, PORTFOLIO_SORT_MAPPING, PORTFOLIO_DEFAULT_SORT);
+        Pageable mappedPageable = PageableSortMapper.remap(pageable, PORTFOLIO_SORT_MAPPING, MakerDisplayOrder.SORT);
         Page<MakerPortfolioItem> page = portfolioItemRepository.findAllByCompanyIdAndStatus(
                 company.getId(), StatusCd.ACTIVE, mappedPageable
         );
@@ -239,7 +258,7 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
     @Override
     public PageResponse<ProductCatalogItemResponse> listMakerProducts(String slugOrGuid, Pageable pageable) {
         Company company = resolveActiveMaker(slugOrGuid);
-        Pageable mappedPageable = PageableSortMapper.remap(pageable, PRODUCT_SORT_MAPPING, PRODUCT_DEFAULT_SORT);
+        Pageable mappedPageable = PageableSortMapper.remap(pageable, PRODUCT_SORT_MAPPING, MakerDisplayOrder.SORT);
         Page<Product> page = productRepository.findAllByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE, mappedPageable);
         Set<Long> favoritedIds = favoriteService.findFavoritedTargetIds(FavoriteTargetType.PRODUCT);
         MakerBriefResponse makerBrief = orderViewAssembler.toMakerBrief(company);
@@ -332,7 +351,9 @@ public class MakerCatalogServiceImpl implements MakerCatalogService {
         }
 
         List<MakerPortfolioItem> portfolioItems =
-                portfolioItemRepository.findAllByCompanyIdInAndStatusOrderByCreateDtDesc(publicCompanyIds, StatusCd.ACTIVE);
+                portfolioItemRepository.findAllByCompanyIdInAndStatusOrderByCreateDtDesc(publicCompanyIds, StatusCd.ACTIVE).stream()
+                        .sorted(Comparator.comparingInt(MakerPortfolioItem::getDisplayPosition))
+                        .toList();
         if (portfolioItems == null || portfolioItems.isEmpty()) {
             return Map.of();
         }

@@ -3,12 +3,15 @@ package org.imprime.ai.api.service;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.common.CreateMakerReviewRequest;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.common.CreateReviewReplyRequest;
 import org.imprime.ai.api.http.response.common.ReviewResponse;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.FileAsset;
 import org.imprime.ai.api.model.Order;
 import org.imprime.ai.api.model.OrderStatus;
 import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.Review;
+import org.imprime.ai.api.model.ReviewReply;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
@@ -17,11 +20,14 @@ import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
+import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
+import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.ReviewRepository;
+import org.imprime.ai.api.repo.db.ReviewReplyRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.impl.ReviewServiceImpl;
 import org.junit.jupiter.api.AfterEach;
@@ -57,6 +63,13 @@ class ReviewServiceImplTest {
     private OrderRepository orderRepository;
     @Mock
     private OrderStatusService orderStatusService;
+
+    @Mock
+    private ReviewReplyRepository reviewReplyRepository;
+    @Mock
+    private FileAssetRepository fileAssetRepository;
+    @Mock
+    private ObjectStorageService objectStorageService;
 
     @InjectMocks
     private ReviewServiceImpl service;
@@ -190,6 +203,63 @@ class ReviewServiceImplTest {
         assertEquals("Editado: ficou ótimo!", updated.comment());
         assertEquals(new BigDecimal("5.00"), product.getRatingAvg());
         assertEquals(1, product.getReviewsCount());
+    }
+
+    @Test
+    void replyAcceptsAnOwnedPhotoAndLeavesTheRatingUntouched() {
+        Review review = new Review();
+        review.setId(501L);
+        review.setTargetType(ReviewTargetType.PRODUCT);
+        review.setTargetId(70L);
+        FileAsset photo = new FileAsset();
+        photo.setUserId(author.getId());
+        photo.setStatus(StatusCd.ACTIVE);
+        photo.setAssetType(FileAsset.AssetType.IMAGE);
+        photo.setName("print.png");
+        String url = "https://cdn.example/print.png";
+
+        when(productRepository.findByGuidAndStatus(product.getGuid(), StatusCd.ACTIVE)).thenReturn(Optional.of(product));
+        when(reviewRepository.findOneByGuidAndStatus("rev-501", StatusCd.ACTIVE)).thenReturn(Optional.of(review));
+        when(fileAssetRepository.findByGuid("photo-guid")).thenReturn(Optional.of(photo));
+        when(objectStorageService.buildPublicObjectUrl(photo)).thenReturn(url);
+        when(reviewReplyRepository.save(any(ReviewReply.class))).thenAnswer(invocation -> {
+            ReviewReply reply = invocation.getArgument(0);
+            assertEquals(501L, reply.getReviewId());
+            assertEquals(author.getId(), reply.getAuthorUserId());
+            return reply;
+        });
+
+        var response = service.reply(ReviewTargetType.PRODUCT, product.getGuid(), "rev-501",
+                new CreateReviewReplyRequest("", List.of("photo-guid")));
+
+        assertEquals(List.of(url), response.imageUrls());
+        assertEquals("", response.comment());
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void replyCannotBeAddedThroughAPathForAnotherProduct() {
+        Review review = new Review();
+        review.setTargetType(ReviewTargetType.PRODUCT);
+        review.setTargetId(71L);
+        when(productRepository.findByGuidAndStatus(product.getGuid(), StatusCd.ACTIVE)).thenReturn(Optional.of(product));
+        when(reviewRepository.findOneByGuidAndStatus("rev-501", StatusCd.ACTIVE)).thenReturn(Optional.of(review));
+
+        assertThrows(NotFoundException.class, () -> service.reply(ReviewTargetType.PRODUCT,
+                product.getGuid(), "rev-501", new CreateReviewReplyRequest("Resposta", List.of())));
+        verifyNoInteractions(reviewReplyRepository);
+    }
+
+    @Test
+    void reviewRejectsAPhotoUploadedByAnotherUser() {
+        FileAsset photo = new FileAsset();
+        photo.setUserId(99L);
+        when(productRepository.findByGuidAndStatus(product.getGuid(), StatusCd.ACTIVE)).thenReturn(Optional.of(product));
+        when(fileAssetRepository.findByGuid("other-photo-guid")).thenReturn(Optional.of(photo));
+
+        assertThrows(BadRequestException.class, () -> service.createReview(ReviewTargetType.PRODUCT,
+                product.getGuid(), new CreateReviewRequest(5, "", List.of("other-photo-guid"))));
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test

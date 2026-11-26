@@ -25,6 +25,7 @@ import org.imprime.ai.api.repo.db.OrderFileAssetRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.service.ObjectStorageService;
 import org.imprime.ai.api.service.MakerOrderSupport;
+import org.imprime.ai.api.service.MakerOrderComplianceService;
 import org.imprime.ai.api.service.OrderManagementService;
 import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.OrderViewAssembler;
@@ -54,6 +55,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     private final ObjectStorageService objectStorageService;
     private final MakerOrderSupport makerOrderSupport;
     private final JsonCodec jsonCodec;
+    private final MakerOrderComplianceService makerCompliance;
 
     @Override
     public OrderDetailResponse getOrderDetail(String orderGuid) {
@@ -164,6 +166,17 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     @Override
     public OrderFileContent downloadOrderFile(String orderGuid, String fileGuid) {
         Order order = requireAuthorizedOrder(orderGuid);
+        User caller = ServiceContext.getUserOrThrow();
+        if (!Objects.equals(order.getBuyerId(), caller.getId())
+                && (caller.getCompanyId() == null || !Objects.equals(order.getVendorId(), caller.getCompanyId()))) {
+            throw new ForbiddenException();
+        }
+        if (!Objects.equals(order.getBuyerId(), caller.getId())) {
+            companyRepository.findById(caller.getCompanyId())
+                    .filter(company -> StatusCd.ACTIVE.equals(company.getStatus()))
+                    .orElseThrow(ForbiddenException::new);
+            makerCompliance.requireNoRefusal(order.getId(), caller.getCompanyId());
+        }
         FileAsset asset = fileAssetRepository.findByGuid(fileGuid)
                 .orElseThrow(() -> new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND));
 
@@ -177,7 +190,10 @@ public class OrderManagementServiceImpl implements OrderManagementService {
             throw new NotFoundException(MessageCd.ARCHIVE_FILE_NOT_FOUND);
         }
 
-        byte[] bytes = objectStorageService.downloadBytes(asset);
+        byte[] bytes = belongsToLegacyOrder || belongsToOrderPlate
+                ? objectStorageService.downloadPrivateOrderFile(asset)
+                : objectStorageService.downloadBytes(asset);
+        makerCompliance.auditFileAccess(order.getId(), asset.getId(), caller.getId());
         String fileName = asset.getName() != null && !asset.getName().isBlank()
                 ? asset.getName()
                 : "modelo.stl";
@@ -258,7 +274,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     @Transactional
     public OrderDetailResponse updateOrderStatus(String orderGuid, UpdateOrderStatusRequest request) {
         User caller = ServiceContext.getUserOrThrow();
-        Order order = orderRepository.findOrderByGuid(orderGuid)
+        Order order = orderRepository.findLockedByGuid(orderGuid)
                 .orElseThrow(() -> new NotFoundException(MessageCd.ORDER_NOT_FOUND));
 
         boolean isBuyer = caller.getId().equals(order.getBuyerId());
@@ -325,7 +341,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
     private boolean isBuyerTransitionAllowed(OrderStatusCd from, OrderStatusCd to) {
         return switch (from) {
             case CREATED, QUOTING -> OrderStatusCd.CANCELLED.equals(to);
-            case CONFIRMED -> OrderStatusCd.IN_PRODUCTION.equals(to) || OrderStatusCd.CANCELLED.equals(to);
+            case CONFIRMED -> OrderStatusCd.CANCELLED.equals(to);
             case IN_TRANSIT -> OrderStatusCd.COMPLETED.equals(to);
             case COMPLETED, CANCELLED -> OrderStatusCd.REFUNDED.equals(to);
             default -> false;
@@ -334,7 +350,7 @@ public class OrderManagementServiceImpl implements OrderManagementService {
 
     private boolean isMakerTransitionAllowed(OrderStatusCd from, OrderStatusCd to) {
         return switch (from) {
-            case CONFIRMED -> OrderStatusCd.IN_PRODUCTION.equals(to) || OrderStatusCd.CANCELLED.equals(to);
+            case CONFIRMED -> OrderStatusCd.CANCELLED.equals(to);
             case IN_PRODUCTION -> OrderStatusCd.READY_TO_SHIP.equals(to) || OrderStatusCd.CANCELLED.equals(to);
             case READY_TO_SHIP -> OrderStatusCd.IN_PRODUCTION.equals(to) || OrderStatusCd.IN_TRANSIT.equals(to) || OrderStatusCd.CANCELLED.equals(to);
             case COMPLETED, CANCELLED -> OrderStatusCd.REFUNDED.equals(to);

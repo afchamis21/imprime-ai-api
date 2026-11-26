@@ -79,6 +79,7 @@ class WebSocketAuthInterceptorTest {
         maker.setStatus(StatusCd.ACTIVE);
 
         assertFalse(makerPresenceCache.isOnline(201L));
+        when(userService.isActiveByGuid(maker.getGuid())).thenReturn(true);
 
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SEND);
         accessor.setUser(new AuthenticatedUserPrincipal(maker));
@@ -87,6 +88,7 @@ class WebSocketAuthInterceptorTest {
         interceptor.preSend(message, channel);
 
         assertTrue(makerPresenceCache.isOnline(201L));
-        verifyNoInteractions(authTokenService, userService);
+        verifyNoInteractions(authTokenService);
+        verify(userService).isActiveByGuid(maker.getGuid());
     }
 }

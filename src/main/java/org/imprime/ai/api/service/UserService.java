@@ -14,6 +14,7 @@ import org.imprime.ai.api.model.dto.FullUserDTO;
 import org.imprime.ai.api.model.dto.Owner;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
@@ -55,6 +56,11 @@ public class UserService {
         dbOptional.ifPresent(userInMemoryCache::put);
 
         return dbOptional;
+    }
+
+    public boolean isActiveByGuid(String userGuid) {
+        return userRepository.findUserByGuid(userGuid)
+                .filter(user -> StatusCd.ACTIVE.equals(user.getStatus())).isPresent();
     }
 
     public Optional<User> findUserByGuid(String userGuid) {

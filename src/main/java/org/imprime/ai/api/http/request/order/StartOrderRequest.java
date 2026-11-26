@@ -6,6 +6,6 @@ import org.imprime.ai.api.validator.annotations.Required;
 
 public record StartOrderRequest(
         @Required(message = MessageCd.MISSING_ADDRESS_GUID)
-        String addressGuid
+        String addressGuid, Boolean rightsDeclared, String declarationVersion, String prohibitedItemsVersion
 ) implements ValidatedRequest {
 }

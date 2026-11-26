@@ -4,6 +4,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.request.maker.CreateBomItemRequest;
 import org.imprime.ai.api.http.request.maker.CreateMakerProjectRequest;
+import org.imprime.ai.api.http.request.maker.ProjectFilamentUsageRequest;
 import org.imprime.ai.api.http.request.maker.QueueNextPlateRequest;
 import org.imprime.ai.api.http.request.maker.UpdateBomItemRequest;
 import org.imprime.ai.api.http.request.maker.UpdateMakerProjectRequest;
@@ -44,10 +45,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -143,7 +146,13 @@ public class MakerProjectServiceImpl implements MakerProjectService {
         project.setProjectStatus(ProjectStatus.PLANNING);
         project.setClientName(request.clientName());
         project.setDueDate(request.dueDate());
-        project.setTotalPlates(request.totalPlates());
+        if (request.partsPerPlate() == null && request.totalPlates() == null) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
+        project.setPartsPerPlate(request.partsPerPlate());
+        project.setTotalPlates(request.partsPerPlate() != null
+                ? calculateTotalPlates(request.totalParts(), request.partsPerPlate())
+                : request.totalPlates());
         project.setCompletedPlates(0);
         project.setTotalParts(request.totalParts());
         project.setCompletedParts(0);
@@ -154,6 +163,9 @@ public class MakerProjectServiceImpl implements MakerProjectService {
         project.setPrimaryMaterial(request.primaryMaterial());
         project.setColorHex(request.colorHex());
         project.setNotes(request.notes());
+        if (request.filamentUsage() != null) {
+            project.setFilamentUsage(resolveFilamentUsage(project, request.filamentUsage()));
+        }
 
         MakerProject saved = projectRepository.save(project);
         return toResponse(saved, order, List.of(), List.of());
@@ -163,16 +175,25 @@ public class MakerProjectServiceImpl implements MakerProjectService {
     @Transactional
     public MakerProjectResponse updateProject(String projectGuid, UpdateMakerProjectRequest request) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
-        MakerProject project = requireOwnedProject(projectGuid, company);
+        MakerProject project = requireOwnedProjectForUpdate(projectGuid, company);
 
         int effectiveCompletedPlates = request.completedPlates() != null
                 ? request.completedPlates()
                 : (project.getCompletedPlates() != null ? project.getCompletedPlates() : 0);
+        Integer partsPerPlate = request.partsPerPlate() != null ? request.partsPerPlate() : project.getPartsPerPlate();
+        int totalParts = request.totalParts() != null ? request.totalParts() : project.getTotalParts();
+        boolean calculatePrintedParts = request.completedParts() == null
+                && request.completedPlates() != null && partsPerPlate != null;
         int effectiveCompletedParts = request.completedParts() != null
                 ? request.completedParts()
-                : (project.getCompletedParts() != null ? project.getCompletedParts() : 0);
+                : calculatePrintedParts
+                        ? MakerProject.partsPrintedForPlates(effectiveCompletedPlates, partsPerPlate, totalParts)
+                        : (project.getCompletedParts() != null ? project.getCompletedParts() : 0);
 
-        if (effectiveCompletedPlates > project.getTotalPlates() || effectiveCompletedParts > project.getTotalParts()) {
+        int totalPlates = partsPerPlate != null
+                ? calculateTotalPlates(totalParts, partsPerPlate)
+                : (request.totalPlates() != null ? request.totalPlates() : project.getTotalPlates());
+        if (effectiveCompletedPlates > totalPlates || effectiveCompletedParts > totalParts) {
             throw new BadRequestException(MessageCd.VALIDATION_ERROR);
         }
 
@@ -188,16 +209,58 @@ public class MakerProjectServiceImpl implements MakerProjectService {
         if (request.completedPlates() != null) {
             project.setCompletedPlates(request.completedPlates());
         }
-        if (request.completedParts() != null) {
-            project.setCompletedParts(request.completedParts());
+        if (request.completedParts() != null || calculatePrintedParts) {
+            project.setCompletedParts(effectiveCompletedParts);
         }
         if (request.notes() != null) {
             project.setNotes(request.notes());
         }
+        if (request.clientName() != null) {
+            project.setClientName(request.clientName().isBlank() ? null : request.clientName().trim());
+        }
+        int previousTotalPlates = project.getTotalPlates();
+        boolean totalPlatesChanged = totalPlates != previousTotalPlates;
+        if (request.partsPerPlate() != null) {
+            project.setPartsPerPlate(partsPerPlate);
+        }
+        if (totalPlatesChanged) {
+            project.setTotalPlates(totalPlates);
+        }
+        if (request.totalParts() != null) {
+            project.setTotalParts(totalParts);
+        }
+        boolean rescaleEstimates = partsPerPlate != null && totalPlatesChanged;
+        if (request.estimatedWeightGrams() != null) {
+            project.setEstimatedWeightGrams(request.estimatedWeightGrams());
+        } else if (rescaleEstimates) {
+            project.setEstimatedWeightGrams(rescaleEstimate(project.getEstimatedWeightGrams(), previousTotalPlates, totalPlates));
+        }
+        if (request.estimatedHours() != null) {
+            project.setEstimatedHours(request.estimatedHours());
+        } else if (rescaleEstimates) {
+            project.setEstimatedHours(rescaleEstimate(project.getEstimatedHours(), previousTotalPlates, totalPlates));
+        }
+        if (request.quotedPrice() != null) {
+            project.setQuotedPrice(request.quotedPrice());
+        }
+        if (request.estimatedCost() != null) {
+            project.setEstimatedCost(request.estimatedCost());
+        }
+        if (request.primaryMaterial() != null) {
+            project.setPrimaryMaterial(request.primaryMaterial());
+        }
+        if (request.colorHex() != null) {
+            project.setColorHex(request.colorHex());
+        }
         if (request.status() != null) {
             project.setProjectStatus(request.status());
-        } else if (effectiveCompletedPlates >= project.getTotalPlates()) {
-            project.setProjectStatus(ProjectStatus.COMPLETED);
+        } else if (request.completedPlates() != null || request.completedParts() != null
+                || totalPlatesChanged || request.totalParts() != null) {
+            project.updateStatusFromProgress();
+        }
+
+        if (request.filamentUsage() != null) {
+            project.setFilamentUsage(resolveFilamentUsage(project, request.filamentUsage()));
         }
 
         MakerProject saved = projectRepository.save(project);
@@ -208,7 +271,7 @@ public class MakerProjectServiceImpl implements MakerProjectService {
     @Transactional
     public void deleteProject(String projectGuid) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
-        MakerProject project = requireOwnedProject(projectGuid, company);
+        MakerProject project = requireOwnedProjectForUpdate(projectGuid, company);
         project.setStatus(StatusCd.INACTIVE);
         projectRepository.save(project);
     }
@@ -272,7 +335,7 @@ public class MakerProjectServiceImpl implements MakerProjectService {
     @Transactional
     public PrintQueueItemResponse queueNextPlate(String projectGuid, QueueNextPlateRequest request) {
         Company company = makerCompanyResolver.requireActiveMakerCompany();
-        MakerProject project = requireOwnedProject(projectGuid, company);
+        MakerProject project = requireOwnedProjectForUpdate(projectGuid, company);
 
         int completedPlates = project.getCompletedPlates() != null ? project.getCompletedPlates() : 0;
         int totalPlates = project.getTotalPlates() != null ? project.getTotalPlates() : 1;
@@ -357,8 +420,15 @@ public class MakerProjectServiceImpl implements MakerProjectService {
     }
 
     private MakerProject requireOwnedProject(String projectGuid, Company company) {
-        MakerProject project = projectRepository.findByGuidAndStatus(projectGuid, StatusCd.ACTIVE)
-                .orElseThrow(() -> new NotFoundException(MessageCd.PROJECT_NOT_FOUND));
+        return requireOwnership(projectRepository.findByGuidAndStatus(projectGuid, StatusCd.ACTIVE), company);
+    }
+
+    private MakerProject requireOwnedProjectForUpdate(String projectGuid, Company company) {
+        return requireOwnership(projectRepository.findForUpdateByGuidAndStatus(projectGuid, StatusCd.ACTIVE), company);
+    }
+
+    private MakerProject requireOwnership(Optional<MakerProject> result, Company company) {
+        MakerProject project = result.orElseThrow(() -> new NotFoundException(MessageCd.PROJECT_NOT_FOUND));
         if (!Objects.equals(company.getId(), project.getCompanyId())) {
             throw new ForbiddenException();
         }
@@ -383,11 +453,57 @@ public class MakerProjectServiceImpl implements MakerProjectService {
         return toResponse(project, order, files, bomItems);
     }
 
+    private int calculateTotalPlates(int totalParts, int partsPerPlate) {
+        return (totalParts - 1) / partsPerPlate + 1;
+    }
+
+    private BigDecimal rescaleEstimate(BigDecimal savedTotal, int previousTotalPlates, int totalPlates) {
+        return savedTotal == null ? null : savedTotal.multiply(BigDecimal.valueOf(totalPlates))
+                .divide(BigDecimal.valueOf(previousTotalPlates), 2, RoundingMode.HALF_UP);
+    }
+
+    private List<MakerProject.FilamentUsage> resolveFilamentUsage(
+            MakerProject project, List<ProjectFilamentUsageRequest> requested) {
+        Map<String, MakerProject.FilamentUsage> saved = project.getFilamentUsage().stream()
+                .collect(Collectors.toMap(MakerProject.FilamentUsage::filamentGuid, item -> item));
+        Set<String> used = new HashSet<>();
+        return requested.stream().map(item -> {
+            String guid = item.filamentGuid().trim();
+            if (!used.add(guid) || (item.grams() == null) == (item.gramsPerPlate() == null)) {
+                throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+            }
+            MakerProject.FilamentUsage previous = saved.get(guid);
+            if (previous != null) {
+                return new MakerProject.FilamentUsage(guid, previous.name(), item.grams(), previous.costPerKg(), item.gramsPerPlate());
+            }
+            Filament filament = filamentRepository.findByGuidAndStatus(guid, StatusCd.ACTIVE)
+                    .filter(candidate -> Objects.equals(candidate.getCompanyId(), project.getCompanyId()))
+                    .orElseThrow(() -> new NotFoundException(MessageCd.FILAMENT_NOT_FOUND));
+            return new MakerProject.FilamentUsage(guid, filament.getName(), item.grams(), filament.getCostPerKg(), item.gramsPerPlate());
+        }).toList();
+    }
+
     private MakerProjectResponse toResponse(
             MakerProject project,
             Order order,
             List<MakerArchiveFile> files,
             List<MakerProjectBomItem> bomItems) {
+        int totalPlates = project.getTotalPlates() != null ? project.getTotalPlates() : 1;
+        List<MakerProject.FilamentUsage> filamentUsage = project.getFilamentUsage().stream()
+                .map(item -> item.withProjectGrams(totalPlates))
+                .toList();
+        BigDecimal filamentCost = filamentUsage.stream()
+                .map(MakerProject.FilamentUsage::materialCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal bomCost = bomItems.stream()
+                .map(item -> item.getUnitCost().multiply(item.getQuantity()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal estimatedCost = project.getPartsPerPlate() == null && filamentUsage.isEmpty() && bomItems.isEmpty()
+                ? project.getEstimatedCost()
+                : filamentCost.add(bomCost);
+
         return new MakerProjectResponse(
                 project.getGuid(),
                 project.getName(),
@@ -397,21 +513,24 @@ public class MakerProjectServiceImpl implements MakerProjectService {
                 order != null ? order.getGuid() : null,
                 order != null ? order.getOrderCode() : null,
                 project.getDueDate(),
-                project.getTotalPlates() != null ? project.getTotalPlates() : 1,
+                totalPlates,
                 project.getCompletedPlates() != null ? project.getCompletedPlates() : 0,
                 project.getTotalParts() != null ? project.getTotalParts() : 1,
                 project.getCompletedParts() != null ? project.getCompletedParts() : 0,
                 project.getEstimatedWeightGrams(),
                 project.getEstimatedHours(),
                 project.getQuotedPrice(),
-                project.getEstimatedCost(),
+                estimatedCost,
                 project.getPrimaryMaterial(),
                 project.getColorHex(),
                 project.getThumbnailUrl(),
                 files.stream().map(MakerArchiveFile::getGuid).toList(),
                 bomItems.stream().map(this::toBomResponse).toList(),
                 project.getNotes(),
-                project.getCreateDt()
+                project.getCreateDt(),
+                filamentUsage,
+                filamentCost,
+                project.getPartsPerPlate()
         );
     }
 

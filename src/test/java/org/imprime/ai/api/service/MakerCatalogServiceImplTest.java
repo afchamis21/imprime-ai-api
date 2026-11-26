@@ -8,6 +8,7 @@ import org.imprime.ai.api.http.response.maker.MakerProfileResponse;
 import org.imprime.ai.api.http.response.maker.PortfolioItemResponse;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.MakerPortfolioItem;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.FavoriteTargetType;
@@ -20,6 +21,7 @@ import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.MakerPortfolioItemRepository;
 import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
+import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.MakerEligibilityService;
 import org.imprime.ai.api.service.impl.FavoriteServiceImpl;
 import org.imprime.ai.api.service.impl.MakerCatalogServiceImpl;
@@ -48,6 +50,8 @@ class MakerCatalogServiceImplTest {
 
     @Mock
     private CompanyRepository companyRepository;
+    @Mock
+    private UserRepository userRepository;
     @Mock
     private AddressRepository addressRepository;
     @Mock
@@ -122,6 +126,7 @@ class MakerCatalogServiceImplTest {
         rjAddress.setDefaultAddress(true);
 
         when(companyRepository.findAllByStatus(StatusCd.ACTIVE)).thenReturn(List.of(nearby, far));
+        givenActiveOwners(nearby, far);
         when(addressRepository.findAllByOwnerTypeAndOwnerIdInAndStatus(eq(EntityType.COMPANY), any(), eq(StatusCd.ACTIVE)))
                 .thenReturn(List.of(spAddress, rjAddress));
         when(favoriteService.findFavoritedTargetIds(FavoriteTargetType.MAKER)).thenReturn(Set.of(1L));
@@ -140,6 +145,55 @@ class MakerCatalogServiceImplTest {
         assertTrue(item.favorited());
         assertNotNull(item.distanceKm());
         assertTrue(item.distanceKm().doubleValue() < 5.0);
+    }
+
+    @Test
+    void listMakersHidesSuspendedAndDeletedOwnersAndShowsReactivatedOwners() {
+        Company activeStudio = studio(1L, "maker-active");
+        Company suspendedStudio = studio(2L, "maker-suspended");
+        Company deletedStudio = studio(3L, "maker-deleted");
+        User active = owner(activeStudio, StatusCd.ACTIVE);
+        User suspended = owner(suspendedStudio, StatusCd.SUSPENDED);
+        User deleted = owner(deletedStudio, StatusCd.DELETED);
+
+        when(companyRepository.findAllByStatus(StatusCd.ACTIVE))
+                .thenReturn(List.of(activeStudio, suspendedStudio, deletedStudio));
+        when(userRepository.findAllById(Set.of(active.getId(), suspended.getId(), deleted.getId())))
+                .thenReturn(List.of(active, suspended, deleted));
+        when(favoriteService.findFavoritedTargetIds(FavoriteTargetType.MAKER)).thenReturn(Set.of());
+
+        var page = service.listMakers(null, PageRequest.of(0, 10));
+        assertEquals(List.of("maker-active"), page.content().stream().map(MakerCatalogItemResponse::guid).toList());
+
+        suspended.setStatus(StatusCd.ACTIVE);
+        var reactivated = service.listMakers(null, PageRequest.of(0, 10));
+        assertEquals(Set.of("maker-active", "maker-suspended"),
+                Set.copyOf(reactivated.content().stream().map(MakerCatalogItemResponse::guid).toList()));
+    }
+
+    private static Company studio(Long id, String guid) {
+        Company company = new Company();
+        company.setId(id);
+        company.setGuid(guid);
+        company.setName(guid);
+        company.setSlug(guid);
+        company.setStatus(StatusCd.ACTIVE);
+        return company;
+    }
+
+    private static User owner(Company company, StatusCd status) {
+        User user = new User();
+        user.setId(company.getId() + 100);
+        user.setStatus(status);
+        company.setOwnerId(user.getId());
+        return user;
+    }
+
+    private void givenActiveOwners(Company... companies) {
+        List<User> owners = java.util.Arrays.stream(companies)
+                .map(company -> owner(company, StatusCd.ACTIVE))
+                .toList();
+        when(userRepository.findAllById(any())).thenReturn(owners);
     }
 
     @Test
@@ -194,6 +248,7 @@ class MakerCatalogServiceImplTest {
 
         when(companyRepository.findAllByStatus(StatusCd.ACTIVE))
                 .thenReturn(List.of(activeOnline, offlineInCache, vacationStudio));
+        givenActiveOwners(activeOnline, offlineInCache, vacationStudio);
         when(addressRepository.findAllByOwnerTypeAndOwnerIdInAndStatus(eq(EntityType.COMPANY), any(), eq(StatusCd.ACTIVE)))
                 .thenReturn(List.of());
         when(favoriteService.findFavoritedTargetIds(FavoriteTargetType.MAKER)).thenReturn(Set.of());
@@ -263,6 +318,7 @@ class MakerCatalogServiceImplTest {
         item2.setImageUrlsJson("[\"https://cdn.example.com/6.jpg\",\"https://cdn.example.com/7.jpg\"]");
 
         when(companyRepository.findAllByStatus(StatusCd.ACTIVE)).thenReturn(List.of(publicMaker, privateMaker));
+        givenActiveOwners(publicMaker, privateMaker);
         when(addressRepository.findAllByOwnerTypeAndOwnerIdInAndStatus(eq(EntityType.COMPANY), any(), eq(StatusCd.ACTIVE)))
                 .thenReturn(List.of(addr21));
         when(favoriteService.findFavoritedTargetIds(FavoriteTargetType.MAKER)).thenReturn(Set.of());

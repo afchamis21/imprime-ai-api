@@ -80,6 +80,7 @@ class UserAddressServiceImplTest {
 
         assertEquals("addr-guid-100", dto.guid());
         assertEquals("Bela Vista", dto.neighborhood());
+        assertTrue(dto.defaultAddress());
         assertEquals(100L, caller.getPrimaryAddressId());
         verify(userInMemoryCache).put(caller);
     }

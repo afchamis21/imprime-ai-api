@@ -15,14 +15,26 @@ import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.enums.MessageType;
+import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.model.exception.BadRequestException;
+import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.InternalErrorException;
 import org.imprime.ai.api.repo.db.OrderFileAssetRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
+import org.imprime.ai.api.validator.PrintFileValidator;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.io.IOException;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
@@ -30,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -42,20 +55,56 @@ public class OrderService {
     private final OrderFileAssetRepository orderFileAssetRepository;
     private final OrderStatusService orderStatusService;
     private final JsonCodec jsonCodec;
+    private final LegalDocumentService legalDocuments;
+    private final PrintFileValidator printFileValidator;
+    private final MakerOrderComplianceService makerCompliance;
+    private final ChatMessageRepository chatMessages;
+    private final OrderUploadRequestService uploadRequests;
 
+    @Transactional
     public StartOrderResponse start(MultipartFile model, StartOrderRequest request) {
         return start(model == null ? List.of() : List.of(model), null, request);
     }
 
+    @Transactional
     public StartOrderResponse start(
             List<MultipartFile> models,
             @Nullable String platesMetadataJson,
             StartOrderRequest request) {
+        return start(models, platesMetadataJson, request, null);
+    }
+
+    @Transactional
+    public StartOrderResponse start(List<MultipartFile> models, @Nullable String platesMetadataJson,
+                                    StartOrderRequest request, @Nullable UUID requestId) {
         if (models == null || models.isEmpty()) {
             throw new BadRequestException(MessageCd.FILE_EMPTY);
         }
 
-        // 1. Validate the Address Exists and belongs to the user
+        if (requestId == null) return createQuote(models, platesMetadataJson, request);
+
+        long buyerId = ServiceContext.getUserOrThrow().getId();
+        String existingGuid = uploadRequests.reserveOrReplay(buyerId, requestId, "START");
+        if (existingGuid != null) {
+            Order existing = orderRepository.findOrderByGuid(existingGuid)
+                    .orElseThrow(() -> new ConflictException(MessageCd.CONFLICT));
+            Address address = addressService.findById(existing.getToAddressId())
+                    .orElseThrow(() -> new BadRequestException(MessageCd.INVALID_ADDRESS_GUID));
+            return new StartOrderResponse(existingGuid, AddressDTO.from(address), getMakerOptions(existingGuid, 100));
+        }
+        StartOrderResponse response = createQuote(models, platesMetadataJson, request);
+        uploadRequests.finish(buyerId, requestId, response.orderGuid());
+        return response;
+    }
+
+    @Transactional
+    public StartOrderResponse startQuoteDraft(String addressGuid) {
+        return createQuote(List.of(), null, new StartOrderRequest(addressGuid, null, null, null));
+    }
+
+    private StartOrderResponse createQuote(List<MultipartFile> models, String platesMetadataJson,
+                                           StartOrderRequest request) {
+        // Validate the address before storing files.
         Optional<Address> optionalAddress = addressService.findByGuid(request.addressGuid());
         if (optionalAddress.isEmpty()) {
             log.warn("No address found for given guid: {}", request.addressGuid());
@@ -75,41 +124,13 @@ public class OrderService {
             throw new BadRequestException(MessageCd.ADDRESS_NOT_ACTIVE);
         }
 
-        // 2-4. Validate & upload all model files, rolling back earlier uploads if any fails
-        List<FileAsset> uploadedAssets = new ArrayList<>(models.size());
-        try {
-            for (MultipartFile model : models) {
-                uploadedAssets.add(fileAssetService.upload(model, FileAsset.AssetType.MODEL));
-            }
-        } catch (RuntimeException e) {
-            cleanupUploadedAssets(uploadedAssets);
-            throw e;
-        }
-
         List<OrderPlateMetadataRequest> platesMetadata = (platesMetadataJson != null && !platesMetadataJson.isBlank())
                 ? jsonCodec.readList(platesMetadataJson, OrderPlateMetadataRequest.class)
                 : List.of();
-
-        // 5. Create the Order and its OrderFileAsset plate records
         Order order = new Order();
-        List<OrderFileAsset> plateEntities = new ArrayList<>(uploadedAssets.size());
-        try {
-            order.setToAddressId(address.getId());
-            order.setBuyerId(caller.getId());
-            order.setFileAssetId(uploadedAssets.getFirst().getId());
-            order = orderRepository.save(order);
-
-            for (int i = 0; i < uploadedAssets.size(); i++) {
-                FileAsset asset = uploadedAssets.get(i);
-                OrderPlateMetadataRequest meta = i < platesMetadata.size() ? platesMetadata.get(i) : null;
-                plateEntities.add(buildOrderFileAsset(order.getId(), asset, meta, i));
-            }
-            orderFileAssetRepository.saveAll(plateEntities);
-        } catch (Exception e) {
-            log.error("Error persisting order! Rolling back File Assets", e);
-            cleanupUploadedAssets(uploadedAssets);
-            throw new InternalErrorException();
-        }
+        order.setToAddressId(address.getId());
+        order.setBuyerId(caller.getId());
+        List<OrderFileAsset> plateEntities = storeQuoteFiles(order, models, platesMetadata, request, 0);
 
         // 5.2 Create the Created Status
         orderStatusService.move(order, OrderStatusCd.CREATED);
@@ -124,6 +145,114 @@ public class OrderService {
             log.error("Error searching companies for order. Returning Order Guid to the UI", e);
             ServiceContext.getContext().addMessage(MessageCd.ERROR_LOADING_MAKERS);
             return new StartOrderResponse(order.getGuid(), AddressDTO.from(address), List.of());
+        }
+    }
+
+    @Transactional
+    public void attachQuoteFiles(String orderGuid, List<MultipartFile> files, StartOrderRequest declaration,
+                                 @Nullable UUID requestId) {
+        if (files == null || files.isEmpty()) throw new BadRequestException(MessageCd.FILE_EMPTY);
+        Order order = makerCompliance.lockOrder(orderGuid);
+        if (!Objects.equals(order.getBuyerId(), ServiceContext.getUserOrThrow().getId())) {
+            throw new ForbiddenException();
+        }
+        if (requestId != null
+                && uploadRequests.reserveOrReplay(order.getBuyerId(), requestId, "ATTACH:" + orderGuid) != null) return;
+        if (order.getVendorId() != null || orderStatusService.findLatest(order).getStatusCd() != OrderStatusCd.QUOTING) {
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        if (chatMessages.existsOfferForOrder(orderGuid, MessageType.OFFER)) {
+            throw new ConflictException(MessageCd.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        List<OrderFileAsset> plates = orderFileAssetRepository
+                .findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(order.getId(), StatusCd.ACTIVE);
+        if (order.getFileAssetId() != null && plates.isEmpty()) {
+            // Keep the original legacy plate discoverable in the multi-plate list.
+            FileAsset legacyAsset = new FileAsset();
+            legacyAsset.setId(order.getFileAssetId());
+            plates = List.of(buildOrderFileAsset(order.getId(), legacyAsset, null, 0));
+            orderFileAssetRepository.saveAll(plates);
+        }
+        if (files.size() + plates.size() > PrintFileValidator.MAX_PLATES) {
+            throw new BadRequestException(MessageCd.PRINT_FILE_INVALID);
+        }
+        int lastPlate = plates.stream().mapToInt(plate -> plate.getPlateNumber()).max().orElse(0);
+        storeQuoteFiles(order, files, List.of(), declaration, lastPlate);
+        if (requestId != null) uploadRequests.finish(order.getBuyerId(), requestId, orderGuid);
+    }
+
+    private List<OrderFileAsset> storeQuoteFiles(Order order, List<MultipartFile> models,
+                                                  List<OrderPlateMetadataRequest> platesMetadata,
+                                                  StartOrderRequest request, int priorPlates) {
+        Long declarationId = null;
+        Long prohibitedItemsId = null;
+        List<String> fileHashes = List.of();
+        if (!models.isEmpty()) {
+            if (!Boolean.TRUE.equals(request.rightsDeclared())) {
+                throw new BadRequestException(MessageCd.PRINT_DECLARATION_REQUIRED);
+            }
+            declarationId = legalDocuments.requireAcceptableVersion("print-declaration", request.declarationVersion());
+            prohibitedItemsId = legalDocuments.requireAcceptableVersion("prohibited-items", request.prohibitedItemsVersion());
+            printFileValidator.validate(models);
+            fileHashes = models.stream().map(this::fileDigest).toList();
+        }
+
+        // Register object cleanup for any rollback, including a failure at commit time.
+        List<FileAsset> uploadedAssets = new ArrayList<>(models.size());
+        boolean transactional = TransactionSynchronizationManager.isSynchronizationActive();
+        if (transactional) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != STATUS_COMMITTED) {
+                        uploadedAssets.forEach(fileAssetService::deleteUploadedObject);
+                    }
+                }
+            });
+        }
+        try {
+            for (MultipartFile model : models) {
+                uploadedAssets.add(fileAssetService.uploadOrderModel(model));
+            }
+        } catch (RuntimeException e) {
+            if (!transactional) cleanupUploadedAssets(uploadedAssets);
+            throw e;
+        }
+
+        // 5. Create the Order and its OrderFileAsset plate records
+        List<OrderFileAsset> plateEntities = new ArrayList<>(uploadedAssets.size());
+        try {
+            if (!uploadedAssets.isEmpty() && order.getFileAssetId() == null) {
+                order.setFileAssetId(uploadedAssets.getFirst().getId());
+            }
+            Order saved = orderRepository.save(order);
+
+            for (int i = 0; i < uploadedAssets.size(); i++) {
+                FileAsset asset = uploadedAssets.get(i);
+                OrderPlateMetadataRequest meta = i < platesMetadata.size() ? platesMetadata.get(i) : null;
+                plateEntities.add(buildOrderFileAsset(saved.getId(), asset, meta, priorPlates + i));
+                legalDocuments.recordOrderFileDeclaration(saved.getId(), asset.getId(), order.getBuyerId(),
+                        declarationId, prohibitedItemsId, fileHashes.get(i));
+            }
+            orderFileAssetRepository.saveAll(plateEntities);
+        } catch (Exception e) {
+            log.error("Error persisting order! Rolling back File Assets", e);
+            if (!transactional) cleanupUploadedAssets(uploadedAssets);
+            throw new InternalErrorException();
+        }
+
+        return plateEntities;
+    }
+
+    private String fileDigest(MultipartFile file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var stream = new DigestInputStream(file.getInputStream(), digest)) {
+                stream.transferTo(java.io.OutputStream.nullOutputStream());
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new InternalErrorException();
         }
     }
 
@@ -236,6 +365,9 @@ public class OrderService {
         }
 
         Order order = optionalOrder.get();
+        if (!Objects.equals(order.getBuyerId(), ServiceContext.getUserOrThrow().getId())) {
+            throw new ForbiddenException();
+        }
         Optional<Address> optionalAddress = addressService.findById(order.getToAddressId());
         if (optionalAddress.isEmpty()) {
             throw new BadRequestException(MessageCd.INTERNAL_SERVER_ERROR); // TODO
@@ -246,13 +378,18 @@ public class OrderService {
         return companyService.findCompaniesForOrder(optionalAddress.get(), plates, max);
     }
 
+    public void requireDeclarationsForExistingFiles(Order order, User buyer) {
+        legalDocuments.requireDeclarationsForExistingFiles(order.getId(), buyer.getId());
+    }
+
     public Optional<Order> findByGuid(String guid) {
         return orderRepository.findOrderByGuid(guid);
     }
 
     @Transactional
     public OrderStatus acceptOffer(String orderGuid, BigDecimal offer, Company company) {
-        Order order = findByGuid(orderGuid).orElseThrow();
+        Order order = makerCompliance.lockOrder(orderGuid);
+        makerCompliance.requireNoRefusal(order.getId(), company.getId());
         order.setOrderTotal(offer);
         order.setVendorId(company.getId());
 
@@ -268,6 +405,7 @@ public class OrderService {
         cloned.setToAddressId(templateOrder.getToAddressId());
         cloned.setFileAssetId(templateOrder.getFileAssetId());
         cloned = orderRepository.save(cloned);
+        legalDocuments.copyOrderFileDeclarations(templateOrder.getId(), cloned.getId(), buyer.getId());
 
         List<OrderFileAsset> sourceFiles = orderFileAssetRepository
                 .findAllByOrderIdAndStatusOrderByPlateNumberAscIdAsc(templateOrder.getId(), StatusCd.ACTIVE);

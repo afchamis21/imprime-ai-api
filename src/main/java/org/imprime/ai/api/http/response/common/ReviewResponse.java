@@ -3,6 +3,7 @@ package org.imprime.ai.api.http.response.common;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.List;
 
 @Schema(description = "Dados de uma avaliação publicada")
 public record ReviewResponse(
@@ -19,6 +20,10 @@ public record ReviewResponse(
         @Schema(description = "Texto da avaliação", example = "Muito resistente e ótimo acabamento!")
         String comment,
         @Schema(description = "Data e hora de criação em UTC (ISO-8601)", example = "2026-11-19T18:30:00Z")
-        Instant createdAt
+        Instant createdAt,
+        List<String> imageUrls,
+        long likeCount,
+        boolean liked,
+        List<ReviewReplyResponse> replies
 ) {
 }

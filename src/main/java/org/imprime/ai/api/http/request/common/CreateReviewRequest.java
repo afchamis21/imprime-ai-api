@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 @Schema(description = "Dados para publicação de uma avaliação (o autor é extraído automaticamente do token JWT)")
 public record CreateReviewRequest(
         @Schema(description = "Nota atribuída de 1 a 5", example = "5", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -16,8 +18,13 @@ public record CreateReviewRequest(
         Integer rating,
 
         @Schema(description = "Texto da avaliação", example = "Encaixe perfeito e ótimo acabamento em PETG!", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank(message = "O comentário é obrigatório")
+        @NotNull(message = "O comentário é obrigatório")
         @Size(max = 2000, message = "O comentário deve ter no máximo 2000 caracteres")
-        String comment
+        String comment,
+        @Size(max = 4)
+        List<@NotBlank @Size(max = 36) String> photoGuids
 ) {
+    public CreateReviewRequest(Integer rating, String comment) {
+        this(rating, comment, null);
+    }
 }

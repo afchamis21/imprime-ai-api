@@ -15,11 +15,14 @@ import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.OptionalAuth;
 import org.imprime.ai.api.http.auth.SkipAuth;
 import org.imprime.ai.api.http.request.common.CreateReviewRequest;
+import org.imprime.ai.api.http.request.common.CreateReviewReplyRequest;
 import org.imprime.ai.api.http.request.product.ProductCatalogFilter;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.common.FavoriteStatusResponse;
 import org.imprime.ai.api.http.response.common.ReviewResponse;
+import org.imprime.ai.api.http.response.common.ReviewLikeResponse;
+import org.imprime.ai.api.http.response.common.ReviewReplyResponse;
 import org.imprime.ai.api.http.response.product.ProductCatalogItemResponse;
 import org.imprime.ai.api.http.response.product.ProductDetailResponse;
 import org.imprime.ai.api.model.enums.MaterialType;
@@ -132,7 +135,7 @@ public class ProductController {
         return ResponseEntity.noContent().build();
     }
 
-    @SkipAuth
+    @OptionalAuth
     @SecurityRequirements
     @Operation(
             summary = "Listar avaliações de um produto",
@@ -211,5 +214,27 @@ public class ProductController {
             @PathVariable String reviewGuid) {
         reviewService.deleteReview(ReviewTargetType.PRODUCT, productGuid, reviewGuid);
         return ResponseEntity.noContent().build();
+    }
+
+    @JwtAuthenticated
+    @PostMapping("/{productGuid}/reviews/{reviewGuid}/replies")
+    public ResponseEntity<BaseResponse<ReviewReplyResponse>> replyToReview(
+            @PathVariable String productGuid, @PathVariable String reviewGuid,
+            @Valid @RequestBody CreateReviewReplyRequest request) {
+        return BaseResponse.created(reviewService.reply(ReviewTargetType.PRODUCT, productGuid, reviewGuid, request));
+    }
+
+    @JwtAuthenticated
+    @PutMapping("/{productGuid}/reviews/{reviewGuid}/like")
+    public ResponseEntity<BaseResponse<ReviewLikeResponse>> likeReview(
+            @PathVariable String productGuid, @PathVariable String reviewGuid) {
+        return BaseResponse.ok(reviewService.setLiked(ReviewTargetType.PRODUCT, productGuid, reviewGuid, true));
+    }
+
+    @JwtAuthenticated
+    @DeleteMapping("/{productGuid}/reviews/{reviewGuid}/like")
+    public ResponseEntity<BaseResponse<ReviewLikeResponse>> unlikeReview(
+            @PathVariable String productGuid, @PathVariable String reviewGuid) {
+        return BaseResponse.ok(reviewService.setLiked(ReviewTargetType.PRODUCT, productGuid, reviewGuid, false));
     }
 }

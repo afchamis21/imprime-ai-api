@@ -11,12 +11,14 @@ import org.imprime.ai.api.model.Product;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.MakerPortfolioItemRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.service.impl.MakerStorefrontServiceImpl;
 import org.imprime.ai.api.util.JsonCodec;
+import org.imprime.ai.api.util.MakerDisplayOrder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -70,6 +74,29 @@ class MakerStorefrontServiceImplTest {
     @AfterEach
     void tearDown() {
         ServiceContext.clear();
+    }
+
+    @Test
+    void reorderProductsKeepsOmittedItemsInPlaceAndRejectsForeignItems() {
+        Product first = new Product();
+        first.setGuid("first");
+        Product second = new Product();
+        second.setGuid("second");
+        Product third = new Product();
+        third.setGuid("third");
+        when(companyRepository.findById(10L)).thenReturn(Optional.of(company));
+        when(companyRepository.findForUpdateById(10L)).thenReturn(Optional.of(company));
+        when(productRepository.findAllByCompanyIdAndStatus(10L, StatusCd.ACTIVE, Pageable.unpaged(MakerDisplayOrder.SORT)))
+                .thenReturn(new PageImpl<>(List.of(first, second, third)));
+
+        assertThrows(BadRequestException.class, () -> service.reorderProducts(List.of("foreign", "third")));
+        assertThrows(BadRequestException.class, () -> service.reorderProducts(List.of("first", "first")));
+        assertEquals(0, first.getDisplayPosition());
+
+        service.reorderProducts(List.of("third", "first"));
+        assertEquals(1, third.getDisplayPosition());
+        assertEquals(2, second.getDisplayPosition());
+        assertEquals(3, first.getDisplayPosition());
     }
 
     @Test

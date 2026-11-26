@@ -13,6 +13,7 @@ import org.imprime.ai.api.http.auth.RequireMaker;
 import org.imprime.ai.api.http.request.maker.CreateMakerModelRequest;
 import org.imprime.ai.api.http.request.maker.CreateMakerProductRequest;
 import org.imprime.ai.api.http.request.maker.CreatePortfolioItemRequest;
+import org.imprime.ai.api.http.request.maker.ReorderMakerItemsRequest;
 import org.imprime.ai.api.http.request.maker.UpdateMakerProductRequest;
 import org.imprime.ai.api.http.request.maker.UpdatePortfolioItemRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
@@ -38,6 +39,24 @@ import org.springframework.web.multipart.MultipartFile;
 public class MakerStorefrontController {
     private final MakerStorefrontService makerStorefrontService;
     private final MakerModelService makerModelService;
+
+    @PutMapping("/portfolio/order")
+    public ResponseEntity<Void> reorderPortfolio(@Valid @RequestBody ReorderMakerItemsRequest request) {
+        makerStorefrontService.reorderPortfolio(request.itemGuids());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/products/order")
+    public ResponseEntity<Void> reorderProducts(@Valid @RequestBody ReorderMakerItemsRequest request) {
+        makerStorefrontService.reorderProducts(request.itemGuids());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/models/order")
+    public ResponseEntity<Void> reorderModels(@Valid @RequestBody ReorderMakerItemsRequest request) {
+        makerModelService.reorderModels(request.itemGuids());
+        return ResponseEntity.noContent().build();
+    }
 
     @Operation(
             summary = "Listar itens do próprio portfólio",

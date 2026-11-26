@@ -1,6 +1,7 @@
 package org.imprime.ai.api.http.request.maker;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,6 +13,7 @@ import org.imprime.ai.api.model.enums.MaterialType;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Schema(description = "Dados para criação de um projeto multi-peça com acompanhamento BOM")
 public record CreateMakerProjectRequest(
@@ -36,8 +38,7 @@ public record CreateMakerProjectRequest(
         @NotNull(message = "A data limite é obrigatória")
         LocalDate dueDate,
 
-        @Schema(description = "Total de mesas/placas de impressão", example = "6", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull(message = "O total de mesas é obrigatório")
+        @Schema(description = "Total de mesas informado quando peças por mesa estiver ausente", example = "6")
         @Min(value = 1, message = "O projeto deve ter ao menos 1 mesa")
         Integer totalPlates,
 
@@ -73,6 +74,14 @@ public record CreateMakerProjectRequest(
 
         @Schema(description = "Observações internas de produção")
         @Size(max = 1000, message = "As observações devem ter no máximo 1000 caracteres")
-        String notes
+        String notes,
+
+        @Schema(description = "Filamentos e gramas para o projeto inteiro")
+        @Size(max = 50)
+        List<@NotNull @Valid ProjectFilamentUsageRequest> filamentUsage,
+
+        @Schema(description = "Peças por mesa. Quando informado, o total de mesas é calculado.")
+        @Min(value = 1, message = "A quantidade por mesa deve ser de pelo menos 1 peça")
+        Integer partsPerPlate
 ) {
 }

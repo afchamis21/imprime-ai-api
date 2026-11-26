@@ -3,12 +3,15 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.ProjectStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
@@ -51,6 +54,9 @@ public class MakerProject extends Auditable {
     @Column(name = "TOTAL_PARTS", nullable = false)
     private Integer totalParts;
 
+    @Column(name = "PARTS_PER_PLATE")
+    private Integer partsPerPlate;
+
     @Column(name = "COMPLETED_PARTS", nullable = false)
     private Integer completedParts = 0;
 
@@ -78,4 +84,37 @@ public class MakerProject extends Auditable {
 
     @Column(name = "NOTES", columnDefinition = "text")
     private String notes;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "FILAMENT_USAGE", nullable = false, columnDefinition = "jsonb")
+    private List<FilamentUsage> filamentUsage = List.of();
+
+    public record FilamentUsage(String filamentGuid, String name, BigDecimal grams, BigDecimal costPerKg, BigDecimal gramsPerPlate) {
+        public FilamentUsage withProjectGrams(int totalPlates) {
+            return gramsPerPlate == null ? this : new FilamentUsage(
+                    filamentGuid, name, gramsPerPlate.multiply(BigDecimal.valueOf(totalPlates)), costPerKg, gramsPerPlate);
+        }
+
+        public BigDecimal materialCost() {
+            return grams.multiply(costPerKg).movePointLeft(3);
+        }
+    }
+
+    public static int partsPrintedForPlates(int completedPlates, int partsPerPlate, int totalParts) {
+        return (int) Math.min(totalParts, (long) completedPlates * partsPerPlate);
+    }
+
+    public void updateStatusFromProgress() {
+        if (projectStatus == ProjectStatus.CANCELLED) {
+            return;
+        }
+        int plates = completedPlates != null ? completedPlates : 0;
+        int parts = completedParts != null ? completedParts : 0;
+        if (plates >= totalPlates && parts >= totalParts) {
+            projectStatus = ProjectStatus.COMPLETED;
+        } else if (projectStatus == ProjectStatus.COMPLETED
+                || (projectStatus == ProjectStatus.PLANNING && (plates > 0 || parts > 0))) {
+            projectStatus = ProjectStatus.IN_PROGRESS;
+        }
+    }
 }

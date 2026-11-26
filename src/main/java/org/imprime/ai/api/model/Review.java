@@ -3,6 +3,10 @@ package org.imprime.ai.api.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.util.List;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.ReviewTargetType;
 
@@ -34,4 +38,8 @@ public class Review extends Auditable {
 
     @Column(name = "COMMENT", nullable = false, columnDefinition = "text")
     private String comment;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "IMAGE_URLS", nullable = false, columnDefinition = "jsonb")
+    private List<String> imageUrls = List.of();
 }

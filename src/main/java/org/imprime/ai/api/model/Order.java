@@ -85,4 +85,7 @@ public class Order extends Auditable {
 
     @Column(name = "CHECKOUT_SESSION_ID", length = 120)
     private String checkoutSessionId;
+
+    @Column(name = "PAYMENT_CONFIRMED_AT")
+    private java.time.Instant paymentConfirmedAt;
 }

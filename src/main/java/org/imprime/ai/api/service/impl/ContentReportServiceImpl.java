@@ -4,6 +4,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.request.report.CreateReportRequest;
+import org.imprime.ai.api.http.request.report.CreateIpNoticeRequest;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.report.ReportResponse;
 import org.imprime.ai.api.model.Company;
@@ -32,6 +33,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
 import java.time.Year;
 import java.time.ZoneOffset;
 import java.util.EnumSet;
@@ -134,6 +136,55 @@ public class ContentReportServiceImpl implements ContentReportService {
                 saved.getReportStatus(),
                 saved.getCreateDt()
         );
+    }
+
+    @Override
+    @Transactional
+    public IpNoticeReceipt createIpNotice(CreateIpNoticeRequest request) {
+        if (!Boolean.TRUE.equals(request.goodFaith())) {
+            throw new BadRequestException(MessageCd.REPORT_INVALID_REQUEST);
+        }
+        ResolvedTarget target = resolveActiveTarget(request.targetType(), request.targetIdOrSlug().trim());
+        List<String> evidence = sanitizeEvidenceUrls(request.evidenceUrls());
+        for (String reference : evidence) {
+            try {
+                URI uri = URI.create(reference);
+                if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null) {
+                    throw new IllegalArgumentException();
+                }
+            } catch (IllegalArgumentException ex) {
+                throw new BadRequestException(MessageCd.REPORT_INVALID_REQUEST);
+            }
+        }
+
+        ContentReport notice = new ContentReport();
+        notice.setProtocol(generateUniqueProtocol());
+        notice.setClaimantName(request.claimantName().trim());
+        notice.setClaimantEmail(request.claimantEmail().trim());
+        notice.setTargetType(request.targetType());
+        notice.setTargetId(target.id());
+        notice.setTargetGuid(target.guid());
+        notice.setTargetName(truncate(target.name(), 200));
+        notice.setReason(ReportReason.COPYRIGHT_DMCA);
+        notice.setDescription("Obra protegida\n" + request.protectedWork().trim()
+                + "\n\nFundamento e legitimidade\n" + request.justification().trim()
+                + "\n\nDeclaração de boa-fé confirmada pelo denunciante.");
+        notice.setEvidenceUrlsJson(jsonCodec.toJsonArray(evidence));
+        notice.setReportStatus(ReportStatus.OPEN);
+        notice.setPriority(TicketPriority.HIGH);
+        return toReceipt(contentReportRepository.save(notice));
+    }
+
+    @Override
+    public IpNoticeReceipt getIpNotice(String trackingToken) {
+        return contentReportRepository.findByGuidAndStatus(trackingToken, StatusCd.ACTIVE)
+                .filter(report -> report.getClaimantEmail() != null)
+                .map(this::toReceipt)
+                .orElseThrow(() -> new NotFoundException(MessageCd.REPORT_NOT_FOUND));
+    }
+
+    private IpNoticeReceipt toReceipt(ContentReport notice) {
+        return new IpNoticeReceipt(notice.getProtocol(), notice.getGuid(), notice.getReportStatus());
     }
 
     @Override

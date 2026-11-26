@@ -67,7 +67,7 @@ public record CreateMakerModelRequest(
         @Size(max = 1000)
         String coverImageUrl,
 
-        @Schema(description = "Lista de URLs das imagens de preview")
+        @Schema(description = "URLs das imagens de preview. Envie ao menos uma imagem na lista ou na capa.")
         List<String> imageUrls,
 
         @Schema(description = "Tags de busca e recomendação técnica")

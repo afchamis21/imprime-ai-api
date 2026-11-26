@@ -68,7 +68,11 @@ public record RegisterUserRequest(
         @Schema(description = "Dados da empresa do Maker (obrigatório quando `isMaker` for `true`)")
         @Nullable RegisterCompanyRequest company,
         @Schema(description = "URL opcional da foto de perfil do usuário")
-        @Nullable String avatarUrl
+        @Nullable String avatarUrl,
+        Boolean termsAccepted,
+        String termsVersion,
+        Boolean privacyAcknowledged,
+        String privacyVersion
 ) implements ValidatedRequest {
     @Nullable
     public MessageCd getInvalidReason() {

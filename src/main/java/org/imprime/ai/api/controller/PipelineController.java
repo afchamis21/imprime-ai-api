@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -52,8 +53,18 @@ public class PipelineController {
             @Parameter(description = "JSON opcional com metadados por mesa (`OrderPlateMetadataRequest[]`)")
             @RequestParam(value = "platesMetadata", required = false) String platesMetadata,
             @Parameter(description = "GUID do endereço de entrega pertencente ao cliente", required = true)
-            @RequestParam String addressGuid) {
-        return BaseResponse.ok(orderService.start(files, platesMetadata, new StartOrderRequest(addressGuid)));
+            @RequestParam String addressGuid,
+            @RequestParam(required = false) Boolean rightsDeclared,
+            @RequestParam(required = false) String declarationVersion,
+            @RequestParam(required = false) String prohibitedItemsVersion,
+            @RequestHeader(name = "Idempotency-Key", required = false) UUID requestId) {
+        return BaseResponse.ok(orderService.start(files, platesMetadata,
+                new StartOrderRequest(addressGuid, rightsDeclared, declarationVersion, prohibitedItemsVersion), requestId));
+    }
+
+    @PostMapping("/quote-draft")
+    public ResponseEntity<BaseResponse<StartOrderResponse>> quoteDraft(@RequestParam String addressGuid) {
+        return BaseResponse.ok(orderService.startQuoteDraft(addressGuid));
     }
 
     // TODO

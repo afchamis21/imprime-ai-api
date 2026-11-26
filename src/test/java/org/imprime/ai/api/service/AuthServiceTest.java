@@ -51,7 +51,7 @@ class AuthServiceTest {
         authConfig.setRefreshToken(refreshCfg);
 
         makerPresenceCache = new MakerPresenceCache(Duration.ofMinutes(4), 1_000L);
-        authService = new AuthService(authConfig, userService, authTokenService, passwordEncoder, makerPresenceCache);
+        authService = new AuthService(authConfig, userService, authTokenService, passwordEncoder, makerPresenceCache, mock(LegalDocumentService.class));
     }
 
     @Test

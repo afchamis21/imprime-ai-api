@@ -5,6 +5,7 @@ import org.imprime.ai.api.model.enums.MessageType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -13,6 +14,13 @@ import java.util.UUID;
 
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
+    @Query("""
+            SELECT count(message) > 0 FROM ChatMessage message
+            WHERE message.type = :type AND message.chatId IN
+                (SELECT chat.chatId FROM Chat chat WHERE chat.orderGuid = :orderGuid)
+            """)
+    boolean existsOfferForOrder(String orderGuid, MessageType type);
+
     Page<ChatMessage> findAllByChatIdOrderByCreateDtDesc(UUID chatId, Pageable pageable);
 
     List<ChatMessage> findAllByChatIdOrderByCreateDtAsc(UUID chatId);
