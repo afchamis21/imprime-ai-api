@@ -26,6 +26,7 @@ import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.ReviewActivityNotificationEvent;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
@@ -39,6 +40,8 @@ import org.imprime.ai.api.service.ReviewService;
 import org.imprime.ai.api.service.ObjectStorageService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.PageableSortMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -75,6 +78,8 @@ public class ReviewServiceImpl implements ReviewService {
     private final FileAssetRepository fileAssetRepository;
     private final ObjectStorageService objectStorageService;
     private final JdbcClient jdbc;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<ReviewResponse> listReviews(
@@ -244,6 +249,18 @@ public class ReviewServiceImpl implements ReviewService {
 
         Review saved = reviewRepository.save(review);
         recalculateTargetRating(targetType, targetId);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new ReviewActivityNotificationEvent(
+                    saved.getGuid(),
+                    targetType.name(),
+                    targetId,
+                    caller.getId(),
+                    saved.getAuthorUserId(),
+                    false,
+                    saved.getRating(),
+                    saved.getComment()
+            ));
+        }
 
         return toReviewResponse(saved, caller, null, new ReviewLikeResponse(0, false), List.of());
     }
@@ -315,7 +332,20 @@ public class ReviewServiceImpl implements ReviewService {
         reply.setAuthorUserId(caller.getId());
         reply.setImageUrls(resolvePhotos(caller, request.photoGuids()));
         reply.setComment(validateContent(request.comment(), reply.getImageUrls()));
-        return toReplyResponse(reviewReplyRepository.save(reply), caller, null);
+        ReviewReply savedReply = reviewReplyRepository.save(reply);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new ReviewActivityNotificationEvent(
+                    review.getGuid(),
+                    targetType.name(),
+                    review.getTargetId(),
+                    caller.getId(),
+                    review.getAuthorUserId(),
+                    true,
+                    review.getRating(),
+                    savedReply.getComment()
+            ));
+        }
+        return toReplyResponse(savedReply, caller, null);
     }
 
     @Override

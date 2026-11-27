@@ -28,6 +28,7 @@ import org.imprime.ai.api.model.enums.SupportTicketStatus;
 import org.imprime.ai.api.model.enums.TicketPriority;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.SupportTicketNotificationEvent;
 import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -41,6 +42,8 @@ import org.imprime.ai.api.service.AdminTicketService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -73,6 +76,8 @@ public class AdminTicketServiceImpl implements AdminTicketService {
     private final OrderViewAssembler orderViewAssembler;
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<AdminTicketSummaryResponse> listTickets(
@@ -247,6 +252,8 @@ public class AdminTicketServiceImpl implements AdminTicketService {
                 afterState
         );
 
+        publishTicketEvent(saved, "REPLIED", trimmedMessage);
+
         return buildDetailResponse(saved);
     }
 
@@ -300,7 +307,29 @@ public class AdminTicketServiceImpl implements AdminTicketService {
                 snapshotTicketState(saved)
         );
 
+        if (request.status() != null || request.resolutionNotes() != null) {
+            publishTicketEvent(saved, "UPDATED", null);
+        }
+
         return buildDetailResponse(saved);
+    }
+
+    private void publishTicketEvent(SupportTicket saved, String action, String replyExcerpt) {
+        if (eventPublisher == null || saved == null) {
+            return;
+        }
+        eventPublisher.publishEvent(new SupportTicketNotificationEvent(
+                saved.getGuid(),
+                saved.getProtocolCode(),
+                saved.getUserId(),
+                saved.getSubject(),
+                saved.getCategory() != null ? saved.getCategory().name() : null,
+                saved.getTicketStatus() != null ? saved.getTicketStatus().name() : null,
+                Boolean.TRUE.equals(saved.getIsDispute()),
+                action,
+                replyExcerpt,
+                saved.getResolutionNotes()
+        ));
     }
 
     private AdminTicketDetailResponse buildDetailResponse(SupportTicket ticket) {

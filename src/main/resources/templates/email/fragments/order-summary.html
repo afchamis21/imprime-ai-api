@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body>
+<div th:fragment="orderTable(items, subtotalFormatted, shippingFormatted, totalFormatted)"
+     style="margin:20px 0;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;padding:14px 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+    <tr th:each="item : ${items}">
+      <td style="padding:8px 0;font-size:14px;color:#18181b;vertical-align:top;">
+        <div style="font-weight:600;color:#09090b;" th:text="${item.name}">Item 3D</div>
+        <div th:if="${item.details != null and !#strings.isEmpty(item.details)}"
+             style="font-size:12px;color:#71717a;margin-top:2px;"
+             th:text="${item.details}">Detalhes</div>
+      </td>
+      <td style="padding:8px 0;font-size:14px;color:#18181b;font-weight:600;text-align:right;vertical-align:top;white-space:nowrap;"
+          th:text="${item.totalFormatted}">R$ 0,00</td>
+    </tr>
+  </table>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="width:100%;margin-top:10px;padding-top:10px;border-top:1px solid #f4f4f5;">
+    <tr th:if="${subtotalFormatted != null}">
+      <td style="padding:4px 0;font-size:13px;color:#71717a;">Subtotal</td>
+      <td style="padding:4px 0;font-size:13px;color:#3f3f46;text-align:right;" th:text="${subtotalFormatted}">R$ 0,00</td>
+    </tr>
+    <tr th:if="${shippingFormatted != null}">
+      <td style="padding:4px 0;font-size:13px;color:#71717a;">Frete</td>
+      <td style="padding:4px 0;font-size:13px;color:#3f3f46;text-align:right;" th:text="${shippingFormatted}">R$ 0,00</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 0 2px 0;font-size:15px;font-weight:700;color:#09090b;">Total</td>
+      <td style="padding:8px 0 2px 0;font-size:15px;font-weight:700;color:#09090b;text-align:right;" th:text="${totalFormatted}">R$ 0,00</td>
+    </tr>
+  </table>
+</div>
+</body>
+</html>

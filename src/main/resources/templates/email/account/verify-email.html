@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Verificação de e-mail',
+    badgeTone='violet',
+    heading='Confirme seu endereço de e-mail',
+    ctaLabel='Confirmar e-mail',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Clique no botão abaixo para confirmar que o endereço
+    <strong th:text="${emailAddress}">email@imprimeai.shop</strong> pertence a você.
+  </p>
+  <p th:if="${expiresAtFormatted != null and !#strings.isEmpty(expiresAtFormatted)}"
+     style="margin:0 0 14px 0;font-size:13px;color:#71717a;">
+    Este link de uso único é válido até <strong th:text="${expiresAtFormatted}">--</strong> (horário de Brasília).
+  </p>
+  <p style="margin:0;font-size:13px;color:#71717a;">
+    Se você não reconhece este cadastro ou alteração de e-mail, desconsidere esta mensagem.
+  </p>
+</div>
+</body>
+</html>

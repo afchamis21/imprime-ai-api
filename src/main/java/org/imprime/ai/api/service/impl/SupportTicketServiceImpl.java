@@ -21,6 +21,7 @@ import org.imprime.ai.api.model.enums.TicketPriority;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.SupportTicketNotificationEvent;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.SupportTicketMessageRepository;
 import org.imprime.ai.api.repo.db.SupportTicketRepository;
@@ -28,6 +29,8 @@ import org.imprime.ai.api.repo.db.UserRepository;
 import org.imprime.ai.api.service.SupportTicketService;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageableSortMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -58,6 +61,8 @@ public class SupportTicketServiceImpl implements SupportTicketService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final JsonCodec jsonCodec = new JsonCodec();
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<SupportTicketSummaryResponse> listTickets(SupportTicketStatus status, Pageable pageable) {
@@ -143,6 +148,20 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         initialMessage.setAttachmentsJson(jsonCodec.toJsonArray(attachments));
 
         SupportTicketMessage savedMessage = messageRepository.save(initialMessage);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new SupportTicketNotificationEvent(
+                    savedTicket.getGuid(),
+                    savedTicket.getProtocolCode(),
+                    savedTicket.getUserId(),
+                    savedTicket.getSubject(),
+                    savedTicket.getCategory() != null ? savedTicket.getCategory().name() : null,
+                    savedTicket.getTicketStatus() != null ? savedTicket.getTicketStatus().name() : null,
+                    dispute,
+                    "OPENED",
+                    null,
+                    null
+            ));
+        }
         SupportTicketMessageResponse messageDto = new SupportTicketMessageResponse(
                 savedMessage.getGuid(),
                 caller.getGuid(),

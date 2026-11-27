@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Falha no repasse',
+    badgeTone='red',
+    heading='Não foi possível concluir seu saque PIX',
+    ctaLabel='Revisar dados PIX',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Parceiro'}">Parceiro</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Houve uma falha ao processar seu repasse PIX de <strong th:text="${amountFormatted}">R$ 0,00</strong>.
+    Revise sua chave PIX cadastrada para solicitar um novo envio.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+  <div style="margin:14px 0 0 0;padding:12px 14px;background-color:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:13px;color:#991b1b;">
+    <strong>Motivo informado:</strong> <span th:text="${failureReason}">Chave inválida</span>
+  </div>
+</div>
+</body>
+</html>

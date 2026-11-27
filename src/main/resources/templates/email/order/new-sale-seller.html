@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Nova venda confirmada',
+    badgeTone='emerald',
+    heading=${heading},
+    ctaLabel=${ctaLabel},
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Maker'}">Maker</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;" th:if="${digitalSale == true}">
+    Você acaba de realizar uma venda de modelo 3D digital na Imprime AÍ! O arquivo já foi disponibilizado para o comprador e o valor foi contabilizado no seu resumo.
+  </p>
+  <p style="margin:0 0 16px 0;" th:unless="${digitalSale == true}">
+    Você recebeu uma nova venda confirmada no pedido <strong th:text="${orderCode}">#PED</strong> de
+    <strong th:text="${buyerName ?: 'um comprador'}">Comprador</strong>.
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <div th:if="${items != null and !#lists.isEmpty(items)}"
+       th:replace="~{fragments/order-summary :: orderTable(${items}, ${subtotalFormatted}, ${shippingFormatted}, ${totalFormatted})}">
+  </div>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;" th:unless="${digitalSale == true}">
+    <strong>Próximo passo:</strong> Acesse sua fila de produção ou o histórico de vendas para revisar os arquivos/especificações e iniciar a impressão 3D.
+  </p>
+</div>
+</body>
+</html>

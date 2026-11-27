@@ -8,6 +8,7 @@ import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ForbiddenException;
+import org.imprime.ai.api.notification.chat.ChatReadStateService;
 import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -52,6 +53,8 @@ class ChatRestServiceImplTest {
     private FileAssetRepository fileAssetRepository;
     @Mock
     private OrderViewAssembler orderViewAssembler;
+    @Mock
+    private ChatReadStateService chatReadStateService;
 
     @InjectMocks
     private ChatRestServiceImpl service;
@@ -64,6 +67,7 @@ class ChatRestServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "chatReadStateService", chatReadStateService);
         chatId = UUID.randomUUID();
 
         buyer = new User();
@@ -151,5 +155,26 @@ class ChatRestServiceImplTest {
                 () -> service.updateSellerNotes(chatId, new UpdateChatSellerNotesRequest("Tentativa indevida"))
         );
         verify(chatRepository, never()).save(any());
+    }
+
+    @Test
+    void markChatAsReadAndGetChatDetailDelegateToChatReadStateService() {
+        ServiceContext.getContext().setUser(buyer);
+        when(chatService.findAuthorizedChat(chatId)).thenReturn(chat);
+        when(orderRepository.findOrderByGuid("order-guid-1")).thenReturn(Optional.empty());
+        when(chatMessageRepository.findTopByChatIdAndTypeOrderByCreateDtDesc(eq(chatId), any()))
+                .thenReturn(Optional.empty());
+        when(chatMessageRepository.findTopByChatIdOrderByCreateDtDesc(chatId)).thenReturn(Optional.empty());
+        when(chatMessageRepository.findTop20ByChatIdOrderByCreateDtDesc(chatId)).thenReturn(List.of());
+        when(userService.findUserByGuid("buyer-guid")).thenReturn(Optional.of(buyer));
+        when(companyRepository.findByGuid("company-guid-50")).thenReturn(Optional.of(company));
+        when(orderViewAssembler.formatOrderCode("order-guid-1")).thenReturn("PED-ORDERG");
+        when(chatReadStateService.countUnread(chatId, "buyer-guid")).thenReturn(4);
+
+        service.markChatAsRead(chatId);
+        verify(chatReadStateService).markAsRead(chatId, "buyer-guid");
+
+        ChatDetailResponse detail = service.getChatDetail(chatId);
+        assertEquals(4, detail.unreadCount());
     }
 }

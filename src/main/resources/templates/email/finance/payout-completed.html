@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Repasse concluído',
+    badgeTone='emerald',
+    heading='Seu saque PIX foi transferido',
+    ctaLabel='Abrir painel financeiro',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Parceiro'}">Parceiro</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    O pagamento do seu repasse PIX no valor de <strong th:text="${amountFormatted}">R$ 0,00</strong> foi concluído com sucesso.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+</div>
+</body>
+</html>

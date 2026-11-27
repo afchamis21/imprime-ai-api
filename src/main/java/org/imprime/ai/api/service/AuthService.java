@@ -18,7 +18,12 @@ import org.imprime.ai.api.model.dto.TokenDTO;
 import org.imprime.ai.api.model.dto.UserDTO;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.notification.chat.UserPresenceCache;
+import org.imprime.ai.api.notification.event.UserRegisteredNotificationEvent;
+import org.imprime.ai.api.notification.security.AccountSecurityService;
 import org.imprime.ai.api.repo.cache.MakerPresenceCache;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +44,12 @@ public class AuthService {
     private final BCryptPasswordEncoder passwordEncoder;
     private final MakerPresenceCache makerPresenceCache;
     private final LegalDocumentService legalDocuments;
+    @Autowired(required = false)
+    private UserPresenceCache userPresenceCache;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
+    @Autowired(required = false)
+    private AccountSecurityService accountSecurityService;
 
     /**
      * This is meant to simulate a password hash comparison even when an email match isn't found, making it very much
@@ -67,6 +78,9 @@ public class AuthService {
         }
 
         makerPresenceCache.markUserActivity(user);
+        if (userPresenceCache != null) {
+            userPresenceCache.markActive(user);
+        }
         return generateTokens(user);
     }
 
@@ -156,7 +170,12 @@ public class AuthService {
                 try {
                     DecodedJWT jwt = authTokenService.validateToken(accessJwt, AuthToken.TokenType.ACCESS);
                     userService.findUserByGuid(jwt.getSubject())
-                            .ifPresent(makerPresenceCache::markUserOffline);
+                            .ifPresent(user -> {
+                                makerPresenceCache.markUserOffline(user);
+                                if (userPresenceCache != null) {
+                                    userPresenceCache.markOffline(user);
+                                }
+                            });
                 } catch (UnauthorizedException ignored) {
                     // Access token may already be expired when the user logs out.
                 }
@@ -169,7 +188,12 @@ public class AuthService {
                     authTokenService.revoke(refreshToken);
                 }
                 userService.findUserById(refreshToken.getUserId())
-                        .ifPresent(makerPresenceCache::markUserOffline);
+                        .ifPresent(user -> {
+                            makerPresenceCache.markUserOffline(user);
+                            if (userPresenceCache != null) {
+                                userPresenceCache.markOffline(user);
+                            }
+                        });
             });
         }
     }
@@ -185,7 +209,16 @@ public class AuthService {
             long privacy = legalDocuments.requireAcceptableVersion("privacy", request.privacyVersion());
             User user = userService.registerUser(request);
             legalDocuments.recordRegistrationAcceptance(user.getId(), terms, privacy);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new UserRegisteredNotificationEvent(user.getId()));
+            }
+            if (accountSecurityService != null) {
+                accountSecurityService.issueEmailVerificationForUser(user);
+            }
             makerPresenceCache.markUserActivity(user);
+            if (userPresenceCache != null) {
+                userPresenceCache.markActive(user);
+            }
             return generateTokens(user);
         } catch (RuntimeException e) {
             throw e;

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText=${isReply == true ? 'Resposta recebida' : 'Nova avaliação'},
+    badgeTone='violet',
+    heading=${isReply == true ? 'Responderam à sua avaliação' : 'Você recebeu uma nova avaliação'},
+    ctaLabel='Ver avaliação na plataforma',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=true,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p th:if="${isReply == true}" style="margin:0 0 14px 0;">
+    <strong th:text="${actorName}">Usuário</strong> respondeu ao seu comentário em
+    <strong th:text="${targetLabel}">Item avaliado</strong>.
+  </p>
+  <p th:unless="${isReply == true}" style="margin:0 0 14px 0;">
+    <strong th:text="${actorName}">Cliente</strong> avaliou <strong th:text="${targetLabel}">Item avaliado</strong>
+    <span th:if="${rating != null}">
+      com nota <strong th:text="${rating + '/5'}">5/5</strong>
+    </span>.
+  </p>
+  <div th:if="${commentExcerpt != null and !#strings.isEmpty(commentExcerpt)}"
+       style="margin:14px 0 0 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#27272a;line-height:1.5;">
+    "<span th:text="${commentExcerpt}">Comentário</span>"
+  </div>
+</div>
+</body>
+</html>

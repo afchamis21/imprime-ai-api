@@ -21,6 +21,7 @@ import org.imprime.ai.api.model.enums.TicketPriority;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.IpNoticeReceiptNotificationEvent;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.ContentReportRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
@@ -28,6 +29,8 @@ import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.service.ContentReportService;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageableSortMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -73,6 +76,8 @@ public class ContentReportServiceImpl implements ContentReportService {
     private final Model3DRepository model3DRepository;
     private final CompanyRepository companyRepository;
     private final JsonCodec jsonCodec;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -172,7 +177,18 @@ public class ContentReportServiceImpl implements ContentReportService {
         notice.setEvidenceUrlsJson(jsonCodec.toJsonArray(evidence));
         notice.setReportStatus(ReportStatus.OPEN);
         notice.setPriority(TicketPriority.HIGH);
-        return toReceipt(contentReportRepository.save(notice));
+        ContentReport saved = contentReportRepository.save(notice);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new IpNoticeReceiptNotificationEvent(
+                    saved.getProtocol(),
+                    saved.getGuid(),
+                    saved.getClaimantName(),
+                    saved.getClaimantEmail(),
+                    saved.getTargetName(),
+                    saved.getTargetType() != null ? saved.getTargetType().name() : null
+            ));
+        }
+        return toReceipt(saved);
     }
 
     @Override

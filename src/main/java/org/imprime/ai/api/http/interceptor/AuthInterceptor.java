@@ -17,10 +17,12 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.notification.chat.UserPresenceCache;
 import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
@@ -32,13 +34,32 @@ import java.util.Optional;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AuthInterceptor implements HandlerInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final AuthTokenService authTokenService;
     private final UserService userService;
     private final MakerPresenceCache makerPresenceCache;
+    private final UserPresenceCache userPresenceCache;
+
+    public AuthInterceptor(
+            AuthTokenService authTokenService,
+            UserService userService,
+            MakerPresenceCache makerPresenceCache) {
+        this(authTokenService, userService, makerPresenceCache, null);
+    }
+
+    @Autowired
+    public AuthInterceptor(
+            AuthTokenService authTokenService,
+            UserService userService,
+            MakerPresenceCache makerPresenceCache,
+            UserPresenceCache userPresenceCache) {
+        this.authTokenService = authTokenService;
+        this.userService = userService;
+        this.makerPresenceCache = makerPresenceCache;
+        this.userPresenceCache = userPresenceCache;
+    }
 
     private AuthType getAuthType(@NonNull HandlerMethod handlerMethod) {
         Method method = handlerMethod.getMethod();
@@ -161,6 +182,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         ServiceContext ctx = ServiceContext.getContext();
         ctx.setUser(user);
         makerPresenceCache.markUserActivity(user);
+        if (userPresenceCache != null) {
+            userPresenceCache.markActive(user);
+        }
 
         return true;
     }

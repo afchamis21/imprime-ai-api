@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Propriedade Intelectual',
+    badgeTone='zinc',
+    heading=${'Recibo de notificação — ' + protocol},
+    ctaLabel='Consultar página de PI / DMCA',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${claimantName ?: 'Solicitante'}">Solicitante</strong>.
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Confirmamos o recebimento da sua notificação de Propriedade Intelectual / Direito Autoral pela equipe de conformidade da Imprime AÍ.
+    Guarde o protocolo e o código de acompanhamento abaixo para consultas futuras.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+</div>
+</body>
+</html>

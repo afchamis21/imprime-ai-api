@@ -5,7 +5,6 @@ import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.checkout.SessionCreateParams;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.config.StripeConfigProperties;
 import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.http.response.CheckoutSessionResponse;
@@ -16,7 +15,10 @@ import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.exception.BadGatewayException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
+import org.imprime.ai.api.notification.event.OrderPurchasedNotificationEvent;
 import org.imprime.ai.api.repo.db.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -27,12 +29,28 @@ import java.util.Objects;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class QuoteCheckoutService {
     private static final String SIMULATED_PREFIX = "cs_quote_sim_";
     private final OrderRepository orders;
     private final OrderStatusService statuses;
     private final StripeConfigProperties stripe;
+    private final ApplicationEventPublisher eventPublisher;
+
+    public QuoteCheckoutService(OrderRepository orders, OrderStatusService statuses, StripeConfigProperties stripe) {
+        this(orders, statuses, stripe, null);
+    }
+
+    @Autowired
+    public QuoteCheckoutService(
+            OrderRepository orders,
+            OrderStatusService statuses,
+            StripeConfigProperties stripe,
+            ApplicationEventPublisher eventPublisher) {
+        this.orders = orders;
+        this.statuses = statuses;
+        this.stripe = stripe;
+        this.eventPublisher = eventPublisher;
+    }
 
     @Transactional
     public CheckoutSessionResponse create(String orderGuid) {
@@ -103,7 +121,10 @@ public class QuoteCheckoutService {
         if (order.getPaymentConfirmedAt() != null) return;
 
         if (canSimulate() && sessionId.startsWith(SIMULATED_PREFIX)) {
-            order.setPaymentConfirmedAt(Instant.now());
+            if (order.getPaymentConfirmedAt() == null) {
+                order.setPaymentConfirmedAt(Instant.now());
+                publishQuotePurchased(order);
+            }
             return;
         }
 
@@ -132,7 +153,21 @@ public class QuoteCheckoutService {
                 || !Objects.equals(order.getOrderTotal().movePointRight(2).longValueExact(), session.getAmountTotal())) {
             throw new ConflictException(MessageCd.CONFLICT);
         }
-        if (order.getPaymentConfirmedAt() == null) order.setPaymentConfirmedAt(Instant.now());
+        if (order.getPaymentConfirmedAt() == null) {
+            order.setPaymentConfirmedAt(Instant.now());
+            publishQuotePurchased(order);
+        }
+    }
+
+    private void publishQuotePurchased(Order order) {
+        if (eventPublisher != null && order != null) {
+            eventPublisher.publishEvent(new OrderPurchasedNotificationEvent(
+                    order.getId(),
+                    order.getGuid(),
+                    false,
+                    true
+            ));
+        }
     }
 
     private CheckoutSessionResponse response(Order order, String url, String status) {

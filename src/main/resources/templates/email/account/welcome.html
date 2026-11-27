@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText=${isMaker == true ? 'Conta Maker' : 'Bem-vindo'},
+    badgeTone='violet',
+    heading=${isMaker == true ? 'Seu estúdio na Imprime AÍ está pronto' : 'Sua conta na Imprime AÍ está pronta'},
+    ctaLabel=${ctaLabel},
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p th:if="${isMaker == true}" style="margin:0 0 14px 0;">
+    Que bom ter <strong th:text="${studioName ?: 'seu estúdio'}">seu estúdio</strong> na <strong style="color:#09090b;">Imprime AÍ</strong>.
+    A partir do seu painel Maker você pode cadastrar impressoras, configurar materiais, responder orçamentos no chat e gerenciar toda a fila de produção.
+  </p>
+  <p th:unless="${isMaker == true}" style="margin:0 0 14px 0;">
+    Seja bem-vindo(a) à <strong style="color:#09090b;">Imprime AÍ</strong>!
+    Agora você pode enviar arquivos 3D para orçamento sob demanda, comprar peças exclusivas no catálogo e negociar diretamente com Makers verificados em todo o Brasil.
+  </p>
+  <p style="margin:0;color:#52525b;">
+    Enviaremos também uma confirmação para validar seu endereço de e-mail e manter sua conta ainda mais segura.
+  </p>
+</div>
+</body>
+</html>

@@ -43,6 +43,8 @@ import org.imprime.ai.api.repo.db.OrderShippingQuoteRepository;
 import org.imprime.ai.api.repo.db.ProductRepository;
 import org.imprime.ai.api.repo.db.PurchasedModelRepository;
 import org.imprime.ai.api.repo.db.UserRepository;
+import org.imprime.ai.api.notification.event.OrderPurchasedNotificationEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -77,6 +79,8 @@ public class PaymentService {
     private final AddressRepository addressRepository;
     @Autowired
     private OrderShippingQuoteRepository shippingQuoteRepository;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     public CheckoutSessionResponse createCheckoutSession(CreateCheckoutSessionRequest request) {
         if (request == null || request.items() == null || request.items().isEmpty()) {
@@ -750,6 +754,15 @@ public class PaymentService {
         orderStatusService.move(savedOrder, OrderStatusCd.CREATED);
         orderStatusService.move(savedOrder, OrderStatusCd.CONFIRMED);
         if (allDigital) orderStatusService.move(savedOrder, OrderStatusCd.COMPLETED);
+
+        if (eventPublisher != null && savedOrder != null) {
+            eventPublisher.publishEvent(new OrderPurchasedNotificationEvent(
+                    savedOrder.getId(),
+                    savedOrder.getGuid(),
+                    allDigital,
+                    false
+            ));
+        }
 
         return savedOrder;
     }

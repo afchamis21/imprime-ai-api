@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Reembolso não aprovado',
+    badgeTone='red',
+    heading='Atualização sobre sua solicitação de reembolso',
+    ctaLabel='Ver detalhes do pedido',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Após análise da nossa equipe, sua solicitação de reembolso para o pedido
+    <strong th:text="${orderCode}">PED-000</strong> não foi aprovada.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+  <div style="margin:14px 0 0 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#3f3f46;">
+    <strong>Justificativa:</strong> <span th:text="${reason}">Motivo</span>
+  </div>
+</div>
+</body>
+</html>

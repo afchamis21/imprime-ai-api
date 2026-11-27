@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Entrega confirmada',
+    badgeTone='emerald',
+    heading=${heading},
+    ctaLabel='Acessar painel financeiro',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Maker'}">Maker</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;">
+    O pedido <strong th:text="${orderCode}">#PED</strong> foi concluído como entregue ao comprador. O valor correspondente foi liberado no seu saldo disponível do painel financeiro.
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;">
+    <strong>Próximo passo:</strong> Acompanhe seu saldo e solicite saques PIX quando desejar diretamente na aba Financeiro do seu painel Maker.
+  </p>
+</div>
+</body>
+</html>

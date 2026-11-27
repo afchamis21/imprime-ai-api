@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Proposta aceita',
+    badgeTone='violet',
+    heading=${heading},
+    ctaLabel='Abrir negociação no chat',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Maker'}">Maker</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;">
+    A proposta de <strong th:text="${offerFormatted}">R$ 0,00</strong> referente ao pedido
+    <strong th:text="${orderCode}">#PED</strong> foi aceita por
+    <strong th:text="${buyerName ?: 'o comprador'}">Comprador</strong>.
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;">
+    <strong>Próximo passo:</strong> Aguarde a confirmação de pagamento do comprador — enviaremos uma notificação assim que o pedido for liberado para a fila de impressão.
+  </p>
+</div>
+</body>
+</html>

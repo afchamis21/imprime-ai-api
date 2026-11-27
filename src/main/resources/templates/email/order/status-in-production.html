@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Em produção',
+    badgeTone='violet',
+    heading=${heading},
+    ctaLabel='Acompanhar pedido',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Cliente'}">Cliente</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;">
+    Boas notícias: o estúdio <strong th:text="${makerName ?: 'Maker'}">Maker</strong> iniciou a impressão 3D do seu pedido
+    <strong th:text="${orderCode}">#PED</strong>.
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;">
+    <strong>Próximo passo:</strong> Assim que a impressão e o pós-processamento forem finalizados, o pedido avançará para a preparação de envio e você será avisado por aqui.
+  </p>
+</div>
+</body>
+</html>

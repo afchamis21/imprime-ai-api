@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Pedido entregue',
+    badgeTone='emerald',
+    heading=${heading},
+    ctaLabel='Avaliar pedido e Maker',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Cliente'}">Cliente</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;">
+    O pedido <strong th:text="${orderCode}">#PED</strong> foi marcado como entregue e concluído. Esperamos que a qualidade da impressão 3D supere as suas expectativas!
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;">
+    <strong>Próximo passo:</strong> Conte como foi a sua experiência avaliando o estúdio
+    <strong th:text="${makerName ?: 'Maker'}">Maker</strong> — sua avaliação ajuda toda a comunidade da Imprime AÍ. Caso tenha qualquer problema com a peça, você também pode abrir um protocolo de suporte pelo painel do pedido.
+  </p>
+</div>
+</body>
+</html>

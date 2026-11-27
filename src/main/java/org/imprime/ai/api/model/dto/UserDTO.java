@@ -24,8 +24,24 @@ public record UserDTO(
         @Schema(description = "Perfil de acesso do usuário (BUYER, DESIGNER, MAKER, ADMIN)", example = "BUYER")
         UserRole role,
         @Schema(description = "Status cadastral do usuário", example = "ACTIVE")
-        StatusCd status
+        StatusCd status,
+        @Schema(description = "Indica se o e-mail do usuário foi verificado", example = "false")
+        Boolean emailVerified
 ) {
+    public UserDTO(
+            String userGuid,
+            String firstName,
+            String lastName,
+            String email,
+            String phoneNumber,
+            Boolean isMaker,
+            String avatarUrl,
+            UserRole role,
+            StatusCd status
+    ) {
+        this(userGuid, firstName, lastName, email, phoneNumber, isMaker, avatarUrl, role, status, false);
+    }
+
     public static UserDTO from(User user) {
         UserRole resolvedRole = user.getRole() != null
                 ? user.getRole()
@@ -40,7 +56,8 @@ public record UserDTO(
                 user.getCompanyId() != null,
                 user.getAvatarUrl(),
                 resolvedRole,
-                resolvedStatus
+                resolvedStatus,
+                user.isEmailVerified()
         );
     }
 }

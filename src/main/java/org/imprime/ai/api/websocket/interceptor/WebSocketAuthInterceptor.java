@@ -8,10 +8,12 @@ import org.imprime.ai.api.model.AuthToken;
 import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.notification.chat.UserPresenceCache;
 import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
 import org.imprime.ai.api.websocket.AuthenticatedUserPrincipal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -22,13 +24,32 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final AuthTokenService authTokenService;
     private final UserService userService;
     private final MakerPresenceCache makerPresenceCache;
+    private final UserPresenceCache userPresenceCache;
+
+    public WebSocketAuthInterceptor(
+            AuthTokenService authTokenService,
+            UserService userService,
+            MakerPresenceCache makerPresenceCache) {
+        this(authTokenService, userService, makerPresenceCache, null);
+    }
+
+    @Autowired
+    public WebSocketAuthInterceptor(
+            AuthTokenService authTokenService,
+            UserService userService,
+            MakerPresenceCache makerPresenceCache,
+            UserPresenceCache userPresenceCache) {
+        this.authTokenService = authTokenService;
+        this.userService = userService;
+        this.makerPresenceCache = makerPresenceCache;
+        this.userPresenceCache = userPresenceCache;
+    }
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -43,6 +64,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             authenticate(accessor);
             if (accessor.getUser() instanceof AuthenticatedUserPrincipal principal) {
                 makerPresenceCache.markUserActivity(principal.user());
+                if (userPresenceCache != null) {
+                    userPresenceCache.markActive(principal.user());
+                }
             }
         } else if (StompCommand.SEND.equals(accessor.getCommand())
                 || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
@@ -52,6 +76,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             }
             if (StompCommand.SEND.equals(accessor.getCommand())) {
                 makerPresenceCache.markUserActivity(principal.user());
+                if (userPresenceCache != null) {
+                    userPresenceCache.markActive(principal.user());
+                }
             }
         }
 

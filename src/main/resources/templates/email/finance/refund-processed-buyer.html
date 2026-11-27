@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Reembolso processado',
+    badgeTone='emerald',
+    heading='Seu reembolso foi aprovado',
+    ctaLabel='Acompanhar na Central do Usuário',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Aprovamos o reembolso de <strong th:text="${amountFormatted}">R$ 0,00</strong> referente ao pedido
+    <strong th:text="${orderCode}">PED-000</strong>. O estorno segue para a sua forma de pagamento original conforme o prazo da operadora do cartão ou banco.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+  <div th:if="${adminNotes != null and !#strings.isEmpty(adminNotes)}"
+       style="margin:14px 0 0 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#3f3f46;">
+    <strong>Observação da equipe:</strong> <span th:text="${adminNotes}">Notas</span>
+  </div>
+</div>
+</body>
+</html>

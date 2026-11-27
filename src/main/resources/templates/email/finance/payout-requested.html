@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Saque PIX em processamento',
+    badgeTone='violet',
+    heading='Solicitação de saque PIX recebida',
+    ctaLabel='Acompanhar financeiro',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Parceiro'}">Parceiro</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Registramos sua solicitação de repasse PIX de <strong th:text="${amountFormatted}">R$ 0,00</strong>.
+    Você receberá um novo aviso por e-mail assim que a transferência for concluída.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+</div>
+</body>
+</html>

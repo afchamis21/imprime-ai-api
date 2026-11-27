@@ -32,6 +32,7 @@ import org.imprime.ai.api.model.enums.PrintJobStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
+import org.imprime.ai.api.notification.event.PayoutNotificationEvent;
 import org.imprime.ai.api.repo.cache.MakerQuoteSettingsInMemoryCache;
 import org.imprime.ai.api.repo.cache.QuoteSettingsInMemoryCache;
 import org.imprime.ai.api.repo.db.AssetRepository;
@@ -50,6 +51,8 @@ import org.imprime.ai.api.util.MaskingUtil;
 import org.imprime.ai.api.util.PageUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -106,6 +109,8 @@ public class MakerFinanceServiceImpl implements MakerFinanceService {
     private final MakerQuoteSettingsRepository makerQuoteSettingsRepository;
     private final MakerQuoteSettingsInMemoryCache makerQuoteSettingsInMemoryCache;
     private final JsonCodec jsonCodec;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public MakerFinanceSummaryResponse getSummary() {
@@ -230,6 +235,19 @@ public class MakerFinanceServiceImpl implements MakerFinanceService {
                 .subtract(requestedAmount)
                 .max(BigDecimal.ZERO)
                 .setScale(2, RoundingMode.HALF_UP);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new PayoutNotificationEvent(
+                    saved.getGuid(),
+                    "MAKER",
+                    company.getId(),
+                    null,
+                    "REQUESTED",
+                    requestedAmount,
+                    maskedPix,
+                    saved.getReference(),
+                    null
+            ));
+        }
         return toPayoutResponse(saved, remaining);
     }
 

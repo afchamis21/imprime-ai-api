@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText=${hasOffer == true ? 'Nova proposta no chat' : 'Novas mensagens'},
+    badgeTone=${hasOffer == true ? 'violet' : 'zinc'},
+    heading=${heading},
+    ctaLabel='Responder no chat',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=true,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;">
+    <strong th:text="${counterpartName}">Contato</strong> enviou
+    <strong th:text="${unreadCount}">1</strong>
+    <span th:text="${unreadCount == 1 ? 'nova mensagem' : 'novas mensagens'}">novas mensagens</span>
+    na conversa sobre <strong th:text="${projectTitle}">Impressão 3D</strong>
+    (<span th:text="${orderCode}">PED-000</span>).
+  </p>
+
+  <div th:if="${hasOffer == true and latestOfferFormatted != null}"
+       style="margin:16px 0;padding:12px 14px;background-color:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;font-size:14px;color:#4c1d95;">
+    <strong>Proposta recebida:</strong>
+    <span th:text="${latestOfferFormatted}">R$ 0,00</span> — abra o chat para aceitar, negociar ou recusar.
+  </div>
+
+  <div style="margin:20px 0;border-top:1px solid #e4e4e7;">
+    <p th:if="${hasMoreMessages == true}" style="margin:12px 0 4px 0;font-size:12px;color:#71717a;">
+      Exibindo as mensagens mais recentes (<span th:text="${hiddenCount}">1</span> anterior(es) oculta(s)):
+    </p>
+    <div th:each="item : ${previews}"
+         style="padding:12px 0;border-bottom:1px solid #e4e4e7;">
+      <div style="font-size:12px;color:#71717a;margin-bottom:4px;">
+        <strong style="color:#09090b;" th:text="${item.sender}">Remetente</strong>
+        <span th:if="${item.time != null and !#strings.isEmpty(item.time)}">
+          • <span th:text="${item.time}">agora</span>
+        </span>
+      </div>
+      <div style="font-size:14px;color:#27272a;line-height:1.5;" th:text="${item.preview}">
+        Conteúdo da mensagem
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

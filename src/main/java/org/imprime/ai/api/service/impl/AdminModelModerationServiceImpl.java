@@ -20,6 +20,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.ModelModerationStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.ModerationNotificationEvent;
 import org.imprime.ai.api.repo.db.FileAssetRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.ModelCustomizationRepository;
@@ -32,6 +33,8 @@ import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
 import org.imprime.ai.api.util.ScadParameterParser;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -57,6 +60,8 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
     private final ObjectStorageService objectStorageService;
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<AdminModelSummaryResponse> listModels(
@@ -202,6 +207,7 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
                 before,
                 auditSnapshot(saved)
         );
+        publishModelModerationEvent(saved, "APPROVED", reason);
 
         return toDetailResponse(saved);
     }
@@ -229,6 +235,7 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
                 before,
                 auditSnapshot(saved)
         );
+        publishModelModerationEvent(saved, "REJECTED", reason);
 
         return toDetailResponse(saved);
     }
@@ -258,6 +265,7 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
                 before,
                 auditSnapshot(saved)
         );
+        publishModelModerationEvent(saved, "TAKEDOWN_DMCA", reason);
 
         return toDetailResponse(saved);
     }
@@ -292,8 +300,26 @@ public class AdminModelModerationServiceImpl implements AdminModelModerationServ
                 before,
                 auditSnapshot(saved)
         );
+        publishModelModerationEvent(saved, "RESTORED", reason);
 
         return toDetailResponse(saved);
+    }
+
+    private void publishModelModerationEvent(Model3D saved, String action, String reason) {
+        if (eventPublisher == null || saved == null) {
+            return;
+        }
+        eventPublisher.publishEvent(new ModerationNotificationEvent(
+                "MODEL",
+                saved.getGuid(),
+                saved.getAuthorUserId(),
+                null,
+                saved.getName(),
+                action,
+                reason,
+                saved.getDmcaClaimant(),
+                saved.getDmcaReference()
+        ));
     }
 
     private Model3D requireModel(String modelGuid) {

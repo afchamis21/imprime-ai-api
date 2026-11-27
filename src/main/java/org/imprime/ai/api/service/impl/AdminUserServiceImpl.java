@@ -19,6 +19,7 @@ import org.imprime.ai.api.model.enums.UserRole;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.ModerationNotificationEvent;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.Model3DRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
@@ -31,6 +32,8 @@ import org.imprime.ai.api.service.AuthTokenService;
 import org.imprime.ai.api.service.UserService;
 import org.imprime.ai.api.util.MaskingUtil;
 import org.imprime.ai.api.util.PageUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -59,6 +62,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final AuthTokenService authTokenService;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AdminAuditService adminAuditService;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<AdminUserSummaryResponse> listUsers(String q, UserRole role, StatusCd status, Pageable pageable) {
@@ -258,6 +263,12 @@ public class AdminUserServiceImpl implements AdminUserService {
                 before,
                 auditSnapshot(saved)
         );
+        String notificationAction = switch (nextStatus) {
+            case ACTIVE -> "REACTIVATED";
+            case DELETED -> "DELETED";
+            case SUSPENDED, INACTIVE -> "SUSPENDED";
+        };
+        publishUserModerationEvent(saved, notificationAction, reason);
 
         return toDetailResponse(saved);
     }
@@ -298,6 +309,24 @@ public class AdminUserServiceImpl implements AdminUserService {
                 before,
                 auditSnapshot(saved)
         );
+        publishUserModerationEvent(saved, "DELETED", trimmedReason);
+    }
+
+    private void publishUserModerationEvent(User saved, String action, String reason) {
+        if (eventPublisher == null || saved == null) {
+            return;
+        }
+        eventPublisher.publishEvent(new ModerationNotificationEvent(
+                "USER",
+                saved.getGuid(),
+                saved.getId(),
+                null,
+                saved.getFullName(),
+                action,
+                reason,
+                null,
+                null
+        ));
     }
 
     private User requireUserByGuid(String userGuid) {

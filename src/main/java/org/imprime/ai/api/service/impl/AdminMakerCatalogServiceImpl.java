@@ -29,6 +29,7 @@ import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.ModerationNotificationEvent;
 import org.imprime.ai.api.repo.cache.MakerPresenceCache;
 import org.imprime.ai.api.repo.db.AddressRepository;
 import org.imprime.ai.api.repo.db.AssetRepository;
@@ -43,6 +44,8 @@ import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.MaskingUtil;
 import org.imprime.ai.api.util.PageUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -71,6 +74,8 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
     private final MakerPresenceCache makerPresenceCache;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<AdminMakerSummaryResponse> listMakers(
@@ -159,6 +164,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 before,
                 makerAuditSnapshot(saved)
         );
+        publishMakerModerationEvent(saved, "APPROVED", reason);
 
         return toMakerDetail(saved);
     }
@@ -186,6 +192,7 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 before,
                 makerAuditSnapshot(saved)
         );
+        publishMakerModerationEvent(saved, "REJECTED", reason);
 
         return toMakerDetail(saved);
     }
@@ -250,7 +257,30 @@ public class AdminMakerCatalogServiceImpl implements AdminMakerCatalogService {
                 makerAuditSnapshot(saved)
         );
 
+        if (action == AuditAction.MAKER_SUSPENDED) {
+            publishMakerModerationEvent(saved, "SUSPENDED", reason);
+        } else if (action == AuditAction.MAKER_REACTIVATED) {
+            publishMakerModerationEvent(saved, "REACTIVATED", reason);
+        }
+
         return toMakerDetail(saved);
+    }
+
+    private void publishMakerModerationEvent(Company saved, String action, String reason) {
+        if (eventPublisher == null || saved == null) {
+            return;
+        }
+        eventPublisher.publishEvent(new ModerationNotificationEvent(
+                "MAKER",
+                saved.getGuid(),
+                null,
+                saved.getId(),
+                saved.getName(),
+                action,
+                reason,
+                null,
+                null
+        ));
     }
 
     @Override

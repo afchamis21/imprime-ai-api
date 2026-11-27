@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Em trânsito',
+    badgeTone='emerald',
+    heading=${heading},
+    ctaLabel=${ctaLabel},
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Cliente'}">Cliente</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;">
+    O seu pedido <strong th:text="${orderCode}">#PED</strong> foi postado e já está a caminho do seu endereço!
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;">
+    <strong>Próximo passo:</strong> Acompanhe o transporte usando o código de rastreamento acima. Ao receber sua peça, lembre-se de confirmar a entrega na sua conta.
+  </p>
+</div>
+</body>
+</html>

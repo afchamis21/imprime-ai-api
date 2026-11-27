@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText=${statusText},
+    badgeTone=${badgeTone},
+    heading=${'Status da sua conta: ' + statusText},
+    ctaLabel='Acessar plataforma',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>.
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Sua conta na Imprime AÍ teve o status atualizado pela moderação para <strong th:text="${statusText}">Atualizado</strong>.
+  </p>
+  <div th:if="${reason != null and !#strings.isEmpty(reason)}"
+       style="margin:14px 0 0 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#3f3f46;">
+    <strong>Motivo informado:</strong> <span th:text="${reason}">Motivo</span>
+  </div>
+  <p style="margin:16px 0 0 0;font-size:13px;color:#71717a;">
+    Em caso de dúvidas, responda para nossa equipe de suporte em suporte@imprimeai.shop.
+  </p>
+</div>
+</body>
+</html>

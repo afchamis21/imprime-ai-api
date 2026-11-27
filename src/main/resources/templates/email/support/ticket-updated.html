@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Atualização de suporte',
+    badgeTone='violet',
+    heading=${'Atualização no protocolo ' + protocolCode},
+    ctaLabel='Responder no protocolo',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p th:if="${isReply == true}" style="margin:0 0 14px 0;">
+    Nossa equipe de suporte enviou uma nova resposta para o protocolo <strong th:text="${protocolCode}">PROT-000</strong>.
+  </p>
+  <p th:unless="${isReply == true}" style="margin:0 0 14px 0;">
+    O status do seu protocolo <strong th:text="${protocolCode}">PROT-000</strong> foi atualizado para
+    <strong th:text="${statusLabel}">Em análise</strong>.
+  </p>
+  <div th:if="${replyExcerpt != null and !#strings.isEmpty(replyExcerpt)}"
+       style="margin:14px 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#27272a;line-height:1.5;">
+    <div style="font-size:12px;color:#71717a;margin-bottom:4px;"><strong>Mensagem da equipe Imprime AÍ</strong></div>
+    <span th:text="${replyExcerpt}">Resposta</span>
+  </div>
+  <div th:if="${resolutionNotes != null and !#strings.isEmpty(resolutionNotes)}"
+       style="margin:14px 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#27272a;">
+    <strong>Notas de resolução:</strong> <span th:text="${resolutionNotes}">Notas</span>
+  </div>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+</div>
+</body>
+</html>

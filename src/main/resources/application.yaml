@@ -1,10 +1,31 @@
 spring:
   application:
     name: Imprime Ai
+  thymeleaf:
+    enabled: false
   servlet:
     multipart:
       max-file-size: ${MULTIPART_MAX_FILE_SIZE:50MB}
       max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:60MB}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 5s
+    listener:
+      simple:
+        default-requeue-rejected: false
+        acknowledge-mode: auto
+        prefetch: 10
+        retry:
+          enabled: true
+          stateless: true
+          max-retries: 2
+          initial-interval: 2s
+          multiplier: 2.0
+          max-interval: 30s
 
 server:
   forward-headers-strategy: framework
@@ -51,6 +72,32 @@ imprime:
       presence:
         ttl: ${MAKER_PRESENCE_TTL:4m}
         max-size: ${MAKER_PRESENCE_MAX_SIZE:10000}
+    notification:
+      enabled: ${NOTIFICATIONS_EMAIL_ENABLED:true}
+      public-base-url: ${APP_PUBLIC_BASE_URL:https://imprimeai.shop}
+      mail:
+        from-address: ${MAIL_FROM_ADDRESS:nao-responda@imprimeai.shop}
+        from-name: ${MAIL_FROM_NAME:Imprime AÍ}
+        reply-to: ${MAIL_REPLY_TO:suporte@imprimeai.shop}
+        resend-api-key: ${RESEND_API_KEY:}
+      rabbitmq:
+        exchange: ${EMAIL_RABBITMQ_EXCHANGE:imprimeai.email.exchange}
+        queue: ${EMAIL_RABBITMQ_QUEUE:imprimeai.email.queue}
+        routing-key: ${EMAIL_RABBITMQ_ROUTING_KEY:imprimeai.email.send}
+        dlx: ${EMAIL_RABBITMQ_DLX:imprimeai.email.dlx}
+        dlq: ${EMAIL_RABBITMQ_DLQ:imprimeai.email.dlq}
+        dlq-routing-key: ${EMAIL_RABBITMQ_DLQ_ROUTING_KEY:imprimeai.email.dlq}
+      chat:
+        debounce-window: ${CHAT_EMAIL_DEBOUNCE_WINDOW:5m}
+        offer-debounce-window: ${CHAT_EMAIL_OFFER_DEBOUNCE_WINDOW:2m}
+        cooldown-window: ${CHAT_EMAIL_COOLDOWN_WINDOW:15m}
+        active-view-ttl: ${CHAT_ACTIVE_VIEW_TTL:90s}
+        max-active-deferral: ${CHAT_MAX_ACTIVE_DEFERRAL:15m}
+        poll-interval: ${CHAT_EMAIL_POLL_INTERVAL:30000}
+        batch-size: ${CHAT_EMAIL_BATCH_SIZE:50}
+      security:
+        password-reset-ttl: ${PASSWORD_RESET_TOKEN_TTL:30m}
+        email-verification-ttl: ${EMAIL_VERIFICATION_TOKEN_TTL:24h}
 
 oci:
   object-storage:

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Compra confirmada',
+    badgeTone='emerald',
+    heading=${heading},
+    ctaLabel=${ctaLabel},
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${recipientName ?: 'Cliente'}">Cliente</strong>!
+  </p>
+  <p style="margin:0 0 16px 0;" th:if="${allDigital == true}">
+    Seu pagamento foi confirmado e os arquivos do seu modelo 3D já estão liberados para download imediato na sua biblioteca da Imprime AÍ.
+  </p>
+  <p style="margin:0 0 16px 0;" th:unless="${allDigital == true}">
+    Recebemos a confirmação do seu pagamento para o pedido <strong th:text="${orderCode}">#PED</strong>.
+    <span th:if="${sellerName != null and !#strings.isEmpty(sellerName)}">
+      O estúdio <strong th:text="${sellerName}">Maker</strong> já foi notificado para iniciar os preparativos da sua impressão 3D.
+    </span>
+  </p>
+
+  <div th:replace="~{fragments/info-box :: infoRows(${infoRows})}"></div>
+
+  <div th:if="${items != null and !#lists.isEmpty(items)}"
+       th:replace="~{fragments/order-summary :: orderTable(${items}, ${subtotalFormatted}, ${shippingFormatted}, ${totalFormatted})}">
+  </div>
+
+  <p th:if="${shippingAddressSummary != null and !#strings.isEmpty(shippingAddressSummary)}"
+     style="margin:16px 0 0 0;font-size:13px;color:#52525b;">
+    <strong style="color:#09090b;">Endereço de entrega:</strong>
+    <span th:text="${shippingAddressSummary}">Rua Exemplo, 123</span>
+  </p>
+
+  <p style="margin:16px 0 0 0;font-size:14px;color:#52525b;" th:unless="${allDigital == true}">
+    <strong>Próximo passo:</strong> Você receberá uma nova atualização assim que a produção for iniciada e quando o código de rastreio estiver disponível.
+  </p>
+</div>
+</body>
+</html>

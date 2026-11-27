@@ -22,6 +22,7 @@ import org.imprime.ai.api.model.enums.NegotiationStatus;
 import org.imprime.ai.api.model.enums.OrderStatusCd;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.ForbiddenException;
+import org.imprime.ai.api.notification.chat.ChatReadStateService;
 import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.repo.db.CompanyRepository;
@@ -32,6 +33,7 @@ import org.imprime.ai.api.service.ChatService;
 import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +42,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,6 +60,8 @@ public class ChatRestServiceImpl implements ChatRestService {
     private final CompanyRepository companyRepository;
     private final FileAssetRepository fileAssetRepository;
     private final OrderViewAssembler orderViewAssembler;
+    @Autowired(required = false)
+    private ChatReadStateService chatReadStateService;
 
     @Override
     public PageResponse<ChatSummaryResponse> listChats(ChatRoleFilter role, String orderGuid, NegotiationStatus status, Pageable pageable) {
@@ -78,10 +83,20 @@ public class ChatRestServiceImpl implements ChatRestService {
                     : chatRepository.findAllByClientGuidAndStatusOrderByLastMessageAtDesc(caller.getGuid(), StatusCd.ACTIVE);
         }
 
-        List<ChatSummaryResponse> filtered = candidates.stream()
+        List<Chat> visibleChats = candidates.stream()
                 .filter(chat -> !StatusCd.DELETED.equals(chat.getStatus()))
                 .filter(chat -> orderGuid == null || orderGuid.isBlank() || orderGuid.equals(chat.getOrderGuid()))
-                .map(this::toSummaryResponse)
+                .toList();
+
+        Map<UUID, Integer> unreadByChatId = (chatReadStateService != null && !visibleChats.isEmpty())
+                ? chatReadStateService.countUnreadByChatIds(
+                        visibleChats.stream().map(Chat::getChatId).toList(),
+                        caller.getGuid()
+                )
+                : Map.of();
+
+        List<ChatSummaryResponse> filtered = visibleChats.stream()
+                .map(chat -> toSummaryResponse(chat, unreadByChatId.getOrDefault(chat.getChatId(), 0)))
                 .filter(summary -> status == null || status.equals(summary.status()))
                 .toList();
 
@@ -122,6 +137,9 @@ public class ChatRestServiceImpl implements ChatRestService {
 
         User caller = ServiceContext.getUser().orElse(null);
         boolean isCallerMaker = caller != null && isCallerMakerForChat(caller, chat);
+        int unreadCount = (chatReadStateService != null && caller != null)
+                ? chatReadStateService.countUnread(chatId, caller.getGuid())
+                : 0;
 
         return new ChatDetailResponse(
                 chat.getChatId(),
@@ -131,7 +149,7 @@ public class ChatRestServiceImpl implements ChatRestService {
                 quotedPrice,
                 orderStatus,
                 negotiationStatus,
-                0,
+                unreadCount,
                 client,
                 maker,
                 recentChronological,
@@ -144,6 +162,9 @@ public class ChatRestServiceImpl implements ChatRestService {
     @Override
     public PageResponse<MessageDTO> listChatMessages(UUID chatId, Pageable pageable) {
         chatService.findAuthorizedChat(chatId);
+        if (pageable != null && pageable.getPageNumber() == 0 && chatReadStateService != null) {
+            ServiceContext.getUser().ifPresent(caller -> chatReadStateService.markAsRead(chatId, caller.getGuid()));
+        }
         Page<ChatMessage> page = chatMessageRepository.findAllByChatIdOrderByCreateDtDesc(chatId, pageable);
         return PageResponse.from(page.map(this::toMessageDto));
     }
@@ -151,7 +172,10 @@ public class ChatRestServiceImpl implements ChatRestService {
     @Override
     public void markChatAsRead(UUID chatId) {
         chatService.findAuthorizedChat(chatId);
-        // TODO Fase 2: persistir cursor de leitura por participante na tabela CHAT_PARTICIPANT_STATE
+        User caller = ServiceContext.getUserOrThrow();
+        if (chatReadStateService != null) {
+            chatReadStateService.markAsRead(chatId, caller.getGuid());
+        }
     }
 
     @Override
@@ -189,7 +213,7 @@ public class ChatRestServiceImpl implements ChatRestService {
                 .orElse(false);
     }
 
-    private ChatSummaryResponse toSummaryResponse(Chat chat) {
+    private ChatSummaryResponse toSummaryResponse(Chat chat, int unreadCount) {
         Optional<Order> orderOpt = chat.getOrderGuid() != null
                 ? orderRepository.findOrderByGuid(chat.getOrderGuid())
                 : Optional.empty();
@@ -213,7 +237,7 @@ public class ChatRestServiceImpl implements ChatRestService {
                 negotiationStatus,
                 latestQuotedPrice,
                 null,
-                0,
+                unreadCount,
                 lastMessage.map(this::formatMessagePreview).orElse(null),
                 chat.getLastMessageAt(),
                 resolveUserDto(chat.getClientGuid()),

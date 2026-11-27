@@ -30,8 +30,25 @@ public record FullUserDTO(
         @Schema(description = "Perfil de acesso do usuário (BUYER, DESIGNER, MAKER, ADMIN)", example = "BUYER")
         UserRole role,
         @Schema(description = "Status cadastral do usuário", example = "ACTIVE")
-        StatusCd status
+        StatusCd status,
+        @Schema(description = "Indica se o e-mail do usuário foi verificado", example = "false")
+        Boolean emailVerified
 ) {
+    public FullUserDTO(
+            String userGuid,
+            String firstName,
+            String lastName,
+            String email,
+            String phoneNumber,
+            Boolean isMaker,
+            String avatarUrl,
+            List<AddressDTO> addresses,
+            UserRole role,
+            StatusCd status
+    ) {
+        this(userGuid, firstName, lastName, email, phoneNumber, isMaker, avatarUrl, addresses, role, status, false);
+    }
+
     public static FullUserDTO from(@NonNull User user, @NonNull List<Address> addresses) {
         UserRole resolvedRole = user.getRole() != null
                 ? user.getRole()
@@ -47,7 +64,8 @@ public record FullUserDTO(
                 user.getAvatarUrl(),
                 addresses.stream().map(AddressDTO::from).toList(),
                 resolvedRole,
-                resolvedStatus
+                resolvedStatus,
+                user.isEmailVerified()
         );
     }
 }

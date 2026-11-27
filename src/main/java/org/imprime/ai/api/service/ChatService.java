@@ -19,6 +19,8 @@ import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.ChatMessageRecordedEvent;
+import org.imprime.ai.api.notification.event.QuoteAcceptedNotificationEvent;
 import org.imprime.ai.api.repo.db.ChatMessageRepository;
 import org.imprime.ai.api.repo.db.ChatRepository;
 import org.imprime.ai.api.websocket.chat.ChatEvent;
@@ -142,6 +144,13 @@ public class ChatService {
             recipients = getChatMembers(chat);
         }
 
+        eventPublisher.publishEvent(new ChatMessageRecordedEvent(
+                chat.getChatId(),
+                caller.getGuid(),
+                request.type(),
+                recipients
+        ));
+
         deliverMessage(chat.getChatId(), MessageDTO.from(message, caller), recipients);
     }
 
@@ -252,6 +261,15 @@ public class ChatService {
         }
         OrderStatus orderStatus = orderService.acceptOffer(chat.getOrderGuid(), offer, company);
         log.info("Order [{}] Confirmed! New Status [{}]", orderStatus.getOrderId(), orderStatus.getStatusCd());
+
+        eventPublisher.publishEvent(new QuoteAcceptedNotificationEvent(
+                chat.getChatId(),
+                chat.getOrderGuid(),
+                offer,
+                caller.getGuid(),
+                chat.getClientGuid(),
+                chat.getCompanyGuid()
+        ));
 
         String text = "Proposta de R$ %.2f aprovada por %s! Pedido confirmado.".formatted(
                 offer,

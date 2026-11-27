@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Ajuste financeiro',
+    badgeTone='amber',
+    heading='Reembolso processado para pedido da sua loja',
+    ctaLabel='Ver extrato financeiro',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Maker'}">Maker</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Informamos que um reembolso no valor de <strong th:text="${amountFormatted}">R$ 0,00</strong> foi processado para o pedido
+    <strong th:text="${orderCode}">PED-000</strong> e lançado no seu extrato financeiro.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+  <p style="margin:14px 0 0 0;font-size:13px;color:#52525b;">
+    <strong>Motivo registrado:</strong> <span th:text="${reason}">Motivo</span>
+  </p>
+</div>
+</body>
+</html>

@@ -134,6 +134,29 @@
             <artifactId>stripe-java</artifactId>
             <version>28.4.0</version>
         </dependency>
+
+        <!-- Mensageria Assíncrona, E-mail e Templates HTML -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
+        <!-- Resend Java SDK -->
+        <dependency>
+            <groupId>com.resend</groupId>
+            <artifactId>resend-java</artifactId>
+            <version>4.30.0</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

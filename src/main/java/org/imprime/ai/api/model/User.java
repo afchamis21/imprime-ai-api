@@ -63,6 +63,9 @@ public class User extends Auditable {
     @Column(name = "SUSPENDED_AT")
     private Instant suspendedAt;
 
+    @Column(name = "EMAIL_VERIFIED_AT")
+    private Instant emailVerifiedAt;
+
     @Transient
     public String getFullName() {
         return firstName + " " + lastName;
@@ -71,5 +74,10 @@ public class User extends Auditable {
     @Transient
     public boolean isAdmin() {
         return UserRole.ADMIN.equals(role);
+    }
+
+    @Transient
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
     }
 }

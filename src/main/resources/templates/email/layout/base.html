@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR" th:fragment="layout(title, preheader, badgeText, badgeTone, heading, ctaLabel, ctaUrl, showPreferencesLink, content)">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title th:text="${title ?: 'Imprime AÍ'}">Imprime AÍ</title>
+  <style type="text/css">
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #18181b;
+      -webkit-font-smoothing: antialiased;
+    }
+    table {
+      border-collapse: collapse;
+    }
+    a {
+      color: #7c3aed;
+    }
+    @media only screen and (max-width: 620px) {
+      .container {
+        width: 100% !important;
+      }
+      .card-padding {
+        padding: 24px 20px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#fafafa;color:#18181b;">
+  <!-- Preheader oculto para preview nos clientes de e-mail -->
+  <div th:if="${preheader != null and !#strings.isEmpty(preheader)}"
+       th:text="${preheader}"
+       style="display:none;font-size:1px;color:#fafafa;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+    Notificação Imprime AÍ
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fafafa;width:100%;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="container" style="width:600px;max-width:600px;">
+
+          <!-- Cabeçalho com marca sóbria -->
+          <tr>
+            <td align="left" style="padding:0 4px 16px 4px;">
+              <a th:href="${publicBaseUrl}" style="text-decoration:none;font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#09090b;">
+                Imprime <span style="color:#7c3aed;">AÍ</span>
+              </a>
+            </td>
+          </tr>
+
+          <!-- Card principal único (sem cards aninhados) -->
+          <tr>
+            <td class="card-padding" style="background-color:#ffffff;border:1px solid #e4e4e7;border-radius:8px;padding:32px;">
+              <!-- Badge sutil de contexto -->
+              <div th:if="${badgeText != null and !#strings.isEmpty(badgeText)}" style="margin-bottom:16px;">
+                <span th:text="${badgeText}"
+                      th:style="${badgeTone == 'emerald' ? 'display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background-color:#ecfdf5;color:#047857;border:1px solid #a7f3d0;' :
+                                  (badgeTone == 'amber' ? 'display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background-color:#fffbeb;color:#b45309;border:1px solid #fde68a;' :
+                                  (badgeTone == 'red' ? 'display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background-color:#fef2f2;color:#b91c1c;border:1px solid #fecaca;' :
+                                  (badgeTone == 'violet' ? 'display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background-color:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe;' :
+                                  'display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background-color:#f4f4f5;color:#3f3f46;border:1px solid #e4e4e7;')))}">
+                  Status
+                </span>
+              </div>
+
+              <!-- Título principal -->
+              <h1 th:text="${heading}" style="margin:0 0 16px 0;font-size:22px;line-height:1.3;font-weight:600;letter-spacing:-0.02em;color:#09090b;">
+                Atualização na Imprime AÍ
+              </h1>
+
+              <!-- Conteúdo específico do template -->
+              <div style="font-size:15px;line-height:1.6;color:#3f3f46;">
+                <th:block th:replace="${content}"></th:block>
+              </div>
+
+              <!-- Botão CTA único principal -->
+              <div th:if="${ctaLabel != null and !#strings.isEmpty(ctaLabel) and ctaUrl != null and !#strings.isEmpty(ctaUrl)}"
+                   style="margin-top:28px;padding-top:24px;border-top:1px solid #e4e4e7;">
+                <a th:href="${ctaUrl}"
+                   th:text="${ctaLabel}"
+                   style="display:inline-block;background-color:#7c3aed;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:6px;">
+                  Acessar plataforma
+                </a>
+                <p style="margin:12px 0 0 0;font-size:12px;line-height:1.5;color:#71717a;word-break:break-all;">
+                  Caso o botão não funcione, copie e cole o link no navegador:<br />
+                  <a th:href="${ctaUrl}" th:text="${ctaUrl}" style="color:#7c3aed;text-decoration:underline;">https://imprimeai.shop</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Rodapé -->
+          <tr>
+            <td style="padding:20px 4px 0 4px;font-size:12px;line-height:1.6;color:#71717a;">
+              <p style="margin:0 0 6px 0;">
+                Enviado por <strong style="color:#3f3f46;">Imprime AÍ</strong> (<a th:href="${publicBaseUrl}" th:text="${domainName}" style="color:#71717a;text-decoration:underline;">imprimeai.shop</a>).
+              </p>
+              <p style="margin:0 0 6px 0;">
+                Dúvidas? Fale com a nossa equipe em <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#71717a;text-decoration:underline;">suporte@imprimeai.shop</a>.
+              </p>
+              <p th:if="${showPreferencesLink == true}" style="margin:0;">
+                <a th:href="${preferencesUrl}" style="color:#7c3aed;text-decoration:underline;">Gerenciar preferências de notificação</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

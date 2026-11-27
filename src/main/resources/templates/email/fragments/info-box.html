@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body>
+<div th:fragment="infoRows(rows)" th:if="${rows != null and !#lists.isEmpty(rows)}"
+     style="margin:20px 0;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;padding:12px 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+    <tr th:each="row : ${rows}">
+      <td style="padding:6px 0;font-size:13px;color:#71717a;vertical-align:top;width:40%;" th:text="${row.label}">Campo</td>
+      <td style="padding:6px 0;font-size:13px;color:#09090b;font-weight:600;text-align:right;vertical-align:top;" th:text="${row.value}">Valor</td>
+    </tr>
+  </table>
+</div>
+</body>
+</html>

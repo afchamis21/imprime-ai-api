@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText='Protocolo registrado',
+    badgeTone='violet',
+    heading=${kindLabel + ' recebido — ' + protocolCode},
+    ctaLabel='Acompanhar atendimento',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Usuário'}">Usuário</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Seu atendimento foi aberto e nossa equipe já pode visualizar todas as informações registradas.
+    Use o número do protocolo abaixo para acompanhar qualquer andamento.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+</div>
+</body>
+</html>

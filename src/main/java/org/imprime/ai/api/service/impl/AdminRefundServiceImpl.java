@@ -31,6 +31,7 @@ import org.imprime.ai.api.model.exception.BadGatewayException;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.RefundDecisionNotificationEvent;
 import org.imprime.ai.api.repo.db.MakerFinanceTransactionRepository;
 import org.imprime.ai.api.repo.db.OrderRepository;
 import org.imprime.ai.api.repo.db.OrderStatusRepository;
@@ -42,6 +43,8 @@ import org.imprime.ai.api.service.OrderStatusService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -78,6 +81,8 @@ public class AdminRefundServiceImpl implements AdminRefundService {
     private final OrderViewAssembler orderViewAssembler;
     private final AdminAuditService adminAuditService;
     private final JsonCodec jsonCodec;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResponse<AdminRefundResponse> listRefunds(
@@ -275,6 +280,20 @@ public class AdminRefundServiceImpl implements AdminRefundService {
                 auditSnapshot(saved, order)
         );
 
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new RefundDecisionNotificationEvent(
+                    saved.getGuid(),
+                    saved.getOrderId(),
+                    saved.getRequestedByUserId(),
+                    order != null ? order.getVendorId() : null,
+                    false,
+                    saved.getRequestedAmount(),
+                    reason,
+                    saved.getAdminNotes(),
+                    saved.getRefundType() != null ? saved.getRefundType().name() : null
+            ));
+        }
+
         User requester = userRepository.findById(saved.getRequestedByUserId()).orElse(null);
         return toResponse(saved, order, requester, admin);
     }
@@ -341,6 +360,20 @@ public class AdminRefundServiceImpl implements AdminRefundService {
                 before,
                 auditSnapshot(saved, order)
         );
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new RefundDecisionNotificationEvent(
+                    saved.getGuid(),
+                    saved.getOrderId(),
+                    saved.getRequestedByUserId(),
+                    order.getVendorId(),
+                    true,
+                    approvedAmount,
+                    saved.getReason(),
+                    saved.getAdminNotes(),
+                    saved.getRefundType() != null ? saved.getRefundType().name() : null
+            ));
+        }
 
         User requester = userRepository.findById(saved.getRequestedByUserId()).orElse(null);
         return toResponse(saved, order, requester, admin);

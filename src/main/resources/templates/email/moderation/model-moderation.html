@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText=${statusText},
+    badgeTone=${badgeTone},
+    heading=${'Moderação do modelo: ' + modelName},
+    ctaLabel='Gerenciar modelos',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Criador'}">Criador</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    Informamos que o modelo 3D <strong th:text="${modelName}">Modelo 3D</strong> recebeu uma atualização de moderação:
+    <strong th:text="${statusText}">Aprovado</strong>.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+  <div th:if="${isDmca == true}"
+       style="margin:14px 0;padding:12px 14px;background-color:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:13px;color:#991b1b;">
+    <strong>Notificação de Propriedade Intelectual (DMCA):</strong>
+    <div th:if="${dmcaClaimant != null and !#strings.isEmpty(dmcaClaimant)}">Reclamante: <span th:text="${dmcaClaimant}">Titular</span></div>
+    <div th:if="${dmcaReference != null and !#strings.isEmpty(dmcaReference)}">Protocolo/Referência: <span th:text="${dmcaReference}">Ref</span></div>
+  </div>
+  <div th:if="${reason != null and !#strings.isEmpty(reason)}"
+       style="margin:14px 0 0 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#3f3f46;">
+    <strong>Detalhes:</strong> <span th:text="${reason}">Motivo</span>
+  </div>
+</div>
+</body>
+</html>

@@ -29,6 +29,7 @@ import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.model.exception.NotFoundException;
 import org.imprime.ai.api.model.exception.UnauthorizedException;
+import org.imprime.ai.api.notification.security.AccountSecurityService;
 import org.imprime.ai.api.repo.cache.UserInMemoryCache;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.FileAssetRepository;
@@ -45,6 +46,7 @@ import org.imprime.ai.api.service.UserService;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.PageUtils;
 import org.imprime.ai.api.util.PageableSortMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -85,6 +87,8 @@ public class UserHubServiceImpl implements UserHubService {
     private final FileAssetRepository fileAssetRepository;
     private final ReviewRepository reviewRepository;
     private final ObjectStorageService objectStorageService;
+    @Autowired(required = false)
+    private AccountSecurityService accountSecurityService;
 
     @Override
     @Transactional
@@ -92,7 +96,8 @@ public class UserHubServiceImpl implements UserHubService {
         User caller = ServiceContext.getUserOrThrow();
         User user = userRepository.findById(caller.getId()).orElseThrow(UnauthorizedException::new);
 
-        if (!request.email().equalsIgnoreCase(user.getEmail()) && userRepository.existsUserByEmail(request.email())) {
+        boolean emailChanged = !request.email().equalsIgnoreCase(user.getEmail());
+        if (emailChanged && userRepository.existsUserByEmail(request.email())) {
             throw new BadRequestException(MessageCd.USER_EMAIL_ALREADY_REGISTERED);
         }
 
@@ -103,6 +108,9 @@ public class UserHubServiceImpl implements UserHubService {
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
         user.setEmail(request.email());
+        if (emailChanged) {
+            user.setEmailVerifiedAt(null);
+        }
         user.setPhoneNumber(request.phoneNumber());
         if (request.avatarUrl() != null) {
             user.setAvatarUrl(normalizeAvatarUrl(request.avatarUrl()));
@@ -111,6 +119,9 @@ public class UserHubServiceImpl implements UserHubService {
         User saved = userRepository.save(user);
         userInMemoryCache.put(saved);
         ServiceContext.getContext().setUser(saved);
+        if (emailChanged && accountSecurityService != null) {
+            accountSecurityService.issueEmailVerificationForUser(saved);
+        }
 
         return userService.getFullUserDetails(saved);
     }

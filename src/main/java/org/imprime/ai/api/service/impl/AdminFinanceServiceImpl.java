@@ -29,6 +29,7 @@ import org.imprime.ai.api.model.enums.SupportTicketStatus;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.model.exception.NotFoundException;
+import org.imprime.ai.api.notification.event.PayoutNotificationEvent;
 import org.imprime.ai.api.repo.db.CompanyRepository;
 import org.imprime.ai.api.repo.db.DesignerFinanceTransactionRepository;
 import org.imprime.ai.api.repo.db.MakerFinanceTransactionRepository;
@@ -41,7 +42,9 @@ import org.imprime.ai.api.service.AdminAuditService;
 import org.imprime.ai.api.service.AdminFinanceService;
 import org.imprime.ai.api.service.OrderViewAssembler;
 import org.imprime.ai.api.util.PageUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -119,6 +122,8 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
     private final SupportTicketRepository supportTicketRepository;
     private final OrderViewAssembler orderViewAssembler;
     private final AdminAuditService adminAuditService;
+    @Autowired(required = false)
+    private ApplicationEventPublisher eventPublisher;
 
     @Value("${imprime.ai.finance.platform-fee-rate:0.10}")
     private BigDecimal platformFeeRate = new BigDecimal("0.10");
@@ -275,6 +280,7 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
                     beforeState,
                     snapshotPayout(saved.getGuid(), AdminPayoutBeneficiaryType.MAKER, saved.getTransactionStatus(), saved.getReference())
             );
+            publishMakerPayoutEvent(saved, "COMPLETED", null);
             return hydrateMakerPayout(saved);
         }
 
@@ -300,6 +306,7 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
                 beforeState,
                 snapshotPayout(saved.getGuid(), AdminPayoutBeneficiaryType.DESIGNER, saved.getTransactionStatus(), saved.getReference())
         );
+        publishDesignerPayoutEvent(saved, "COMPLETED", null);
         return hydrateDesignerPayout(saved);
     }
 
@@ -330,6 +337,7 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
                     beforeState,
                     snapshotPayout(saved.getGuid(), AdminPayoutBeneficiaryType.MAKER, saved.getTransactionStatus(), saved.getReference())
             );
+            publishMakerPayoutEvent(saved, "FAILED", reason);
             return hydrateMakerPayout(saved);
         }
 
@@ -352,7 +360,44 @@ public class AdminFinanceServiceImpl implements AdminFinanceService {
                 beforeState,
                 snapshotPayout(saved.getGuid(), AdminPayoutBeneficiaryType.DESIGNER, saved.getTransactionStatus(), saved.getReference())
         );
+        publishDesignerPayoutEvent(saved, "FAILED", reason);
         return hydrateDesignerPayout(saved);
+    }
+
+    private void publishMakerPayoutEvent(MakerFinanceTransaction tx, String status, String failureReason) {
+        if (eventPublisher == null || tx == null) {
+            return;
+        }
+        BigDecimal absAmount = tx.getAmount() != null ? tx.getAmount().abs() : BigDecimal.ZERO;
+        eventPublisher.publishEvent(new PayoutNotificationEvent(
+                tx.getGuid(),
+                "MAKER",
+                tx.getCompanyId(),
+                null,
+                status,
+                absAmount,
+                tx.getPixKeyMasked(),
+                tx.getReference(),
+                failureReason
+        ));
+    }
+
+    private void publishDesignerPayoutEvent(DesignerFinanceTransaction tx, String status, String failureReason) {
+        if (eventPublisher == null || tx == null) {
+            return;
+        }
+        BigDecimal absAmount = tx.getAmount() != null ? tx.getAmount().abs() : BigDecimal.ZERO;
+        eventPublisher.publishEvent(new PayoutNotificationEvent(
+                tx.getGuid(),
+                "DESIGNER",
+                null,
+                tx.getDesignerUserId(),
+                status,
+                absAmount,
+                tx.getPixKeyMasked(),
+                tx.getReference(),
+                failureReason
+        ));
     }
 
     @Override

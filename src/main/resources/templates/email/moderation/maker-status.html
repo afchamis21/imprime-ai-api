@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<body th:replace="~{layout/base :: layout(
+    title=${subject},
+    preheader=${preheader},
+    badgeText=${statusText},
+    badgeTone=${badgeTone},
+    heading=${'Atualização do estúdio Maker: ' + statusText},
+    ctaLabel='Acessar painel Maker',
+    ctaUrl=${ctaUrl},
+    showPreferencesLink=false,
+    content=~{::#email-content}
+)}">
+<div id="email-content">
+  <p style="margin:0 0 14px 0;">
+    Olá, <strong th:text="${firstName ?: 'Maker'}">Maker</strong>!
+  </p>
+  <p style="margin:0 0 14px 0;">
+    O status operacional do estúdio <strong th:text="${targetName}">Seu Estúdio</strong> na Imprime AÍ foi atualizado para
+    <strong th:text="${statusText}">Aprovado</strong>.
+  </p>
+  <th:block th:replace="~{fragments/info-box :: infoRows(${rows})}"></th:block>
+  <div th:if="${reason != null and !#strings.isEmpty(reason)}"
+       style="margin:14px 0 0 0;padding:12px 14px;background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-size:13px;color:#3f3f46;">
+    <strong>Observação / Motivo:</strong> <span th:text="${reason}">Motivo</span>
+  </div>
+</div>
+</body>
+</html>
