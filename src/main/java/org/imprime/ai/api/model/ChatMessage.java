@@ -5,6 +5,7 @@ import lombok.*;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.MessageType;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
@@ -29,4 +30,19 @@ public class ChatMessage extends Auditable {
 
     @Convert(converter = MessageType.Converter.class)
     private MessageType type;
+
+    @Column(name = "production_days")
+    private Integer productionDays;
+
+    @Column(name = "package_weight", precision = 10, scale = 3)
+    private BigDecimal packageWeight;
+
+    @Column(name = "package_height", precision = 10, scale = 2)
+    private BigDecimal packageHeight;
+
+    @Column(name = "package_width", precision = 10, scale = 2)
+    private BigDecimal packageWidth;
+
+    @Column(name = "package_length", precision = 10, scale = 2)
+    private BigDecimal packageLength;
 }

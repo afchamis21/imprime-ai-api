@@ -38,6 +38,22 @@ public final class ObjectStorageKey {
         );
     }
 
+    public static ObjectStorageKey validated3mf(String bucket, String orderGuid, String plateIdentifier) {
+        return new ObjectStorageKey(
+                Path.of("validated", orderGuid, plateIdentifier + ".3mf").toString(),
+                bucket,
+                FileAsset.AssetType.VALIDATED_3MF
+        );
+    }
+
+    public static ObjectStorageKey validatedGcode(String bucket, String orderGuid, String plateIdentifier) {
+        return new ObjectStorageKey(
+                Path.of("validated", orderGuid, plateIdentifier + ".gcode").toString(),
+                bucket,
+                FileAsset.AssetType.VALIDATED_GCODE
+        );
+    }
+
     public static ObjectStorageKey image(
             String userGuid,
             String fileIdentifier,

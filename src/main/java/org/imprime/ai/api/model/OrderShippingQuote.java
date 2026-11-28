@@ -58,4 +58,7 @@ public class OrderShippingQuote extends Auditable {
 
     @Column(name = "USED_ORDER_ID")
     private Long usedOrderId;
+
+    @Column(name = "CHAT_MESSAGE_GUID", length = 36)
+    private String chatMessageGuid;
 }

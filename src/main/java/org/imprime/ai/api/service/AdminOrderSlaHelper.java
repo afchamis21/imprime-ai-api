@@ -81,7 +81,9 @@ public class AdminOrderSlaHelper {
                     "Aguardando início de produção há mais de 24h"
             );
             case IN_PRODUCTION -> {
-                int leadDays = (vendor != null && vendor.getMaxLeadTimeDays() != null && vendor.getMaxLeadTimeDays() > 0)
+                int leadDays = (order.getProductionDays() != null && order.getProductionDays() > 0)
+                        ? order.getProductionDays()
+                        : (vendor != null && vendor.getMaxLeadTimeDays() != null && vendor.getMaxLeadTimeDays() > 0)
                         ? vendor.getMaxLeadTimeDays()
                         : 5;
                 yield evaluateWindow(

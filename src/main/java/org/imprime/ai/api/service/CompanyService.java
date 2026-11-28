@@ -8,6 +8,8 @@ import org.imprime.ai.api.http.request.company.RegisterMakerPrinterRequest;
 import org.imprime.ai.api.model.Address;
 import org.imprime.ai.api.model.Asset;
 import org.imprime.ai.api.model.Company;
+import org.imprime.ai.api.model.MakerMaterialPrice;
+import org.imprime.ai.api.model.MakerPricingProfile;
 import org.imprime.ai.api.model.OrderFileAsset;
 import org.imprime.ai.api.model.PrinterCatalog;
 import org.imprime.ai.api.model.User;
@@ -31,6 +33,7 @@ import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.SlugUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -62,6 +65,24 @@ public class CompanyService {
     private final PrinterCatalogRepository printerCatalogRepository;
     private final MakerEligibilityService makerEligibilityService;
     private final JsonCodec jsonCodec;
+
+    private org.imprime.ai.api.repo.db.MakerPricingProfileRepository makerPricingProfileRepository;
+    private org.imprime.ai.api.repo.db.MakerMaterialPriceRepository makerMaterialPriceRepository;
+    private PrinterSpeedResolver printerSpeedResolver;
+    private MarketplaceQuoteCalculator marketplaceQuoteCalculator;
+
+    @Autowired(required = false)
+    public void setMarketplacePricingRepositories(
+            org.imprime.ai.api.repo.db.MakerPricingProfileRepository makerPricingProfileRepository,
+            org.imprime.ai.api.repo.db.MakerMaterialPriceRepository makerMaterialPriceRepository,
+            PrinterSpeedResolver printerSpeedResolver,
+            MarketplaceQuoteCalculator marketplaceQuoteCalculator
+    ) {
+        this.makerPricingProfileRepository = makerPricingProfileRepository;
+        this.makerMaterialPriceRepository = makerMaterialPriceRepository;
+        this.printerSpeedResolver = printerSpeedResolver;
+        this.marketplaceQuoteCalculator = marketplaceQuoteCalculator;
+    }
 
     @Transactional
     public Company registerCompany(RegisterCompanyRequest request, User owner) {
@@ -224,7 +245,59 @@ public class CompanyService {
         Address address = addressService.registerAddress(request.address(), EntityType.COMPANY, company.getId(), true);
         company.setAddressId(address.getId());
 
-        return companyRepository.save(company);
+        Company saved = companyRepository.save(company);
+        seedDefaultMarketplacePricing(saved, resolvedMaterials);
+        return saved;
+    }
+
+    private void seedDefaultMarketplacePricing(Company company, List<MaterialType> resolvedMaterials) {
+        if (makerPricingProfileRepository != null
+                && makerPricingProfileRepository.findByCompanyIdAndStatus(company.getId(), StatusCd.ACTIVE).isEmpty()) {
+            MakerPricingProfile profile = MakerPricingProfile.defaultForCompany(company.getId());
+            if (company.getMinOrderValue() != null && company.getMinOrderValue().signum() > 0) {
+                profile.setMinimumOrderFeeBrl(company.getMinOrderValue());
+            }
+            if (company.getMinLeadTimeDays() != null && company.getMinLeadTimeDays() >= 1) {
+                profile.setLeadTimeDays(Math.min(90, company.getMinLeadTimeDays()));
+            }
+            profile.setStatus(StatusCd.ACTIVE);
+            makerPricingProfileRepository.save(profile);
+        }
+        if (makerMaterialPriceRepository != null) {
+            List<MaterialType> materials = (resolvedMaterials == null || resolvedMaterials.isEmpty())
+                    ? List.of(MaterialType.PLA)
+                    : resolvedMaterials.stream().distinct().toList();
+            List<MakerMaterialPrice> toSave = new ArrayList<>();
+            for (MaterialType mat : materials) {
+                MakerMaterialPrice price = new MakerMaterialPrice();
+                price.setCompanyId(company.getId());
+                price.setMaterial(mat);
+                price.setPricePerGramBrl(defaultPricePerGram(mat));
+                price.setEnabled(Boolean.TRUE);
+                price.setStatus(StatusCd.ACTIVE);
+                toSave.add(price);
+            }
+            makerMaterialPriceRepository.saveAll(toSave);
+        }
+    }
+
+    private static BigDecimal defaultPricePerGram(MaterialType material) {
+        return switch (material) {
+            case PLA -> new BigDecimal("0.2000");
+            case PETG -> new BigDecimal("0.2300");
+            case ABS -> new BigDecimal("0.2400");
+            case ASA -> new BigDecimal("0.2500");
+            case TPU -> new BigDecimal("0.2700");
+            case NYLON -> new BigDecimal("0.3000");
+            case PC -> new BigDecimal("0.3300");
+            case CARBON_FIBER -> new BigDecimal("0.4200");
+            case PETG_CF -> new BigDecimal("0.3800");
+            case PA_CF -> new BigDecimal("0.4800");
+            case PVA -> new BigDecimal("0.4500");
+            case HIPS -> new BigDecimal("0.2600");
+            case RESIN -> new BigDecimal("0.3500");
+            case OTHER -> new BigDecimal("0.2500");
+        };
     }
 
     private List<RegisterMakerPrinterRequest> resolveRequestedPrinters(RegisterCompanyRequest request) {
@@ -296,6 +369,9 @@ public class CompanyService {
                 : printerCatalogRepository.findAllByIdIn(catalogIds).stream()
                 .collect(Collectors.toMap(PrinterCatalog::getId, pc -> pc, (a, b) -> a));
 
+        Map<Long, org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.MakerInstantQuoteItem> instantQuotesByCompany =
+                computeInstantQuotesForOrder(nearest, assetsByCompanyId, catalogById, plates);
+
         return nearest.stream()
                 .filter(match -> makerEligibilityService.isEligible(
                         match.company(),
@@ -307,15 +383,166 @@ public class CompanyService {
                 .map(match -> toChoiceDto(
                         match,
                         assetsByCompanyId.getOrDefault(match.company().getId(), List.of()),
-                        catalogById
+                        catalogById,
+                        instantQuotesByCompany.get(match.company().getId())
                 ))
                 .toList();
+    }
+
+    private Map<Long, org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.MakerInstantQuoteItem> computeInstantQuotesForOrder(
+            List<CompanyAndAddress> nearest,
+            Map<Long, List<Asset>> assetsByCompanyId,
+            Map<Long, PrinterCatalog> catalogById,
+            List<OrderFileAsset> plates
+    ) {
+        if (plates == null || plates.isEmpty()
+                || makerPricingProfileRepository == null
+                || makerMaterialPriceRepository == null
+                || printerSpeedResolver == null
+                || marketplaceQuoteCalculator == null) {
+            return Map.of();
+        }
+        boolean allHaveDna = plates.stream().allMatch(p ->
+                p.getClientModelWeightGrams() != null
+                        && p.getClientBasePrintTimeSeconds() != null
+                        && p.getClientBasePrintTimeSeconds() > 0
+                        && p.getDimensionXMm() != null
+                        && p.getDimensionYMm() != null
+                        && p.getDimensionZMm() != null
+                        && MakerEligibilityService.parseMaterial(p.getMaterial()) != null);
+        if (!allHaveDna) {
+            return Map.of();
+        }
+
+        List<Long> companyIds = nearest.stream().map(m -> m.company().getId()).filter(Objects::nonNull).distinct().toList();
+        Map<Long, MakerPricingProfile> profiles = makerPricingProfileRepository
+                .findAllByCompanyIdInAndStatus(companyIds, StatusCd.ACTIVE).stream()
+                .collect(Collectors.toMap(MakerPricingProfile::getCompanyId, p -> p, (a, b) -> a));
+        Map<Long, Map<MaterialType, BigDecimal>> prices = new HashMap<>();
+        for (MakerMaterialPrice row : makerMaterialPriceRepository.findAllByCompanyIdInAndStatus(companyIds, StatusCd.ACTIVE)) {
+            if (Boolean.TRUE.equals(row.getEnabled()) && row.getMaterial() != null && row.getPricePerGramBrl() != null) {
+                prices.computeIfAbsent(row.getCompanyId(), k -> new java.util.EnumMap<>(MaterialType.class))
+                        .put(row.getMaterial(), row.getPricePerGramBrl());
+            }
+        }
+
+        List<MakerEligibilityService.PlateMatchSpec> specs = plates.stream()
+                .map(p -> new MakerEligibilityService.PlateMatchSpec(
+                        p.getPlateNumber() != null ? p.getPlateNumber() : 1,
+                        MakerEligibilityService.parseMaterial(p.getMaterial()),
+                        p.getDimensionXMm(),
+                        p.getDimensionYMm(),
+                        p.getDimensionZMm(),
+                        Boolean.TRUE.equals(p.getIsMultiColor()),
+                        p.getColorCount() != null ? p.getColorCount() : 1
+                ))
+                .toList();
+
+        Map<Long, org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.MakerInstantQuoteItem> result = new HashMap<>();
+        for (CompanyAndAddress match : nearest) {
+            Company company = match.company();
+            MakerPricingProfile profile = profiles.getOrDefault(company.getId(), MakerPricingProfile.defaultForCompany(company.getId()));
+            if (!Boolean.TRUE.equals(profile.getInstantQuoteEnabled())) {
+                continue;
+            }
+            Map<MaterialType, BigDecimal> companyPrices = prices.getOrDefault(company.getId(), Map.of());
+            var printerMatch = makerEligibilityService.matchPrintersForInstantQuote(
+                    company,
+                    assetsByCompanyId.getOrDefault(company.getId(), List.of()),
+                    catalogById,
+                    specs,
+                    companyPrices.keySet(),
+                    printerSpeedResolver
+            );
+            if (!printerMatch.eligible() || printerMatch.primaryPrinter() == null) {
+                continue;
+            }
+            List<MarketplaceQuoteCalculator.PlateQuoteInput> calcInputs = new ArrayList<>(plates.size());
+            for (int i = 0; i < plates.size(); i++) {
+                OrderFileAsset plate = plates.get(i);
+                int plateNum = plate.getPlateNumber() != null ? plate.getPlateNumber() : (i + 1);
+                var mp = printerMatch.plateMatches().get(plateNum);
+                calcInputs.add(new MarketplaceQuoteCalculator.PlateQuoteInput(
+                        plateNum,
+                        plate.getPlateName() != null ? plate.getPlateName() : ("Mesa " + plateNum),
+                        MakerEligibilityService.parseMaterial(plate.getMaterial()),
+                        plate.getQuantity() != null ? plate.getQuantity() : 1,
+                        plate.getClientModelWeightGrams(),
+                        plate.getClientSupportWeightGrams() != null ? plate.getClientSupportWeightGrams() : BigDecimal.ZERO,
+                        plate.getClientBasePrintTimeSeconds(),
+                        plate.getFinish(),
+                        plate.getUrgency(),
+                        mp.assetId(),
+                        mp.printerGuid(),
+                        mp.printerName(),
+                        mp.printerModel(),
+                        mp.speedTier(),
+                        mp.speedMultiplier()
+                ));
+            }
+            var calculated = marketplaceQuoteCalculator.calculate(profile, companyPrices, calcInputs);
+            var primary = printerMatch.primaryPrinter();
+            double distKm = match.distanceMeters() != null
+                    ? BigDecimal.valueOf(match.distanceMeters() / 1000.0d).setScale(2, RoundingMode.HALF_UP).doubleValue()
+                    : 0.0d;
+            result.put(company.getId(), new org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.MakerInstantQuoteItem(
+                    company.getGuid(),
+                    company.getSlug(),
+                    company.getName(),
+                    company.getAvatarUrl(),
+                    Boolean.TRUE.equals(company.getVerified()),
+                    makerPresenceCache.isCompanyOnline(company),
+                    company.getRatingAvg() != null ? company.getRatingAvg() : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                    company.getReviewsCount() != null ? company.getReviewsCount() : 0,
+                    company.getPrintsDone() != null ? company.getPrintsDone() : 0,
+                    match.address() != null ? match.address().getCity() : null,
+                    match.address() != null ? match.address().getState() : null,
+                    distKm,
+                    new org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.MatchedPrinterDto(
+                            primary.printerGuid(),
+                            primary.printerName(),
+                            primary.printerModel(),
+                            primary.speedTier(),
+                            primary.speedMultiplier(),
+                            new org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.BoundingBoxMmDto(
+                                    primary.maxX(), primary.maxY(), primary.maxZ()
+                            )
+                    ),
+                    calculated.totalEstimatedPrintTimeSeconds(),
+                    calculated.estimatedLeadTimeDays(),
+                    calculated.totalPriceBrl(),
+                    calculated.minimumOrderFeeApplied(),
+                    new org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.PriceBreakdownDto(
+                            calculated.materialCostBrl(),
+                            calculated.machineCostBrl(),
+                            calculated.supportCostBrl(),
+                            calculated.setupFeeBrl(),
+                            calculated.finishAndUrgencyAdjustmentBrl(),
+                            calculated.minimumOrderDeltaBrl()
+                    ),
+                    calculated.plateQuotes().stream()
+                            .map(pq -> new org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.PlateQuoteItemDto(
+                                    pq.plateNumber(),
+                                    pq.plateName(),
+                                    pq.material().name(),
+                                    pq.quantity(),
+                                    pq.printerModel(),
+                                    pq.speedTier(),
+                                    pq.speedMultiplier(),
+                                    pq.estimatedPrintTimeSeconds(),
+                                    pq.totalPriceBrl()
+                            ))
+                            .toList()
+            ));
+        }
+        return result;
     }
 
     private CompanyChoiceDTO toChoiceDto(
             CompanyAndAddress match,
             List<Asset> activePrinters,
-            Map<Long, PrinterCatalog> catalogById
+            Map<Long, PrinterCatalog> catalogById,
+            org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse.MakerInstantQuoteItem instantQuote
     ) {
         double meters = match.distanceMeters();
         boolean useKilometers = meters > 1000;
@@ -349,7 +576,8 @@ public class CompanyService {
                 company.getAvatarUrl(),
                 company.getMinLeadTimeDays() != null ? company.getMinLeadTimeDays() : 2,
                 company.getMaxLeadTimeDays() != null ? company.getMaxLeadTimeDays() : 5,
-                makerEligibilityService.computeMaxBuildVolume(activePrinters, catalogById)
+                makerEligibilityService.computeMaxBuildVolume(activePrinters, catalogById),
+                instantQuote
         );
     }
 

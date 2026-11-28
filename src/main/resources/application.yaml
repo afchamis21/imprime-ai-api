@@ -72,6 +72,34 @@ imprime:
       presence:
         ttl: ${MAKER_PRESENCE_TTL:4m}
         max-size: ${MAKER_PRESENCE_MAX_SIZE:10000}
+    slicing:
+      enabled: ${SLICING_VALIDATION_ENABLED:true}
+      execution-mode: ${SLICING_EXECUTION_MODE:HYBRID}
+      provider: ${SLICING_CLI_PROVIDER:BAMBU_STUDIO}
+      binary-path: ${SLICING_CLI_BINARY:bambu-studio}
+      docker-image: ${SLICING_DOCKER_IMAGE:imprimeai/slicer-cli:latest}
+      profiles-dir: ${SLICING_PROFILES_DIR:}
+      max-concurrent-jobs: ${SLICING_MAX_CONCURRENT_JOBS:2}
+      per-plate-timeout-seconds: ${SLICING_PER_PLATE_TIMEOUT_SECONDS:30}
+      sync-max-plates: ${SLICING_SYNC_MAX_PLATES:2}
+      sync-max-bytes: ${SLICING_SYNC_MAX_BYTES:15728640}
+      max-triangles-per-plate: ${SLICING_MAX_TRIANGLES_PER_PLATE:1500000}
+      store-validated-artifacts: ${SLICING_STORE_VALIDATED_ARTIFACTS:true}
+      validation:
+        weight-tolerance-percent: ${SLICING_WEIGHT_TOLERANCE_PERCENT:5.0}
+        min-weight-tolerance-grams: ${SLICING_MIN_WEIGHT_TOLERANCE_GRAMS:2.0}
+        time-tolerance-percent: ${SLICING_TIME_TOLERANCE_PERCENT:10.0}
+        min-time-tolerance-seconds: ${SLICING_MIN_TIME_TOLERANCE_SECONDS:120}
+        hard-reject-tolerance-percent: ${SLICING_HARD_REJECT_TOLERANCE_PERCENT:30.0}
+        divergence-policy: ${SLICING_DIVERGENCE_POLICY:RECALCULATE}
+        fail-open-on-unavailable: ${SLICING_FAIL_OPEN_ON_UNAVAILABLE:false}
+      rabbitmq:
+        exchange: ${SLICING_RABBITMQ_EXCHANGE:imprimeai.slicing.exchange}
+        queue: ${SLICING_RABBITMQ_QUEUE:imprimeai.slicing.queue}
+        routing-key: ${SLICING_RABBITMQ_ROUTING_KEY:slicing.validate}
+        dlx: ${SLICING_RABBITMQ_DLX:imprimeai.slicing.dlx}
+        dlq: ${SLICING_RABBITMQ_DLQ:imprimeai.slicing.dlq}
+        dlq-routing-key: ${SLICING_RABBITMQ_DLQ_ROUTING_KEY:slicing.dlq}
     notification:
       enabled: ${NOTIFICATIONS_EMAIL_ENABLED:true}
       public-base-url: ${APP_PUBLIC_BASE_URL:https://imprimeai.shop}

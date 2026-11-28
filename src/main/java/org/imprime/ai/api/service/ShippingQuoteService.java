@@ -8,6 +8,7 @@ import org.imprime.ai.api.http.request.payment.CalculateShippingQuotesRequest;
 import org.imprime.ai.api.http.request.payment.CheckoutItemRequest;
 import org.imprime.ai.api.http.response.payment.ShippingQuotesResponse;
 import org.imprime.ai.api.model.Address;
+import org.imprime.ai.api.model.ChatMessage;
 import org.imprime.ai.api.model.Company;
 import org.imprime.ai.api.model.OrderShippingQuote;
 import org.imprime.ai.api.model.Product;
@@ -15,6 +16,7 @@ import org.imprime.ai.api.model.User;
 import org.imprime.ai.api.model.enums.EntityType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.StatusCd;
+import org.imprime.ai.api.model.exception.BadGatewayException;
 import org.imprime.ai.api.model.exception.BadRequestException;
 import org.imprime.ai.api.model.exception.ForbiddenException;
 import org.imprime.ai.api.repo.db.AddressRepository;
@@ -30,11 +32,13 @@ import java.text.Normalizer;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -114,40 +118,132 @@ public class ShippingQuoteService {
             Address origin = resolveCompanyAddress(company);
             User sender = company.getOwnerId() == null ? null : userRepository.findById(company.getOwnerId()).orElse(null);
             Map<String, Object> payload = buildCalculatePayload(company, sender, buyer, origin, destination, group.getValue());
-            JsonNode response = melhorEnvioClient.post("/api/v2/me/shipment/calculate", payload);
-            JsonNode rows = response != null && response.isArray() ? response : response == null ? null : response.path("data");
-            List<ShippingQuotesResponse.ShippingOption> options = new ArrayList<>();
-            if (rows != null && rows.isArray()) {
-                for (JsonNode row : rows) {
-                    if (row.hasNonNull("error") || !row.hasNonNull("id")) continue;
-                    BigDecimal price = decimal(row.path("custom_price"), row.path("price"));
-                    if (price == null || price.signum() < 0) continue;
-                    String serviceName = text(row.path("name"), "Serviço Melhor Envio");
-                    String carrier = text(row.path("company").path("name"), "Transportadora");
-                    Map<String, Object> cartPayload = buildCartPayload(
-                            company, sender, buyer, origin, destination, group.getValue(), row);
-
-                    OrderShippingQuote quote = new OrderShippingQuote();
-                    quote.setGuid(UUID.randomUUID().toString());
-                    quote.setBuyerId(buyer.getId());
-                    quote.setVendorId(company.getId());
-                    quote.setDeliveryAddressId(destination.getId());
-                    quote.setServiceId(row.path("id").asInt());
-                    quote.setServiceName(serviceName);
-                    quote.setCarrierName(carrier);
-                    quote.setQuotePrice(price.setScale(2, RoundingMode.HALF_UP));
-                    quote.setDeliveryDays(integer(row.path("custom_delivery_time"), row.path("delivery_time")));
-                    quote.setSnapshotJson(writeSnapshot(payload, cartPayload, row));
-                    quote.setExpiresAt(Instant.now().plus(15, ChronoUnit.MINUTES));
-                    quoteRepository.save(quote);
-                    options.add(new ShippingQuotesResponse.ShippingOption(
-                            quote.getGuid(), quote.getServiceId(), serviceName, carrier,
-                            quote.getQuotePrice(), quote.getDeliveryDays()));
-                }
-            }
+            List<ShippingQuotesResponse.ShippingOption> options = fetchAndPersistOptions(
+                    buyer,
+                    company,
+                    destination,
+                    payload,
+                    null,
+                    row -> buildCartPayload(company, sender, buyer, origin, destination, group.getValue(), row),
+                    false
+            );
             vendors.add(new ShippingQuotesResponse.VendorQuotes(company.getGuid(), company.getName(), options));
         }
         return new ShippingQuotesResponse(vendors);
+    }
+
+    public ChatOfferCalculationResult calculateForChatOffer(
+            User buyer,
+            Company company,
+            Address destination,
+            ChatMessage offerMessage,
+            BigDecimal serviceAmount,
+            String projectTitle
+    ) {
+        if (buyer == null || company == null || destination == null || offerMessage == null
+                || serviceAmount == null || serviceAmount.signum() <= 0
+                || offerMessage.getPackageWeight() == null || offerMessage.getPackageWeight().signum() <= 0
+                || offerMessage.getPackageHeight() == null || offerMessage.getPackageHeight().signum() <= 0
+                || offerMessage.getPackageWidth() == null || offerMessage.getPackageWidth().signum() <= 0
+                || offerMessage.getPackageLength() == null || offerMessage.getPackageLength().signum() <= 0) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
+        if (digitsOnly(destination.getZipCode()).length() != 8) {
+            throw new BadRequestException(MessageCd.INVALID_ADDRESS_ZIP_CODE);
+        }
+        Address origin = resolveCompanyAddressOrThrowMissing(company);
+        if (digitsOnly(origin.getZipCode()).length() != 8) {
+            throw new BadRequestException(MessageCd.MISSING_COMPANY_ADDRESS);
+        }
+
+        User sender = company.getOwnerId() == null ? null : userRepository.findById(company.getOwnerId()).orElse(null);
+        BigDecimal insuredValue = serviceAmount.setScale(2, RoundingMode.HALF_UP);
+        Map<String, Object> baseVolume = buildDirectOfferVolume(offerMessage);
+        Map<String, Object> calculateVolume = new LinkedHashMap<>(baseVolume);
+        calculateVolume.put("insurance", insuredValue);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("from", contactAddress(company.getName(), sender, company.getDocument(), origin, true));
+        payload.put("to", contactAddress(buyer.getFullName(), buyer, null, destination, false));
+        payload.put("volumes", List.of(calculateVolume));
+        payload.put("options", Map.of("receipt", false, "own_hand", false));
+
+        List<ShippingQuotesResponse.ShippingOption> options = fetchAndPersistOptions(
+                buyer,
+                company,
+                destination,
+                payload,
+                offerMessage.getGuid(),
+                row -> buildChatOfferCartPayload(company, sender, buyer, origin, destination, baseVolume, insuredValue, projectTitle, row),
+                true
+        );
+        options = options.stream()
+                .sorted(Comparator.comparing(ShippingQuotesResponse.ShippingOption::price)
+                        .thenComparing(ShippingQuotesResponse.ShippingOption::deliveryDays, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        return new ChatOfferCalculationResult(origin.getZipCode(), options);
+    }
+
+    private List<ShippingQuotesResponse.ShippingOption> fetchAndPersistOptions(
+            User buyer,
+            Company company,
+            Address destination,
+            Map<String, Object> payload,
+            String chatMessageGuid,
+            Function<JsonNode, Map<String, Object>> cartPayloadBuilder,
+            boolean wrapGatewayFailure
+    ) {
+        JsonNode response;
+        try {
+            response = melhorEnvioClient.post("/api/v2/me/shipment/calculate", payload);
+        } catch (RuntimeException exception) {
+            if (wrapGatewayFailure) {
+                throw new BadGatewayException(MessageCd.BAD_GATEWAY);
+            }
+            throw exception;
+        }
+        JsonNode rows = response != null && response.isArray() ? response : response == null ? null : response.path("data");
+        List<ShippingQuotesResponse.ShippingOption> options = new ArrayList<>();
+        if (rows != null && rows.isArray()) {
+            for (JsonNode row : rows) {
+                if (row.hasNonNull("error") || !row.hasNonNull("id")) continue;
+                BigDecimal price = decimal(row.path("custom_price"), row.path("price"));
+                if (price == null || price.signum() < 0) continue;
+                String serviceName = text(row.path("name"), "Serviço Melhor Envio");
+                String carrier = text(row.path("company").path("name"), "Transportadora");
+                Map<String, Object> cartPayload = cartPayloadBuilder.apply(row);
+
+                OrderShippingQuote quote = new OrderShippingQuote();
+                quote.setGuid(UUID.randomUUID().toString());
+                quote.setBuyerId(buyer.getId());
+                quote.setVendorId(company.getId());
+                quote.setDeliveryAddressId(destination.getId());
+                quote.setServiceId(row.path("id").asInt());
+                quote.setServiceName(serviceName);
+                quote.setCarrierName(carrier);
+                quote.setQuotePrice(price.setScale(2, RoundingMode.HALF_UP));
+                quote.setDeliveryDays(integer(row.path("custom_delivery_time"), row.path("delivery_time")));
+                quote.setSnapshotJson(writeSnapshot(payload, cartPayload, row));
+                quote.setExpiresAt(Instant.now().plus(15, ChronoUnit.MINUTES));
+                quote.setChatMessageGuid(chatMessageGuid);
+                quoteRepository.save(quote);
+                options.add(new ShippingQuotesResponse.ShippingOption(
+                        quote.getGuid(), quote.getServiceId(), serviceName, carrier,
+                        quote.getQuotePrice(), quote.getDeliveryDays()));
+            }
+        }
+        return options;
+    }
+
+    private Address resolveCompanyAddressOrThrowMissing(Company company) {
+        if (company.getAddressId() != null) {
+            Address address = addressRepository.findById(company.getAddressId()).orElse(null);
+            if (address != null && address.getStatus() == StatusCd.ACTIVE
+                    && address.getOwnerType() == EntityType.COMPANY
+                    && company.getId().equals(address.getOwnerId())) return address;
+        }
+        return addressRepository.findAllByOwnerTypeAndOwnerIdAndStatus(EntityType.COMPANY, company.getId(), StatusCd.ACTIVE)
+                .stream().findFirst().orElseThrow(() -> new BadRequestException(MessageCd.MISSING_COMPANY_ADDRESS));
     }
 
     private Address resolveCompanyAddress(Company company) {
@@ -200,7 +296,57 @@ public class ShippingQuoteService {
         return cart;
     }
 
+    private Map<String, Object> buildChatOfferCartPayload(
+            Company company,
+            User sender,
+            User buyer,
+            Address from,
+            Address to,
+            Map<String, Object> baseVolume,
+            BigDecimal insuredValue,
+            String projectTitle,
+            JsonNode quoteRow
+    ) {
+        List<Map<String, Object>> products = List.of(Map.of(
+                "name", trimOrFallback(projectTitle, "Impressão 3D sob demanda"),
+                "quantity", 1,
+                "unitary_value", insuredValue
+        ));
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("insurance_value", insuredValue);
+        options.put("receipt", false);
+        options.put("own_hand", false);
+        options.put("reverse", false);
+        options.put("non_commercial", true);
+        options.put("platform", "Imprime.AI");
+        options.put("reminder", "Pedido Imprime.AI");
+
+        Map<String, Object> cart = new LinkedHashMap<>();
+        cart.put("from", contactAddress(company.getName(), sender, company.getDocument(), from, true));
+        cart.put("to", contactAddress(buyer.getFullName(), buyer, null, to, false));
+        cart.put("products", products);
+        cart.put("volumes", extractCartVolumes(quoteRow, () -> new LinkedHashMap<>(baseVolume)));
+        cart.put("options", options);
+        return cart;
+    }
+
+    private Map<String, Object> buildDirectOfferVolume(ChatMessage offerMessage) {
+        Map<String, Object> volume = new LinkedHashMap<>();
+        volume.put("width", clampDimensionCm(offerMessage.getPackageWidth(), MIN_WIDTH_CM));
+        volume.put("height", clampDimensionCm(offerMessage.getPackageHeight(), MIN_HEIGHT_CM));
+        volume.put("length", clampDimensionCm(offerMessage.getPackageLength(), MIN_LENGTH_CM));
+        volume.put("weight", clampWeightKg(offerMessage.getPackageWeight()));
+        return volume;
+    }
+
     private List<Map<String, Object>> extractCartVolumes(JsonNode quoteRow, List<ProductLine> lines) {
+        return extractCartVolumes(quoteRow, () -> buildCartVolume(lines));
+    }
+
+    private List<Map<String, Object>> extractCartVolumes(
+            JsonNode quoteRow,
+            java.util.function.Supplier<Map<String, Object>> fallbackVolumeSupplier
+    ) {
         if (quoteRow != null && quoteRow.path("packages").isArray() && !quoteRow.path("packages").isEmpty()) {
             List<Map<String, Object>> parsed = new ArrayList<>();
             for (JsonNode pkg : quoteRow.path("packages")) {
@@ -225,12 +371,12 @@ public class ShippingQuoteService {
                 int serviceId = quoteRow.path("id").asInt(-1);
                 String carrierName = quoteRow.path("company").path("name").asText("");
                 if (parsed.size() > 1 && isCorreiosCarrier(companyId, serviceId, carrierName)) {
-                    return List.of(buildCartVolume(lines));
+                    return List.of(fallbackVolumeSupplier.get());
                 }
                 return parsed;
             }
         }
-        return List.of(buildCartVolume(lines));
+        return List.of(fallbackVolumeSupplier.get());
     }
 
     private Map<String, Object> buildVolume(List<ProductLine> lines) {
@@ -431,6 +577,11 @@ public class ShippingQuoteService {
     private String text(JsonNode node, String fallback) {
         return node != null && !node.isMissingNode() && !node.isNull() && !node.asText().isBlank() ? node.asText() : fallback;
     }
+
+    public record ChatOfferCalculationResult(
+            String originZipCode,
+            List<ShippingQuotesResponse.ShippingOption> options
+    ) { }
 
     private record ProductLine(Product product, int quantity) { }
 }

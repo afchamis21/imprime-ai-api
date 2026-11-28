@@ -2,9 +2,17 @@ package org.imprime.ai.api.service;
 
 import com.stripe.model.checkout.Session;
 import org.imprime.ai.api.config.StripeConfigProperties;
+import org.imprime.ai.api.http.ServiceContext;
 import org.imprime.ai.api.model.Order;
+import org.imprime.ai.api.model.OrderStatus;
+import org.imprime.ai.api.model.User;
+import org.imprime.ai.api.model.enums.MessageCd;
+import org.imprime.ai.api.model.enums.OrderPricingSource;
+import org.imprime.ai.api.model.enums.OrderStatusCd;
+import org.imprime.ai.api.model.enums.SlicingValidationStatus;
 import org.imprime.ai.api.model.exception.ConflictException;
 import org.imprime.ai.api.repo.db.OrderRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +36,63 @@ class QuoteCheckoutServiceTest {
         order.setCheckoutSessionId("cs_test_order");
         order.setOrderTotal(new BigDecimal("49.90"));
         when(orders.findLockedByGuid(order.getGuid())).thenReturn(Optional.of(order));
+    }
+
+    @AfterEach
+    void tearDown() {
+        ServiceContext.clear();
+    }
+
+    @Test
+    void instantQuoteOrderBlocksStripeCheckoutUntilValidatedAndConfirmed() {
+        User buyer = new User();
+        buyer.setId(77L);
+        ServiceContext.getContext().setUser(buyer);
+
+        order.setBuyerId(77L);
+        order.setVendorId(10L);
+        order.setCheckoutSessionId(null);
+        order.setPricingSource(OrderPricingSource.INSTANT_QUOTE);
+        order.setServerValidatedAmount(new BigDecimal("49.90"));
+        order.setServiceAmount(new BigDecimal("49.90"));
+
+        OrderStatus confirmedStatus = new OrderStatus();
+        confirmedStatus.setStatusCd(OrderStatusCd.CONFIRMED);
+        when(statuses.findLatest(order)).thenReturn(confirmedStatus);
+
+        StripeConfigProperties simStripe = new StripeConfigProperties();
+        simStripe.setAllowSimulatedOrderCheckout(true);
+        simStripe.setSuccessUrl("https://imprimeai.shop/cart?payment=success&session_id={CHECKOUT_SESSION_ID}");
+        QuoteCheckoutService simCheckout = new QuoteCheckoutService(orders, statuses, simStripe);
+
+        order.setSlicingValidationStatus(SlicingValidationStatus.PENDING);
+        assertEquals(MessageCd.SLICE_VALIDATION_PENDING,
+                assertThrows(ConflictException.class, () -> simCheckout.create("quote-guid")).getMessageCd());
+
+        order.setSlicingValidationStatus(SlicingValidationStatus.RUNNING);
+        assertEquals(MessageCd.SLICE_VALIDATION_PENDING,
+                assertThrows(ConflictException.class, () -> simCheckout.create("quote-guid")).getMessageCd());
+
+        order.setSlicingValidationStatus(SlicingValidationStatus.RECALCULATED);
+        assertEquals(MessageCd.SLICE_CONFIRMATION_REQUIRED,
+                assertThrows(ConflictException.class, () -> simCheckout.create("quote-guid")).getMessageCd());
+
+        order.setSlicingValidationStatus(SlicingValidationStatus.REJECTED);
+        assertEquals(MessageCd.SLICE_VALIDATION_FAILED,
+                assertThrows(ConflictException.class, () -> simCheckout.create("quote-guid")).getMessageCd());
+
+        order.setSlicingValidationStatus(SlicingValidationStatus.VALIDATED);
+        order.setServerValidatedAmount(null);
+        assertEquals(MessageCd.SLICE_VALIDATION_FAILED,
+                assertThrows(ConflictException.class, () -> simCheckout.create("quote-guid")).getMessageCd());
+
+        order.setServerValidatedAmount(new BigDecimal("54.90"));
+        order.setOrderTotal(new BigDecimal("54.90"));
+        when(orders.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        var res = simCheckout.create("quote-guid");
+        assertEquals("SIMULATED", res.status());
+        assertEquals(new BigDecimal("54.90"), res.totalAmount());
+        assertNotNull(order.getCheckoutSessionId());
     }
 
     @Test

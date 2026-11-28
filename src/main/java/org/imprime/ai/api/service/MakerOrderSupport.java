@@ -122,7 +122,9 @@ public class MakerOrderSupport {
         Map<Long, Instant> result = new HashMap<>();
         for (Order order : orders) {
             Instant base = order.getCreateDt() != null ? order.getCreateDt() : Instant.now();
-            int days = productionDaysByOrder.getOrDefault(order.getId(), companyLead);
+            int days = (order.getProductionDays() != null && order.getProductionDays() > 0)
+                    ? order.getProductionDays()
+                    : productionDaysByOrder.getOrDefault(order.getId(), companyLead);
             result.put(order.getId(), base.plus(Duration.ofDays(days)));
         }
         return result;

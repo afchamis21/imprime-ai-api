@@ -120,7 +120,18 @@ public class OrderManagementServiceImpl implements OrderManagementService {
                         colors,
                         plate.getEstimatedWeightGrams(),
                         plate.getEstimatedPrintTimeMinutes(),
-                        plate.getEstimatedPriceBrl()
+                        plate.getEstimatedPriceBrl(),
+                        plate.getSlicerEngineId(),
+                        plate.getSlicerProfileId(),
+                        plate.getClientModelWeightGrams(),
+                        plate.getClientSupportWeightGrams(),
+                        plate.getClientBasePrintTimeSeconds(),
+                        plate.getServerModelWeightGrams(),
+                        plate.getServerSupportWeightGrams(),
+                        plate.getServerTotalWeightGrams(),
+                        plate.getServerBasePrintTimeSeconds(),
+                        plate.getSlicingValidationStatus(),
+                        plate.getValidated3mfFileAssetId() != null
                 ));
                 fallbackIndex++;
             }

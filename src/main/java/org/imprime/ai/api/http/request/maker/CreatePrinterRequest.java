@@ -3,6 +3,9 @@ package org.imprime.ai.api.http.request.maker;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -65,7 +68,15 @@ public record CreatePrinterRequest(
         Boolean isEnclosedOverride,
 
         @Schema(description = "Sobrescrita opcional dos materiais suportados por esta unidade")
-        List<MaterialType> supportedMaterialsOverride
+        List<MaterialType> supportedMaterialsOverride,
+
+        @Schema(description = "Categoria de velocidade opcional da impressora (sobrescreve o catálogo)")
+        PrinterSpeedTier speedTier,
+
+        @DecimalMin("0.50")
+        @DecimalMax("5.00")
+        @Schema(description = "Multiplicador de velocidade customizado opcional em relação à Bambu A1 (1.0x)")
+        BigDecimal speedMultiplierOverride
 ) {
     public CreatePrinterRequest(
             String name,
@@ -81,7 +92,31 @@ public record CreatePrinterRequest(
         this(
                 name, model, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
                 purchasePrice, lifespanHours, hourlyDepreciationRate,
-                null, null, null, null, null
+                null, null, null, null, null, null, null
+        );
+    }
+
+    public CreatePrinterRequest(
+            String name,
+            String model,
+            BuildVolumeRequest buildVolume,
+            BigDecimal nozzleDiameterMm,
+            Integer powerWatts,
+            String ipAddress,
+            BigDecimal purchasePrice,
+            Integer lifespanHours,
+            BigDecimal hourlyDepreciationRate,
+            String printerCatalogGuid,
+            Boolean supportsMulticolor,
+            Integer multicolorSlots,
+            Boolean isEnclosedOverride,
+            List<MaterialType> supportedMaterialsOverride
+    ) {
+        this(
+                name, model, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
+                purchasePrice, lifespanHours, hourlyDepreciationRate,
+                printerCatalogGuid, supportsMulticolor, multicolorSlots, isEnclosedOverride, supportedMaterialsOverride,
+                null, null
         );
     }
 }

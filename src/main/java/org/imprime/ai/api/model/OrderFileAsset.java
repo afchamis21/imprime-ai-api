@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.imprime.ai.api.model.enums.SlicingValidationStatus;
 import org.imprime.ai.api.model.base.Auditable;
 
 import java.math.BigDecimal;
@@ -117,4 +118,53 @@ public class OrderFileAsset extends Auditable {
 
     @Column(name = "ESTIMATED_PRICE_BRL", precision = 10, scale = 2)
     private BigDecimal estimatedPriceBrl;
+
+    @Column(name = "SLICER_ENGINE_ID", length = 30)
+    private String slicerEngineId;
+
+    @Column(name = "SLICER_PROFILE_ID", length = 120)
+    private String slicerProfileId;
+
+    @Column(name = "CLIENT_MODEL_WEIGHT_GRAMS", precision = 10, scale = 2)
+    private BigDecimal clientModelWeightGrams;
+
+    @Column(name = "CLIENT_SUPPORT_WEIGHT_GRAMS", precision = 10, scale = 2)
+    private BigDecimal clientSupportWeightGrams;
+
+    @Column(name = "CLIENT_BASE_PRINT_TIME_SECONDS")
+    private Integer clientBasePrintTimeSeconds;
+
+    @Column(name = "SERVER_MODEL_WEIGHT_GRAMS", precision = 10, scale = 2)
+    private BigDecimal serverModelWeightGrams;
+
+    @Column(name = "SERVER_SUPPORT_WEIGHT_GRAMS", precision = 10, scale = 2)
+    private BigDecimal serverSupportWeightGrams;
+
+    @Column(name = "SERVER_TOTAL_WEIGHT_GRAMS", precision = 10, scale = 2)
+    private BigDecimal serverTotalWeightGrams;
+
+    @Column(name = "SERVER_BASE_PRINT_TIME_SECONDS")
+    private Integer serverBasePrintTimeSeconds;
+
+    @Column(name = "WEIGHT_DIVERGENCE_PERCENT", precision = 6, scale = 2)
+    private BigDecimal weightDivergencePercent;
+
+    @Column(name = "TIME_DIVERGENCE_PERCENT", precision = 6, scale = 2)
+    private BigDecimal timeDivergencePercent;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "SLICING_VALIDATION_STATUS", length = 30)
+    private SlicingValidationStatus slicingValidationStatus;
+
+    @Column(name = "SLICING_VALIDATED_AT")
+    private java.time.Instant slicingValidatedAt;
+
+    @Column(name = "SLICING_VALIDATION_ERROR", length = 500)
+    private String slicingValidationError;
+
+    @Column(name = "VALIDATED_3MF_FILE_ASSET_ID")
+    private Long validated3mfFileAssetId;
+
+    @Column(name = "VALIDATED_GCODE_FILE_ASSET_ID")
+    private Long validatedGcodeFileAssetId;
 }

@@ -50,7 +50,17 @@ public class ErrorHandler {
 
     @ExceptionHandler(value = { HttpException.class })
     public ResponseEntity<BaseResponse<Void>> handleException(HttpException e) {
-        ServiceContext.getContext().addMessage(e.getMessageCd(), e.getArgs());
+        ServiceContext ctx = ServiceContext.getContext();
+        ctx.addMessage(e.getMessageCd(), e.getArgs());
+        if ((ctx.getMessages().isEmpty()
+                || ctx.getMessages().stream().allMatch(m -> m.getMessage() == null || m.getMessage().isBlank()))
+                && e.getMessage() != null && !e.getMessage().isBlank()) {
+            ctx.addResponseMessage(new ResponseMessage(
+                    e.getMessageCd() != null ? e.getMessageCd().getCode() : "ERR",
+                    e.getMessage(),
+                    MessageLkup.MessageType.ERROR
+            ));
+        }
         ServiceContext.addException(e);
 
         return BaseResponse.build(null, e.getHttpStatus());

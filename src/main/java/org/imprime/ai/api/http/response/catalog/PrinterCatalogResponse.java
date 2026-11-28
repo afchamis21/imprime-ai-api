@@ -5,6 +5,7 @@ import org.imprime.ai.api.model.enums.ExtruderType;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrinterConnectivity;
 import org.imprime.ai.api.model.enums.PrinterKinematics;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import org.imprime.ai.api.model.enums.PrinterTechnology;
 import org.imprime.ai.api.model.enums.StatusCd;
 
@@ -58,6 +59,8 @@ public record PrinterCatalogResponse(
         String notes,
         List<MaterialType> supportedMaterials,
         long activeMakersFleetCount,
+        PrinterSpeedTier speedTier,
+        BigDecimal speedMultiplier,
         StatusCd status,
         Instant createdAt,
         Instant updatedAt

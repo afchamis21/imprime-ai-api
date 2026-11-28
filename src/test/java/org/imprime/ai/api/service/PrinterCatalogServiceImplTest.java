@@ -154,7 +154,7 @@ class PrinterCatalogServiceImplTest {
                 null, null, null, null, null, null, 320, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
                 true, "CFS", 8, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, "Upgrade CFS"
+                null, null, null, null, null, null, null, null, null, null, null, null, null, "Upgrade CFS"
         );
         PrinterCatalogResponse updated = service.patchPrinter("pc-k1", patch);
 
@@ -257,6 +257,8 @@ class PrinterCatalogServiceImplTest {
                 null,
                 null,
                 "Notas",
+                null,
+                null,
                 "Teste"
         );
     }

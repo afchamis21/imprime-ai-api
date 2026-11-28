@@ -169,4 +169,70 @@ class MakerEligibilityServiceTest {
         p.setColorCount(colors);
         return p;
     }
+
+    @Test
+    void matchPrintersForInstantQuoteSelectsFastestCompatiblePrinterWithXyRotationAndMaterials() {
+        Company maker = baseCompany(10L, true, 4, true, List.of(MaterialType.PLA, MaterialType.PETG));
+
+        Asset slowLarge = basePrinter(10L, null, 300, 300, 300, false, 1);
+        slowLarge.setId(101L);
+        slowLarge.setGuid("p-slow");
+        slowLarge.setName("Ender 3 Max");
+        slowLarge.setModel("Ender 3");
+        slowLarge.setPrinterStatus(org.imprime.ai.api.model.enums.PrinterStatus.ONLINE);
+        slowLarge.setSpeedTier(org.imprime.ai.api.model.enums.PrinterSpeedTier.STANDARD);
+
+        Asset fastCompact = basePrinter(10L, null, 250, 200, 180, true, 4);
+        fastCompact.setId(102L);
+        fastCompact.setGuid("p-fast");
+        fastCompact.setName("Bambu P1S");
+        fastCompact.setModel("Bambu Lab P1S");
+        fastCompact.setPrinterStatus(org.imprime.ai.api.model.enums.PrinterStatus.ONLINE);
+        fastCompact.setSpeedTier(org.imprime.ai.api.model.enums.PrinterSpeedTier.HIGH_SPEED);
+
+        Asset offlineFast = basePrinter(10L, null, 256, 256, 256, true, 4);
+        offlineFast.setId(103L);
+        offlineFast.setGuid("p-off");
+        offlineFast.setPrinterStatus(org.imprime.ai.api.model.enums.PrinterStatus.OFFLINE);
+        offlineFast.setSpeedTier(org.imprime.ai.api.model.enums.PrinterSpeedTier.HIGH_SPEED);
+        offlineFast.setSpeedMultiplierOverride(new BigDecimal("0.80"));
+
+        // Needs 190x240 (fits 250x200 ONLY after 90-degree XY rotation)
+        MakerEligibilityService.PlateMatchSpec spec = new MakerEligibilityService.PlateMatchSpec(
+                1, MaterialType.PETG,
+                new BigDecimal("190"), new BigDecimal("240"), new BigDecimal("100"),
+                false, 1
+        );
+
+        PrinterSpeedResolver speedResolver = new PrinterSpeedResolver();
+        var match = service.matchPrintersForInstantQuote(
+                maker,
+                List.of(slowLarge, fastCompact, offlineFast),
+                Map.of(),
+                List.of(spec),
+                Set.of(MaterialType.PLA, MaterialType.PETG),
+                speedResolver
+        );
+
+        assertTrue(match.eligible());
+        assertNotNull(match.primaryPrinter());
+        assertEquals("p-fast", match.primaryPrinter().printerGuid());
+        assertEquals(org.imprime.ai.api.model.enums.PrinterSpeedTier.HIGH_SPEED, match.primaryPrinter().speedTier());
+        assertEquals(new BigDecimal("1.00"), match.primaryPrinter().speedMultiplier());
+
+        // Missing PETG price -> ineligible
+        var unpriced = service.matchPrintersForInstantQuote(
+                maker, List.of(fastCompact), Map.of(), List.of(spec), Set.of(MaterialType.PLA), speedResolver
+        );
+        assertFalse(unpriced.eligible());
+        assertEquals("MISSING_MATERIAL_PRICE", unpriced.rejectionReason());
+
+        // Empty fleet -> legacy conservative STANDARD (256x256x256, 2.20x) fallback
+        var legacyFallback = service.matchPrintersForInstantQuote(
+                maker, List.of(), Map.of(), List.of(spec), Set.of(MaterialType.PETG), speedResolver
+        );
+        assertTrue(legacyFallback.eligible());
+        assertEquals(org.imprime.ai.api.model.enums.PrinterSpeedTier.STANDARD, legacyFallback.primaryPrinter().speedTier());
+        assertEquals(new BigDecimal("2.20"), legacyFallback.primaryPrinter().speedMultiplier());
+    }
 }

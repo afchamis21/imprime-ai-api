@@ -5,6 +5,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import jakarta.validation.constraints.Size;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrinterStatus;
@@ -83,7 +86,15 @@ public record UpdatePrinterRequest(
         Boolean isEnclosedOverride,
 
         @Schema(description = "Sobrescrita opcional dos materiais suportados por esta unidade")
-        List<MaterialType> supportedMaterialsOverride
+        List<MaterialType> supportedMaterialsOverride,
+
+        @Schema(description = "Categoria de velocidade opcional da impressora")
+        PrinterSpeedTier speedTier,
+
+        @DecimalMin("0.50")
+        @DecimalMax("5.00")
+        @Schema(description = "Multiplicador de velocidade customizado opcional")
+        BigDecimal speedMultiplierOverride
 ) {
     public UpdatePrinterRequest(
             String name,
@@ -106,7 +117,38 @@ public record UpdatePrinterRequest(
                 name, model, status, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
                 amsSlots, config, purchasePrice, lifespanHours, hourlyDepreciationRate,
                 clearPurchasePrice, clearLifespanHours, clearHourlyDepreciationRate,
-                null, null, null, null, null
+                null, null, null, null, null, null, null
+        );
+    }
+
+    public UpdatePrinterRequest(
+            String name,
+            String model,
+            PrinterStatus status,
+            BuildVolumeRequest buildVolume,
+            BigDecimal nozzleDiameterMm,
+            Integer powerWatts,
+            String ipAddress,
+            List<AmsSlotRequest> amsSlots,
+            PrinterConfigRequest config,
+            BigDecimal purchasePrice,
+            Integer lifespanHours,
+            BigDecimal hourlyDepreciationRate,
+            Boolean clearPurchasePrice,
+            Boolean clearLifespanHours,
+            Boolean clearHourlyDepreciationRate,
+            String printerCatalogGuid,
+            Boolean supportsMulticolor,
+            Integer multicolorSlots,
+            Boolean isEnclosedOverride,
+            List<MaterialType> supportedMaterialsOverride
+    ) {
+        this(
+                name, model, status, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
+                amsSlots, config, purchasePrice, lifespanHours, hourlyDepreciationRate,
+                clearPurchasePrice, clearLifespanHours, clearHourlyDepreciationRate,
+                printerCatalogGuid, supportsMulticolor, multicolorSlots, isEnclosedOverride, supportedMaterialsOverride,
+                null, null
         );
     }
 }

@@ -7,6 +7,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.PrinterStatus;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 
 import java.math.BigDecimal;
 
@@ -98,4 +99,11 @@ public class Asset extends Auditable {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "TELEMETRY", columnDefinition = "jsonb")
     private String telemetryJson = "{}";
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "SPEED_TIER", length = 20)
+    private PrinterSpeedTier speedTier;
+
+    @Column(name = "SPEED_MULTIPLIER_OVERRIDE", precision = 4, scale = 2)
+    private java.math.BigDecimal speedMultiplierOverride;
 }

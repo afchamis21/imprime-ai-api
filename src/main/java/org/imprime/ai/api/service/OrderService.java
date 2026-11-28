@@ -38,6 +38,7 @@ import java.util.HexFormat;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -326,6 +327,17 @@ public class OrderService {
                         ? meta.estimatedPrintTimeMinutes()
                         : null);
         entity.setEstimatedPriceBrl(positiveBigDecimalOrNull(meta != null ? meta.estimatedPriceBrl() : null));
+        entity.setSlicerEngineId(truncate(meta != null ? meta.slicerEngineId() : null, 30));
+        entity.setSlicerProfileId(truncate(meta != null ? meta.slicerProfileId() : null, 120));
+        entity.setClientModelWeightGrams(positiveBigDecimalOrNull(meta != null ? meta.clientModelWeightGrams() : null));
+        entity.setClientSupportWeightGrams(
+                meta != null && meta.clientSupportWeightGrams() != null && meta.clientSupportWeightGrams().signum() >= 0
+                        ? meta.clientSupportWeightGrams()
+                        : null);
+        entity.setClientBasePrintTimeSeconds(
+                meta != null && meta.clientBasePrintTimeSeconds() != null && meta.clientBasePrintTimeSeconds() > 0
+                        ? meta.clientBasePrintTimeSeconds()
+                        : null);
         return entity;
     }
 
@@ -388,10 +400,51 @@ public class OrderService {
 
     @Transactional
     public OrderStatus acceptOffer(String orderGuid, BigDecimal offer, Company company) {
+        return acceptOffer(orderGuid, offer, company, null, null, null);
+    }
+
+    @Transactional
+    public OrderStatus acceptOffer(
+            String orderGuid,
+            BigDecimal serviceOffer,
+            Company company,
+            @Nullable ChatMessage offerMessage,
+            @Nullable OrderShippingQuote selectedQuote,
+            @Nullable Long fromAddressId
+    ) {
         Order order = makerCompliance.lockOrder(orderGuid);
         makerCompliance.requireNoRefusal(order.getId(), company.getId());
-        order.setOrderTotal(offer);
+
+        BigDecimal normalizedService = serviceOffer.setScale(2, RoundingMode.HALF_UP);
         order.setVendorId(company.getId());
+        order.setServiceAmount(normalizedService);
+        if (fromAddressId != null) {
+            order.setFromAddressId(fromAddressId);
+        }
+        if (offerMessage != null) {
+            order.setProductionDays(offerMessage.getProductionDays());
+            order.setPackageWeight(offerMessage.getPackageWeight());
+            order.setPackageHeight(offerMessage.getPackageHeight());
+            order.setPackageWidth(offerMessage.getPackageWidth());
+            order.setPackageLength(offerMessage.getPackageLength());
+        }
+        if (selectedQuote != null) {
+            BigDecimal shippingPrice = selectedQuote.getQuotePrice() != null
+                    ? selectedQuote.getQuotePrice().setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            order.setToAddressId(selectedQuote.getDeliveryAddressId());
+            order.setShippingCost(shippingPrice);
+            order.setShippingServiceId(selectedQuote.getServiceId());
+            order.setShippingServiceName(selectedQuote.getServiceName());
+            order.setShippingQuotePrice(shippingPrice);
+            order.setShippingDeliveryDays(selectedQuote.getDeliveryDays());
+            order.setShippingQuoteSnapshotJson(selectedQuote.getSnapshotJson());
+            order.setCarrierName(selectedQuote.getCarrierName());
+            order.setOrderTotal(normalizedService.add(shippingPrice).setScale(2, RoundingMode.HALF_UP));
+        } else {
+            order.setShippingCost(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            order.setOrderTotal(normalizedService);
+        }
 
         orderRepository.save(order);
 
@@ -444,6 +497,11 @@ public class OrderService {
                 copy.setEstimatedWeightGrams(src.getEstimatedWeightGrams());
                 copy.setEstimatedPrintTimeMinutes(src.getEstimatedPrintTimeMinutes());
                 copy.setEstimatedPriceBrl(src.getEstimatedPriceBrl());
+                copy.setSlicerEngineId(src.getSlicerEngineId());
+                copy.setSlicerProfileId(src.getSlicerProfileId());
+                copy.setClientModelWeightGrams(src.getClientModelWeightGrams());
+                copy.setClientSupportWeightGrams(src.getClientSupportWeightGrams());
+                copy.setClientBasePrintTimeSeconds(src.getClientBasePrintTimeSeconds());
                 clonedFiles.add(copy);
             }
             orderFileAssetRepository.saveAll(clonedFiles);

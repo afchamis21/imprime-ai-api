@@ -98,7 +98,15 @@ public class OrderViewAssembler {
                 statusHistory,
                 order.getCreateDt(),
                 order.getUpdateDt(),
-                order.getPaymentConfirmedAt()
+                order.getPaymentConfirmedAt(),
+                order.getProductionDays(),
+                order.getPackageWeight(),
+                order.getPackageHeight(),
+                order.getPackageWidth(),
+                order.getPackageLength(),
+                order.getShippingServiceId(),
+                order.getShippingServiceName(),
+                order.getShippingDeliveryDays()
         );
     }
 
@@ -177,7 +185,11 @@ public class OrderViewAssembler {
             totalAmount = order.getOrderTotal() != null ? order.getOrderTotal() : subtotal.add(shippingCost);
         } else {
             totalAmount = order.getOrderTotal() != null ? order.getOrderTotal() : BigDecimal.ZERO;
-            subtotal = totalAmount.compareTo(shippingCost) >= 0 ? totalAmount.subtract(shippingCost) : totalAmount;
+            if (order.getServiceAmount() != null) {
+                subtotal = order.getServiceAmount();
+            } else {
+                subtotal = totalAmount.compareTo(shippingCost) >= 0 ? totalAmount.subtract(shippingCost) : totalAmount;
+            }
             items = buildFallbackAssetItem(order, subtotal);
         }
 

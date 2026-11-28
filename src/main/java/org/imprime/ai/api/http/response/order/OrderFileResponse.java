@@ -2,6 +2,8 @@ package org.imprime.ai.api.http.response.order;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import org.imprime.ai.api.model.enums.SlicingValidationStatus;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -68,7 +70,18 @@ public record OrderFileResponse(
         @Schema(description = "Tempo estimado de impressão pelo fatiador em minutos", example = "135")
         Integer estimatedPrintTimeMinutes,
         @Schema(description = "Preço estimado pelo fatiador em BRL", example = "42.90")
-        BigDecimal estimatedPriceBrl
+        BigDecimal estimatedPriceBrl,
+        String slicerEngineId,
+        String slicerProfileId,
+        BigDecimal clientModelWeightGrams,
+        BigDecimal clientSupportWeightGrams,
+        Integer clientBasePrintTimeSeconds,
+        BigDecimal serverModelWeightGrams,
+        BigDecimal serverSupportWeightGrams,
+        BigDecimal serverTotalWeightGrams,
+        Integer serverBasePrintTimeSeconds,
+        SlicingValidationStatus slicingValidationStatus,
+        Boolean hasValidated3mf
 ) {
     public OrderFileResponse(
             String fileGuid,
@@ -91,7 +104,51 @@ public record OrderFileResponse(
                 null, null, null, null, null, null,
                 1, null, null, null, null, null, null, null,
                 colorHex != null && !colorHex.isBlank() ? List.of(colorHex) : List.of(),
-                null, null, null
+                null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null
+        );
+    }
+
+    public OrderFileResponse(
+            String fileGuid,
+            String fileName,
+            Integer plateNumber,
+            String plateName,
+            String material,
+            String colorHex,
+            Integer infillPercent,
+            Boolean supports,
+            Double scaleX,
+            Double scaleY,
+            Double scaleZ,
+            Boolean isMultiColor,
+            String paintingInstructions,
+            BigDecimal dimensionXMm,
+            BigDecimal dimensionYMm,
+            BigDecimal dimensionZMm,
+            Integer colorCount,
+            BigDecimal layerHeightMm,
+            String urgency,
+            Integer quantity,
+            Integer wallCount,
+            String infillPattern,
+            String adhesionType,
+            String supportType,
+            String finish,
+            String tolerance,
+            String notes,
+            List<String> colors,
+            BigDecimal estimatedWeightGrams,
+            Integer estimatedPrintTimeMinutes,
+            BigDecimal estimatedPriceBrl
+    ) {
+        this(
+                fileGuid, fileName, plateNumber, plateName, material, colorHex,
+                infillPercent, supports, scaleX, scaleY, scaleZ, isMultiColor, paintingInstructions,
+                dimensionXMm, dimensionYMm, dimensionZMm, colorCount, layerHeightMm, urgency,
+                quantity, wallCount, infillPattern, adhesionType, supportType, finish, tolerance, notes,
+                colors, estimatedWeightGrams, estimatedPrintTimeMinutes, estimatedPriceBrl,
+                null, null, null, null, null, null, null, null, null, null, null
         );
     }
 }

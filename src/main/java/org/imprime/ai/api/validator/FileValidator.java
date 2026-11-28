@@ -24,6 +24,8 @@ public class FileValidator {
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.IMAGE, Set.of("png", "jpg", "jpeg", "webp", "gif", "svg", "avif"));
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.ARCHIVE_3D, Set.of("stl", "3mf", "gcode", "obj"));
         ALLOWED_EXTENSIONS.put(FileAsset.AssetType.SCAD_SCRIPT, Set.of("scad"));
+        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.VALIDATED_3MF, Set.of("3mf"));
+        ALLOWED_EXTENSIONS.put(FileAsset.AssetType.VALIDATED_GCODE, Set.of("gcode"));
         ALLOWED_EXTENSIONS.put(
                 FileAsset.AssetType.ATTACHMENT,
                 Set.of(
@@ -36,7 +38,7 @@ public class FileValidator {
 
     public @Nullable BadRequestException validateFile(MultipartFile file, FileAsset.AssetType type) {
         return switch (type) {
-            case MODEL, IMAGE, ARCHIVE_3D, SCAD_SCRIPT, ATTACHMENT -> defaultValidation(file, type);
+            case MODEL, IMAGE, ARCHIVE_3D, SCAD_SCRIPT, ATTACHMENT, VALIDATED_3MF, VALIDATED_GCODE -> defaultValidation(file, type);
         };
     }
 

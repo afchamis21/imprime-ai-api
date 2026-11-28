@@ -9,11 +9,17 @@ import org.imprime.ai.api.model.PrinterCatalog;
 import org.imprime.ai.api.model.enums.MakerApprovalStatus;
 import org.imprime.ai.api.model.enums.MakerCapability;
 import org.imprime.ai.api.model.enums.MaterialType;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
+import org.imprime.ai.api.model.enums.PrinterStatus;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.util.JsonCodec;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -344,7 +350,11 @@ public class MakerEligibilityService {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        String normalized = raw.trim().toUpperCase(Locale.ROOT)
+        String trimmed = raw.trim();
+        if ("PLA+".equalsIgnoreCase(trimmed)) {
+            return MaterialType.PLA;
+        }
+        String normalized = trimmed.toUpperCase(Locale.ROOT)
                 .replace('-', '_')
                 .replace(' ', '_');
         if ("RESINA".equals(normalized) || "SLA".equals(normalized)) {
@@ -359,5 +369,198 @@ public class MakerEligibilityService {
             }
         }
         return null;
+    }
+
+    public record PlateMatchSpec(
+            int plateNumber,
+            MaterialType material,
+            BigDecimal dimensionXMm,
+            BigDecimal dimensionYMm,
+            BigDecimal dimensionZMm,
+            boolean isMultiColor,
+            int colorCount
+    ) {
+    }
+
+    public record MatchedPlatePrinter(
+            int plateNumber,
+            @Nullable Long assetId,
+            @Nullable String printerGuid,
+            String printerName,
+            String printerModel,
+            PrinterSpeedTier speedTier,
+            BigDecimal speedMultiplier,
+            BigDecimal maxX,
+            BigDecimal maxY,
+            BigDecimal maxZ,
+            PrinterStatus printerStatus
+    ) {
+    }
+
+    public record InstantQuoteMatchResult(
+            boolean eligible,
+            @Nullable String rejectionReason,
+            @Nullable MatchedPlatePrinter primaryPrinter,
+            Map<Integer, MatchedPlatePrinter> plateMatches
+    ) {
+    }
+
+    public InstantQuoteMatchResult matchPrintersForInstantQuote(
+            Company company,
+            @Nullable List<Asset> fleet,
+            Map<Long, PrinterCatalog> catalogsById,
+            List<PlateMatchSpec> plates,
+            Set<MaterialType> pricedEnabledMaterials,
+            PrinterSpeedResolver speedResolver
+    ) {
+        if (company == null || company.getStatus() != StatusCd.ACTIVE) {
+            return new InstantQuoteMatchResult(false, "COMPANY_INACTIVE", null, Map.of());
+        }
+        if (company.getApprovalStatus() != null && company.getApprovalStatus() != MakerApprovalStatus.APPROVED) {
+            return new InstantQuoteMatchResult(false, "MAKER_NOT_APPROVED", null, Map.of());
+        }
+        if (Boolean.TRUE.equals(company.getVacationMode())) {
+            return new InstantQuoteMatchResult(false, "MAKER_ON_VACATION", null, Map.of());
+        }
+        if (Boolean.FALSE.equals(company.getAcceptingCustomQuotes())) {
+            return new InstantQuoteMatchResult(false, "MAKER_NOT_ACCEPTING_QUOTES", null, Map.of());
+        }
+        if (plates == null || plates.isEmpty()) {
+            return new InstantQuoteMatchResult(false, "NO_PLATES", null, Map.of());
+        }
+        if (pricedEnabledMaterials == null || pricedEnabledMaterials.isEmpty()) {
+            return new InstantQuoteMatchResult(false, "NO_PRICED_MATERIALS", null, Map.of());
+        }
+
+        for (PlateMatchSpec plate : plates) {
+            if (plate.material() == null || !pricedEnabledMaterials.contains(plate.material())) {
+                return new InstantQuoteMatchResult(false, "MISSING_MATERIAL_PRICE", null, Map.of());
+            }
+        }
+
+        Set<MaterialType> companyMaterials = new LinkedHashSet<>(
+                jsonCodec.readEnumList(company.getMaterialsJson(), MaterialType.class)
+        );
+        List<Asset> activeOperationalPrinters = fleet == null ? List.of() : fleet.stream()
+                .filter(Objects::nonNull)
+                .filter(a -> a.getStatus() == StatusCd.ACTIVE)
+                .filter(a -> a.getPrinterStatus() != PrinterStatus.OFFLINE
+                        && a.getPrinterStatus() != PrinterStatus.MAINTENANCE
+                        && a.getPrinterStatus() != PrinterStatus.ERROR)
+                .toList();
+
+        boolean hasAnyFleetAtAll = fleet != null && fleet.stream().anyMatch(a -> a != null && a.getStatus() == StatusCd.ACTIVE);
+        if (!hasAnyFleetAtAll) {
+            for (PlateMatchSpec plate : plates) {
+                if (!fitsBoxWithRotation(plate.dimensionXMm(), plate.dimensionYMm(), plate.dimensionZMm(),
+                        DEFAULT_BUILD_VOLUME_MM, DEFAULT_BUILD_VOLUME_MM, DEFAULT_BUILD_VOLUME_MM)) {
+                    return new InstantQuoteMatchResult(false, "BUILD_VOLUME_EXCEEDED", null, Map.of());
+                }
+                if (!companyMaterials.isEmpty() && !companyMaterials.contains(plate.material())) {
+                    return new InstantQuoteMatchResult(false, "MATERIAL_NOT_SUPPORTED", null, Map.of());
+                }
+                if (plate.isMultiColor()) {
+                    if (!Boolean.TRUE.equals(company.getSupportsMulticolor())) {
+                        return new InstantQuoteMatchResult(false, "MULTICOLOR_NOT_SUPPORTED", null, Map.of());
+                    }
+                    int companySlots = resolveCompanyMaxSlots(company, true);
+                    if (Math.max(2, plate.colorCount()) > companySlots) {
+                        return new InstantQuoteMatchResult(false, "COLOR_SLOTS_EXCEEDED", null, Map.of());
+                    }
+                }
+            }
+            Map<Integer, MatchedPlatePrinter> fallbackMap = new HashMap<>();
+            String fallbackName = company.getPrimaryPrinter() != null && !company.getPrimaryPrinter().isBlank()
+                    ? company.getPrimaryPrinter()
+                    : "Impressora Padrão";
+            for (PlateMatchSpec plate : plates) {
+                fallbackMap.put(plate.plateNumber(), new MatchedPlatePrinter(
+                        plate.plateNumber(),
+                        null,
+                        null,
+                        fallbackName,
+                        fallbackName,
+                        PrinterSpeedTier.STANDARD,
+                        PrinterSpeedTier.STANDARD.getDefaultMultiplier(),
+                        DEFAULT_BUILD_VOLUME_MM,
+                        DEFAULT_BUILD_VOLUME_MM,
+                        DEFAULT_BUILD_VOLUME_MM,
+                        PrinterStatus.ONLINE
+                ));
+            }
+            return new InstantQuoteMatchResult(true, null, fallbackMap.get(plates.getFirst().plateNumber()), fallbackMap);
+        }
+
+        if (activeOperationalPrinters.isEmpty()) {
+            return new InstantQuoteMatchResult(false, "NO_OPERATIONAL_PRINTERS", null, Map.of());
+        }
+
+        Map<Integer, MatchedPlatePrinter> matches = new HashMap<>();
+        Comparator<MatchedPlatePrinter> printerRankComparator = Comparator
+                .comparing(MatchedPlatePrinter::speedMultiplier)
+                .thenComparingInt(p -> p.printerStatus() == PrinterStatus.ONLINE ? 0 : (p.printerStatus() == PrinterStatus.PRINTING ? 1 : 2))
+                .thenComparing(p -> p.maxX().multiply(p.maxY()).multiply(p.maxZ()), Comparator.reverseOrder());
+
+        for (PlateMatchSpec plate : plates) {
+            List<MatchedPlatePrinter> candidates = new ArrayList<>();
+            for (Asset asset : activeOperationalPrinters) {
+                PrinterCatalog catalog = resolveCatalog(asset, catalogsById);
+                BigDecimal maxX = resolveDimension(asset.getTrayWidth(), catalog != null ? catalog.getBuildVolumeXMm() : null);
+                BigDecimal maxY = resolveDimension(asset.getTrayDepth(), catalog != null ? catalog.getBuildVolumeYMm() : null);
+                BigDecimal maxZ = resolveDimension(asset.getTrayHeight(), catalog != null ? catalog.getBuildVolumeZMm() : null);
+                if (maxX == null || maxY == null || maxZ == null) {
+                    continue;
+                }
+
+                if (!fitsBoxWithRotation(plate.dimensionXMm(), plate.dimensionYMm(), plate.dimensionZMm(), maxX, maxY, maxZ)) {
+                    continue;
+                }
+
+                Set<MaterialType> supportedMaterials = resolvePrinterSupportedMaterials(asset, catalog, companyMaterials);
+                if (!supportedMaterials.isEmpty() && !supportedMaterials.contains(plate.material())) {
+                    continue;
+                }
+
+                if (plate.isMultiColor()) {
+                    if (!Boolean.TRUE.equals(asset.getSupportsMulticolor())) {
+                        continue;
+                    }
+                    int effectiveSlots = resolvePrinterSlots(asset, catalog, 4);
+                    if (Math.max(2, plate.colorCount()) > effectiveSlots) {
+                        continue;
+                    }
+                }
+
+                PrinterSpeedResolver.ResolvedPrinterSpeed resolvedSpeed = speedResolver.resolve(asset, catalog);
+                String printerModel = catalog != null
+                        ? catalog.getFullDisplayName()
+                        : (asset.getModel() != null && !asset.getModel().isBlank() ? asset.getModel() : asset.getName());
+                candidates.add(new MatchedPlatePrinter(
+                        plate.plateNumber(),
+                        asset.getId(),
+                        asset.getGuid(),
+                        asset.getName() != null && !asset.getName().isBlank() ? asset.getName() : printerModel,
+                        printerModel,
+                        resolvedSpeed.tier(),
+                        resolvedSpeed.multiplier(),
+                        maxX,
+                        maxY,
+                        maxZ,
+                        asset.getPrinterStatus() != null ? asset.getPrinterStatus() : PrinterStatus.ONLINE
+                ));
+            }
+
+            if (candidates.isEmpty()) {
+                return new InstantQuoteMatchResult(false, "NO_COMPATIBLE_PRINTER_FOR_PLATE_" + plate.plateNumber(), null, Map.of());
+            }
+
+            candidates.sort(printerRankComparator);
+            matches.put(plate.plateNumber(), candidates.getFirst());
+        }
+
+        MatchedPlatePrinter primary = matches.values().stream()
+                .min(printerRankComparator)
+                .orElse(null);
+        return new InstantQuoteMatchResult(true, null, primary, matches);
     }
 }

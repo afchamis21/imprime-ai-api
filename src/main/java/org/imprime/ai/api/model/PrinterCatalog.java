@@ -9,6 +9,7 @@ import org.imprime.ai.api.model.base.Auditable;
 import org.imprime.ai.api.model.enums.ExtruderType;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrinterKinematics;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import org.imprime.ai.api.model.enums.PrinterTechnology;
 
 import java.math.BigDecimal;
@@ -158,6 +159,13 @@ public class PrinterCatalog extends Auditable {
     @Column(name = "MATERIAL", nullable = false, length = 30)
     @Convert(converter = MaterialType.Converter.class)
     private Set<MaterialType> supportedMaterials = new LinkedHashSet<>();
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "SPEED_TIER", nullable = false, length = 20)
+    private PrinterSpeedTier speedTier = PrinterSpeedTier.STANDARD;
+
+    @Column(name = "SPEED_MULTIPLIER", nullable = false, precision = 4, scale = 2)
+    private BigDecimal speedMultiplier = new BigDecimal("2.20");
 
     public String getFullDisplayName() {
         String b = brand != null ? brand.trim() : "";

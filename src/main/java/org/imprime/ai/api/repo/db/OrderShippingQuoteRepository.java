@@ -15,4 +15,6 @@ public interface OrderShippingQuoteRepository extends JpaRepository<OrderShippin
 
     Optional<OrderShippingQuote> findByGuidAndBuyerIdAndVendorIdAndDeliveryAddressIdAndStatusAndExpiresAtAfter(
             String guid, Long buyerId, Long vendorId, Long deliveryAddressId, StatusCd status, Instant now);
+
+    Optional<OrderShippingQuote> findByGuidAndStatus(String guid, StatusCd status);
 }

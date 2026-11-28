@@ -22,6 +22,7 @@ import org.imprime.ai.api.http.auth.JwtAuthenticated;
 import org.imprime.ai.api.http.auth.SkipAuth;
 import org.imprime.ai.api.http.request.payment.CompleteCheckoutRequest;
 import org.imprime.ai.api.http.request.payment.CreateCheckoutSessionRequest;
+import org.imprime.ai.api.http.request.payment.CreateQuoteCheckoutRequest;
 import org.imprime.ai.api.http.request.payment.CalculateShippingQuotesRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.CheckoutSessionResponse;
@@ -45,8 +46,10 @@ public class PaymentController {
 
     @JwtAuthenticated
     @PostMapping("/quote-orders/{orderGuid}/checkout")
-    public ResponseEntity<BaseResponse<CheckoutSessionResponse>> createQuoteCheckout(@PathVariable String orderGuid) {
-        return BaseResponse.ok(quoteCheckout.create(orderGuid));
+    public ResponseEntity<BaseResponse<CheckoutSessionResponse>> createQuoteCheckout(
+            @PathVariable String orderGuid,
+            @Valid @RequestBody(required = false) CreateQuoteCheckoutRequest request) {
+        return BaseResponse.ok(quoteCheckout.create(orderGuid, request));
     }
 
     @JwtAuthenticated

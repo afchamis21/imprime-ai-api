@@ -40,10 +40,12 @@ import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.service.MakerCompanyResolver;
 import org.imprime.ai.api.service.MakerPrinterService;
 import org.imprime.ai.api.service.PrinterCatalogService;
+import org.imprime.ai.api.service.PrinterSpeedResolver;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.HashUtil;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -84,6 +86,14 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
     private final CompanyRepository companyRepository;
     private final JsonCodec jsonCodec;
     private final SecureRandom secureRandom = new SecureRandom();
+    private PrinterSpeedResolver printerSpeedResolver = new PrinterSpeedResolver();
+
+    @Autowired(required = false)
+    public void setPrinterSpeedResolver(PrinterSpeedResolver printerSpeedResolver) {
+        if (printerSpeedResolver != null) {
+            this.printerSpeedResolver = printerSpeedResolver;
+        }
+    }
 
     @Override
     public PageResponse<PrinterResponse> listPrinters(PrinterStatus status, Pageable pageable) {
@@ -216,6 +226,12 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         if (request.supportedMaterialsOverride() != null) {
             asset.setSupportedMaterialsOverrideJson(jsonCodec.toEnumArrayJson(request.supportedMaterialsOverride()));
         }
+        if (request.speedTier() != null) {
+            asset.setSpeedTier(request.speedTier());
+        }
+        if (request.speedMultiplierOverride() != null) {
+            asset.setSpeedMultiplierOverride(scale2OrNull(request.speedMultiplierOverride()));
+        }
 
         asset.setConfigJson(jsonCodec.toJson(new StoredPrinterConfig(
                 false, false, new BigDecimal("0.20"), 20, 36, List.of(), null
@@ -313,6 +329,12 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
         }
         if (request.supportedMaterialsOverride() != null) {
             asset.setSupportedMaterialsOverrideJson(jsonCodec.toEnumArrayJson(request.supportedMaterialsOverride()));
+        }
+        if (request.speedTier() != null) {
+            asset.setSpeedTier(request.speedTier());
+        }
+        if (request.speedMultiplierOverride() != null) {
+            asset.setSpeedMultiplierOverride(scale2OrNull(request.speedMultiplierOverride()));
         }
         if (request.config() != null) {
             StoredPrinterConfig merged = mergeConfig(readConfig(asset), request.config(), company);
@@ -672,6 +694,7 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
                 : (catalog != null && Boolean.TRUE.equals(catalog.getIsEnclosed()));
         boolean effectiveMulticolor = Boolean.TRUE.equals(asset.getSupportsMulticolor());
         int effectiveSlots = asset.getMulticolorSlots() != null ? asset.getMulticolorSlots() : (effectiveMulticolor ? 4 : 1);
+        PrinterSpeedResolver.ResolvedPrinterSpeed resolvedSpeed = printerSpeedResolver.resolve(asset, catalog);
 
         return new PrinterResponse(
                 asset.getGuid(),
@@ -696,7 +719,11 @@ public class MakerPrinterServiceImpl implements MakerPrinterService {
                 asset.getIsEnclosedOverride(),
                 overrideMaterials,
                 effectiveMaterials,
-                effectiveEnclosed
+                effectiveEnclosed,
+                resolvedSpeed.tier(),
+                resolvedSpeed.multiplier(),
+                asset.getSpeedMultiplierOverride(),
+                resolvedSpeed.source()
         );
     }
 

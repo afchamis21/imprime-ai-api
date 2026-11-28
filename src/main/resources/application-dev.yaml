@@ -82,6 +82,10 @@ imprime:
   ai:
     api:
       environment: dev
+    slicing:
+      binary-path: ${SLICING_CLI_BINARY:bambu-studio}
+      validation:
+        fail-open-on-unavailable: ${SLICING_FAIL_OPEN_ON_UNAVAILABLE:false}
     notification:
       public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:5173}
       mail:

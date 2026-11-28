@@ -123,6 +123,8 @@ public class FileAssetService {
             case ARCHIVE_3D -> ObjectStorageKey.archive3d(user.getGuid(), identifier, extension);
             case SCAD_SCRIPT -> ObjectStorageKey.scadScript(user.getGuid(), identifier, extension);
             case ATTACHMENT -> ObjectStorageKey.attachment(user.getGuid(), identifier, extension);
+            case VALIDATED_3MF -> ObjectStorageKey.validated3mf("models", user.getGuid(), identifier);
+            case VALIDATED_GCODE -> ObjectStorageKey.validatedGcode("models", user.getGuid(), identifier);
         };
     }
 

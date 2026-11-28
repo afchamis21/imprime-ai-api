@@ -49,8 +49,43 @@ public record OrderDetailResponse(
         Instant createdAt,
         @Schema(description = "Data da última atualização em UTC (ISO-8601)")
         Instant updatedAt,
-        Instant paymentConfirmedAt
+        Instant paymentConfirmedAt,
+        Integer productionDays,
+        BigDecimal packageWeight,
+        BigDecimal packageHeight,
+        BigDecimal packageWidth,
+        BigDecimal packageLength,
+        Integer shippingServiceId,
+        String shippingServiceName,
+        Integer shippingDeliveryDays
 ) {
+    public OrderDetailResponse(
+            String orderGuid,
+            String orderCode,
+            OrderStatusCd status,
+            BigDecimal subtotal,
+            BigDecimal shippingCost,
+            BigDecimal totalAmount,
+            String trackingCode,
+            String carrierName,
+            String trackingStatus,
+            String trackingUrl,
+            String notes,
+            AddressDTO shippingAddress,
+            MakerBriefResponse maker,
+            UserDTO buyer,
+            List<OrderItemResponse> items,
+            List<OrderStatusHistoryResponse> statusHistory,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant paymentConfirmedAt
+    ) {
+        this(orderGuid, orderCode, status, subtotal, shippingCost, totalAmount,
+                trackingCode, carrierName, trackingStatus, trackingUrl, notes, shippingAddress, maker, buyer,
+                items, statusHistory, createdAt, updatedAt, paymentConfirmedAt,
+                null, null, null, null, null, null, null, null);
+    }
+
     public OrderDetailResponse(
             String orderGuid,
             String orderCode,
@@ -69,6 +104,7 @@ public record OrderDetailResponse(
             Instant updatedAt) {
         this(orderGuid, orderCode, status, subtotal, shippingCost, totalAmount,
                 trackingCode, null, null, null, notes, shippingAddress, maker, buyer,
-                items, statusHistory, createdAt, updatedAt, null);
+                items, statusHistory, createdAt, updatedAt, null,
+                null, null, null, null, null, null, null, null);
     }
 }

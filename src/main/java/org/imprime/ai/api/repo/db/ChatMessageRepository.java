@@ -35,6 +35,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
 
     Optional<ChatMessage> findTopByChatIdAndTypeOrderByCreateDtDesc(UUID chatId, MessageType type);
 
+    Optional<ChatMessage> findTopByChatIdAndTypeAndPackageWeightIsNotNullOrderByCreateDtDesc(UUID chatId, MessageType type);
+
     @Query("""
             SELECT count(m) FROM ChatMessage m
             WHERE m.chatId = :chatId

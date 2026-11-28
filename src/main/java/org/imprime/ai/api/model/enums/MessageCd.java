@@ -199,7 +199,16 @@ public enum MessageCd implements CodeAttribute {
     REPORT_NOT_FOUND("RPT_001"),
     REPORT_ALREADY_OPEN("RPT_002"),
     CANNOT_REPORT_OWN_TARGET("RPT_003"),
-    REPORT_INVALID_REQUEST("RPT_004");
+    REPORT_INVALID_REQUEST("RPT_004"),
+    //endregion
+
+    //region Instant Quoting & Slicing Validation
+    SLICE_DIVERGENCE_EXCEEDED("SLC_001"),
+    SLICE_VALIDATION_FAILED("SLC_002"),
+    SLICE_VALIDATION_PENDING("SLC_003"),
+    SLICE_CONFIRMATION_REQUIRED("SLC_004"),
+    MAKER_NOT_ELIGIBLE_FOR_QUOTE("SLC_005"),
+    SLICER_UNAVAILABLE("SLC_006");
     //endregion
     private final String code;
 

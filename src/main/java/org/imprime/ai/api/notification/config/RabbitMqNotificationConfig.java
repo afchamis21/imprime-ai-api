@@ -71,6 +71,7 @@ public class RabbitMqNotificationConfig {
                 mapper,
                 "org.imprime.ai.api.notification.messaging",
                 "org.imprime.ai.api.notification.event",
+                "org.imprime.ai.api.slicing",
                 "java.util",
                 "java.math",
                 "java.time"

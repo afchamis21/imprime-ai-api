@@ -2,6 +2,7 @@ package org.imprime.ai.api.model.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.imprime.ai.api.http.response.maker.BuildVolumeDto;
+import org.imprime.ai.api.http.response.order.InstantPrintQuoteResponse;
 import org.imprime.ai.api.model.enums.MaterialType;
 
 import java.math.BigDecimal;
@@ -44,7 +45,9 @@ public record CompanyChoiceDTO(
         @Schema(description = "Prazo máximo típico em dias", example = "5")
         Integer maxLeadTimeDays,
         @Schema(description = "Maior volume útil entre as impressoras do Maker")
-        BuildVolumeDto maxBuildVolume
+        BuildVolumeDto maxBuildVolume,
+        @Schema(description = "Resumo de cotação instantânea calculada quando o pedido possui DNA do modelo")
+        InstantPrintQuoteResponse.MakerInstantQuoteItem instantQuote
 ) {
     public CompanyChoiceDTO(
             String name,
@@ -55,7 +58,35 @@ public record CompanyChoiceDTO(
     ) {
         this(
                 name, guid, address, distance, online,
-                null, false, 1, true, List.of(), BigDecimal.ZERO, 0, 0, false, null, 2, 5, null
+                null, false, 1, true, List.of(), BigDecimal.ZERO, 0, 0, false, null, 2, 5, null, null
+        );
+    }
+
+    public CompanyChoiceDTO(
+            String name,
+            String guid,
+            AddressDTO address,
+            Distance distance,
+            boolean online,
+            String primaryPrinter,
+            boolean supportsMulticolor,
+            int maxMulticolorSlots,
+            boolean acceptingCustomQuotes,
+            List<MaterialType> materials,
+            BigDecimal ratingAvg,
+            int reviewsCount,
+            int printsDone,
+            boolean verified,
+            String avatarUrl,
+            Integer minLeadTimeDays,
+            Integer maxLeadTimeDays,
+            BuildVolumeDto maxBuildVolume
+    ) {
+        this(
+                name, guid, address, distance, online, primaryPrinter,
+                supportsMulticolor, maxMulticolorSlots, acceptingCustomQuotes, materials,
+                ratingAvg, reviewsCount, printsDone, verified, avatarUrl,
+                minLeadTimeDays, maxLeadTimeDays, maxBuildVolume, null
         );
     }
 

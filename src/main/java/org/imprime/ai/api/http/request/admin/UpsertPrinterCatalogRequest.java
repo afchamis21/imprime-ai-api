@@ -11,6 +11,7 @@ import org.imprime.ai.api.model.enums.ExtruderType;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.PrinterConnectivity;
 import org.imprime.ai.api.model.enums.PrinterKinematics;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import org.imprime.ai.api.model.enums.PrinterTechnology;
 
 import java.math.BigDecimal;
@@ -130,6 +131,10 @@ public record UpsertPrinterCatalogRequest(
         String officialSpecsUrl,
 
         String notes,
+
+        PrinterSpeedTier speedTier,
+
+        BigDecimal speedMultiplier,
 
         @Size(max = 500, message = "O motivo deve ter no máximo 500 caracteres")
         String reason

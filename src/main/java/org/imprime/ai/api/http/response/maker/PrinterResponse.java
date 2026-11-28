@@ -3,6 +3,7 @@ package org.imprime.ai.api.http.response.maker;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.imprime.ai.api.http.response.catalog.PrinterCatalogBriefDto;
 import org.imprime.ai.api.model.enums.MaterialType;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import org.imprime.ai.api.model.enums.PrinterStatus;
 
 import java.math.BigDecimal;
@@ -55,7 +56,15 @@ public record PrinterResponse(
         @Schema(description = "Lista efetiva de materiais suportados por esta impressora")
         List<MaterialType> effectiveSupportedMaterials,
         @Schema(description = "Indica se a unidade efetivamente opera em câmara fechada")
-        boolean effectiveEnclosed
+        boolean effectiveEnclosed,
+        @Schema(description = "Categoria de velocidade efetiva da impressora")
+        PrinterSpeedTier speedTier,
+        @Schema(description = "Multiplicador de velocidade efetivo em relação à Bambu A1 (1.0x)")
+        BigDecimal speedMultiplier,
+        @Schema(description = "Multiplicador customizado configurado pelo Maker (opcional)")
+        BigDecimal speedMultiplierOverride,
+        @Schema(description = "Origem da resolução da velocidade")
+        String speedSource
 ) {
     public PrinterResponse(
             String guid,
@@ -77,7 +86,42 @@ public record PrinterResponse(
         this(
                 guid, name, model, status, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
                 serialNumber, amsSlots, telemetry, config, purchasePrice, lifespanHours, hourlyDepreciationRate,
-                null, null, false, 1, null, List.of(), List.of(), false
+                null, null, false, 1, null, List.of(), List.of(), false,
+                PrinterSpeedTier.STANDARD, PrinterSpeedTier.STANDARD.getDefaultMultiplier(), null, "FALLBACK_STANDARD"
+        );
+    }
+
+    public PrinterResponse(
+            String guid,
+            String name,
+            String model,
+            PrinterStatus status,
+            BuildVolumeDto buildVolume,
+            BigDecimal nozzleDiameterMm,
+            Integer powerWatts,
+            String ipAddress,
+            String serialNumber,
+            List<AmsSlotDto> amsSlots,
+            PrinterTelemetryDto telemetry,
+            PrinterConfigDto config,
+            BigDecimal purchasePrice,
+            Integer lifespanHours,
+            BigDecimal hourlyDepreciationRate,
+            String printerCatalogGuid,
+            PrinterCatalogBriefDto catalogPrinter,
+            boolean supportsMulticolor,
+            int multicolorSlots,
+            Boolean isEnclosedOverride,
+            List<MaterialType> supportedMaterialsOverride,
+            List<MaterialType> effectiveSupportedMaterials,
+            boolean effectiveEnclosed
+    ) {
+        this(
+                guid, name, model, status, buildVolume, nozzleDiameterMm, powerWatts, ipAddress,
+                serialNumber, amsSlots, telemetry, config, purchasePrice, lifespanHours, hourlyDepreciationRate,
+                printerCatalogGuid, catalogPrinter, supportsMulticolor, multicolorSlots, isEnclosedOverride,
+                supportedMaterialsOverride, effectiveSupportedMaterials, effectiveEnclosed,
+                PrinterSpeedTier.STANDARD, PrinterSpeedTier.STANDARD.getDefaultMultiplier(), null, "FALLBACK_STANDARD"
         );
     }
 }

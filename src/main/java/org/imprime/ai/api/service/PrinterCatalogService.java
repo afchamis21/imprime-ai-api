@@ -48,6 +48,12 @@ public interface PrinterCatalogService {
                 : entity.getSupportedMaterials().stream()
                 .sorted(Comparator.comparing(Enum::name))
                 .toList();
+        org.imprime.ai.api.model.enums.PrinterSpeedTier speedTier = entity.getSpeedTier() != null
+                ? entity.getSpeedTier()
+                : org.imprime.ai.api.model.enums.PrinterSpeedTier.STANDARD;
+        java.math.BigDecimal speedMultiplier = entity.getSpeedMultiplier() != null
+                ? entity.getSpeedMultiplier()
+                : speedTier.getDefaultMultiplier();
         return new PrinterCatalogBriefDto(
                 entity.getGuid(),
                 entity.getSlug(),
@@ -63,7 +69,9 @@ public interface PrinterCatalogService {
                 entity.getMaxColorSlots() != null ? entity.getMaxColorSlots() : 1,
                 entity.getTechnology(),
                 materials,
-                entity.getImageUrl()
+                entity.getImageUrl(),
+                speedTier,
+                speedMultiplier
         );
     }
 }

@@ -27,6 +27,10 @@ public class CompanyDAO {
     }
 
     public List<CompanyAndAddress> findNearestCompaniesByAddress(Double latitude, Double longitude, int limit) {
+        return findNearestCompaniesByAddress(latitude, longitude, DEFAULT_RADIUS_METERS, limit);
+    }
+
+    public List<CompanyAndAddress> findNearestCompaniesByAddress(Double latitude, Double longitude, double radiusMeters, int limit) {
         if (latitude == null || longitude == null || limit <= 0) {
             return List.of();
         }
@@ -57,6 +61,8 @@ public class CompanyDAO {
                     c.avatar_url AS company_avatar_url,
                     c.min_lead_time_days AS company_min_lead_time_days,
                     c.max_lead_time_days AS company_max_lead_time_days,
+                    c.min_order_value AS company_min_order_value,
+                    c.base_price AS company_base_price,
                     c.approval_status AS company_approval_status,
                     c.document AS company_document,
                     c.document_type AS company_document_type,
@@ -119,7 +125,7 @@ public class CompanyDAO {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("latitude", latitude)
                 .addValue("longitude", longitude)
-                .addValue("radiusMeters", DEFAULT_RADIUS_METERS)
+                .addValue("radiusMeters", radiusMeters > 0 ? radiusMeters : DEFAULT_RADIUS_METERS)
                 .addValue("limit", limit);
 
         return jdbcTemplate.query(sql, params, this::mapRow);
@@ -160,6 +166,8 @@ public class CompanyDAO {
         if (!rs.wasNull()) {
             company.setMaxLeadTimeDays(maxLead);
         }
+        company.setMinOrderValue(rs.getBigDecimal("company_min_order_value"));
+        company.setBasePrice(rs.getBigDecimal("company_base_price"));
         company.setApprovalStatus(parseApprovalStatus(rs.getString("company_approval_status")));
         company.setDocument(rs.getString("company_document"));
         company.setDocumentType(parseDocumentType(rs.getString("company_document_type")));

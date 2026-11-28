@@ -10,11 +10,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.imprime.ai.api.http.auth.JwtAuthenticated;
+import org.imprime.ai.api.http.request.chat.CalculateChatOfferShippingRequest;
+import org.imprime.ai.api.http.request.chat.CreateChatOfferRequest;
 import org.imprime.ai.api.http.request.chat.OfferDecisionRequest;
 import org.imprime.ai.api.http.request.chat.UpdateChatSellerNotesRequest;
 import org.imprime.ai.api.http.response.BaseResponse;
 import org.imprime.ai.api.http.response.PageResponse;
 import org.imprime.ai.api.http.response.chat.ChatDetailResponse;
+import org.imprime.ai.api.http.response.chat.ChatOfferShippingQuotesResponse;
 import org.imprime.ai.api.http.response.chat.ChatSummaryResponse;
 import org.imprime.ai.api.model.dto.MessageDTO;
 import org.imprime.ai.api.model.enums.ChatRoleFilter;
@@ -107,6 +110,32 @@ public class ChatRestController {
             @PathVariable UUID chatId) {
         chatRestService.markChatAsRead(chatId);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
+            summary = "Enviar proposta ou contra-proposta no chat",
+            description = "Cria e transmite uma mensagem de proposta (`OFFER`) com valor do serviço, prazo de produção e dados de envio do pacote (peso e dimensões)."
+    )
+    @PostMapping("/{chatId}/offers")
+    public ResponseEntity<BaseResponse<MessageDTO>> createOffer(
+            @Parameter(description = "UUID do chat", required = true)
+            @PathVariable UUID chatId,
+            @Valid @RequestBody CreateChatOfferRequest request) {
+        return BaseResponse.ok(chatRestService.createOffer(chatId, request));
+    }
+
+    @Operation(
+            summary = "Calcular opções de frete via Melhor Envio para uma proposta do chat",
+            description = "Calcula automaticamente as modalidades de frete disponíveis utilizando o CEP de origem do vendedor, o CEP principal (ou informado) do comprador, as dimensões/peso da proposta e o valor do serviço como seguro."
+    )
+    @PostMapping("/{chatId}/offers/{messageGuid}/shipping-quotes")
+    public ResponseEntity<BaseResponse<ChatOfferShippingQuotesResponse>> calculateOfferShippingQuotes(
+            @Parameter(description = "UUID do chat", required = true)
+            @PathVariable UUID chatId,
+            @Parameter(description = "GUID da mensagem de proposta", required = true)
+            @PathVariable String messageGuid,
+            @Valid @RequestBody(required = false) CalculateChatOfferShippingRequest request) {
+        return BaseResponse.ok(chatRestService.calculateOfferShippingQuotes(chatId, messageGuid, request));
     }
 
     @Operation(

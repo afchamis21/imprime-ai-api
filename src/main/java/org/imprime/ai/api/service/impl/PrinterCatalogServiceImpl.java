@@ -10,6 +10,7 @@ import org.imprime.ai.api.model.enums.AuditAction;
 import org.imprime.ai.api.model.enums.MaterialType;
 import org.imprime.ai.api.model.enums.MessageCd;
 import org.imprime.ai.api.model.enums.PrinterConnectivity;
+import org.imprime.ai.api.model.enums.PrinterSpeedTier;
 import org.imprime.ai.api.model.enums.PrinterTechnology;
 import org.imprime.ai.api.model.enums.StatusCd;
 import org.imprime.ai.api.model.exception.BadRequestException;
@@ -19,6 +20,7 @@ import org.imprime.ai.api.repo.db.AssetRepository;
 import org.imprime.ai.api.repo.db.PrinterCatalogRepository;
 import org.imprime.ai.api.service.AdminAuditService;
 import org.imprime.ai.api.service.PrinterCatalogService;
+import org.imprime.ai.api.service.PrinterSpeedResolver;
 import org.imprime.ai.api.util.CatalogDtoMapper;
 import org.imprime.ai.api.util.JsonCodec;
 import org.imprime.ai.api.util.PageUtils;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -295,6 +298,18 @@ public class PrinterCatalogServiceImpl implements PrinterCatalogService {
         if (request.notes() != null) {
             entity.setNotes(trimToNull(request.notes()));
         }
+        if (request.speedTier() != null) {
+            entity.setSpeedTier(request.speedTier());
+            if (request.speedMultiplier() == null) {
+                entity.setSpeedMultiplier(request.speedTier().getDefaultMultiplier());
+            }
+        }
+        if (request.speedMultiplier() != null) {
+            entity.setSpeedMultiplier(request.speedMultiplier().setScale(2, RoundingMode.HALF_UP));
+            if (request.speedTier() == null) {
+                entity.setSpeedTier(PrinterSpeedTier.fromMultiplier(entity.getSpeedMultiplier()));
+            }
+        }
         if (request.status() != null && request.status() != StatusCd.DELETED) {
             entity.setStatus(request.status());
         }
@@ -386,6 +401,16 @@ public class PrinterCatalogServiceImpl implements PrinterCatalogService {
         entity.setImageUrl(trimToNull(request.imageUrl()));
         entity.setOfficialSpecsUrl(trimToNull(request.officialSpecsUrl()));
         entity.setNotes(trimToNull(request.notes()));
+        PrinterSpeedTier resolvedTier = request.speedTier() != null
+                ? request.speedTier()
+                : (request.speedMultiplier() != null
+                        ? PrinterSpeedTier.fromMultiplier(request.speedMultiplier())
+                        : PrinterSpeedTier.STANDARD);
+        BigDecimal resolvedMultiplier = request.speedMultiplier() != null
+                ? request.speedMultiplier().setScale(2, RoundingMode.HALF_UP)
+                : resolvedTier.getDefaultMultiplier();
+        entity.setSpeedTier(resolvedTier);
+        entity.setSpeedMultiplier(resolvedMultiplier);
         entity.setStatus(StatusCd.ACTIVE);
 
         validatePrinterConstraints(entity);
@@ -398,6 +423,11 @@ public class PrinterCatalogServiceImpl implements PrinterCatalogService {
         }
         if (entity.getMinLayerHeightMm() != null && entity.getMaxLayerHeightMm() != null
                 && entity.getMinLayerHeightMm().compareTo(entity.getMaxLayerHeightMm()) > 0) {
+            throw new BadRequestException(MessageCd.VALIDATION_ERROR);
+        }
+        if (entity.getSpeedMultiplier() != null
+                && (entity.getSpeedMultiplier().signum() <= 0
+                        || entity.getSpeedMultiplier().compareTo(new BigDecimal("10.00")) > 0)) {
             throw new BadRequestException(MessageCd.VALIDATION_ERROR);
         }
     }
@@ -447,6 +477,7 @@ public class PrinterCatalogServiceImpl implements PrinterCatalogService {
         List<MaterialType> materials = entity.getSupportedMaterials() == null
                 ? List.of()
                 : entity.getSupportedMaterials().stream().sorted(Comparator.comparing(Enum::name)).toList();
+        PrinterSpeedResolver.ResolvedPrinterSpeed resolvedSpeed = new PrinterSpeedResolver().resolveCatalog(entity);
 
         return new PrinterCatalogResponse(
                 entity.getGuid(),
@@ -493,6 +524,8 @@ public class PrinterCatalogServiceImpl implements PrinterCatalogService {
                 entity.getNotes(),
                 materials,
                 activeFleetCount,
+                resolvedSpeed.tier(),
+                resolvedSpeed.multiplier(),
                 entity.getStatus(),
                 entity.getCreateDt(),
                 entity.getUpdateDt()

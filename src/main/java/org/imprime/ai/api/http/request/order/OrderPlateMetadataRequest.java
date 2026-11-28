@@ -32,7 +32,14 @@ public record OrderPlateMetadataRequest(
         List<String> colors,
         BigDecimal estimatedWeightGrams,
         Integer estimatedPrintTimeMinutes,
-        BigDecimal estimatedPriceBrl
+        BigDecimal estimatedPriceBrl,
+        @jakarta.validation.constraints.Size(max = 30)
+        String slicerEngineId,
+        @jakarta.validation.constraints.Size(max = 120)
+        String slicerProfileId,
+        BigDecimal clientModelWeightGrams,
+        BigDecimal clientSupportWeightGrams,
+        Integer clientBasePrintTimeSeconds
 ) {
     public OrderPlateMetadataRequest(
             Integer plateNumber,
@@ -51,7 +58,8 @@ public record OrderPlateMetadataRequest(
                 plateNumber, plateName, material, colorHex, infillPercent, supports,
                 scaleX, scaleY, scaleZ, isMultiColor, paintingInstructions,
                 null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null
         );
     }
 
@@ -78,7 +86,49 @@ public record OrderPlateMetadataRequest(
                 plateNumber, plateName, material, colorHex, infillPercent, supports,
                 scaleX, scaleY, scaleZ, isMultiColor, paintingInstructions,
                 dimensionXMm, dimensionYMm, dimensionZMm, colorCount, layerHeightMm, urgency,
-                null, null, null, null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null
+        );
+    }
+
+    public OrderPlateMetadataRequest(
+            Integer plateNumber,
+            String plateName,
+            String material,
+            String colorHex,
+            Integer infillPercent,
+            Boolean supports,
+            Double scaleX,
+            Double scaleY,
+            Double scaleZ,
+            Boolean isMultiColor,
+            String paintingInstructions,
+            BigDecimal dimensionXMm,
+            BigDecimal dimensionYMm,
+            BigDecimal dimensionZMm,
+            Integer colorCount,
+            BigDecimal layerHeightMm,
+            String urgency,
+            Integer quantity,
+            Integer wallCount,
+            String infillPattern,
+            String adhesionType,
+            String supportType,
+            String finish,
+            String tolerance,
+            String notes,
+            List<String> colors,
+            BigDecimal estimatedWeightGrams,
+            Integer estimatedPrintTimeMinutes,
+            BigDecimal estimatedPriceBrl
+    ) {
+        this(
+                plateNumber, plateName, material, colorHex, infillPercent, supports,
+                scaleX, scaleY, scaleZ, isMultiColor, paintingInstructions,
+                dimensionXMm, dimensionYMm, dimensionZMm, colorCount, layerHeightMm, urgency,
+                quantity, wallCount, infillPattern, adhesionType, supportType, finish, tolerance,
+                notes, colors, estimatedWeightGrams, estimatedPrintTimeMinutes, estimatedPriceBrl,
+                null, null, null, null, null
         );
     }
 }
